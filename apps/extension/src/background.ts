@@ -19,8 +19,8 @@ chrome.contextMenus.onClicked.addListener(async (info) => {
     await chrome.windows.create({
       url: chrome.runtime.getURL('popup.html'),
       type: 'popup',
-      width: 380,
-      height: 620,
+      width: 460,
+      height: 700,
       focused: true,
     });
   }

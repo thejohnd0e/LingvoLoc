@@ -11,6 +11,7 @@ export interface Settings {
 const storageKey = 'lingvoloc.settings';
 const legacyStorageKey = 'lingoloc.settings';
 const textScaleStorageKey = 'lingvoloc.textScale';
+const clipboardTextScaleStorageKey = 'lingvoloc.clipboardTextScale';
 
 export const textScaleMin = 0.5;
 export const textScaleMax = 1;
@@ -50,6 +51,18 @@ export function loadTextScale(): number {
 
 export function saveTextScale(value: number): void {
   localStorage.setItem(textScaleStorageKey, String(clampTextScale(value)));
+}
+
+export function loadClipboardTextScale(): number {
+  const stored = Number(localStorage.getItem(clipboardTextScaleStorageKey));
+  return Number.isFinite(stored) ? clampTextScale(stored) : 1;
+}
+
+export function saveClipboardTextScale(value: number): void {
+  localStorage.setItem(
+    clipboardTextScaleStorageKey,
+    String(clampTextScale(value)),
+  );
 }
 
 export function clampTextScale(value: number): number {

@@ -63,4 +63,20 @@
 - [x] Add persisted +/- text-size controls to the main and clipboard windows.
 - [x] Keep Dictionary lookup transient and separate from translation history.
 - [x] Add richer StarDict/Wiktionary definitions, forms, examples, and provider aggregation.
-- [x] Load user-provided StarDict dictionaries from the application data subdirectory.
+- [x] Load user-provided StarDict dictionaries from a user-selected folder.
+- [x] Remove bundled dictionary records from the default lookup.
+- [x] Let the user choose the dictionary folder with a native folder picker.
+- [x] Collapse dictionary results and translation history behind disclosures.
+- [x] Add an English fallback when automatic detection returns an unsupported language for short Latin input.
+- [x] Collapse the local lexicon as a separate section and hide empty lexical facts.
+- [x] Remove the single-option adapter selector from the translation controls.
+- [x] Move dictionary folder controls into a dedicated collapsed setup section.
+- [x] Add one collapsed additional-options section around dictionary lookup and history.
+- [x] Keep Recent translations in its own nested collapsed section.
+- [x] Stop creating or using the legacy app-data dictionary folder.
+- [x] Hide the extension pairing form after a stored token is validated.
+- [x] Add extension action icons and improve the context-menu fallback window.
+- [x] Decouple clipboard popup text scale, enable mouse resizing, and fit its height automatically.
+- [x] Remove the popup full-viewport minimum height so auto-fitting has no empty space.
+- [x] Group the automatic detection language pair under a visually separated Main pair label.
+- [x] Remove duplicate visible pair labels and vertically tighten the Main pair control.

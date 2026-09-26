@@ -22,12 +22,14 @@
       {
         "label": "popup",
         "title": "LingvoLoc Clipboard",
-        "width": 420,
-        "height": 300,
+        "width": 460,
+        "height": 360,
         "center": true,
         "visible": false,
         "alwaysOnTop": true,
-        "resizable": false,
+        "resizable": true,
+        "minWidth": 360,
+        "minHeight": 240,
         "skipTaskbar": true
       }
     ],

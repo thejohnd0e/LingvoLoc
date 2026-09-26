@@ -30,7 +30,7 @@ app.innerHTML = `
         <span class="status" id="status">READY</span>
       </div>
     </header>
-    <div class="pairing">
+    <div id="pairing" class="pairing" hidden>
       <label class="field"><span>Pairing token</span><input id="token" type="password" autocomplete="off" placeholder="Paste token from LingvoLoc" /></label>
       <button id="pair" class="secondary" type="button">Pair extension</button>
     </div>
@@ -51,6 +51,7 @@ const targetInput = document.querySelector<HTMLSelectElement>('#target')!;
 const textInput = document.querySelector<HTMLTextAreaElement>('#text')!;
 const button = document.querySelector<HTMLButtonElement>('#translate')!;
 const pairButton = document.querySelector<HTMLButtonElement>('#pair')!;
+const pairing = document.querySelector<HTMLDivElement>('#pairing')!;
 const decreaseButton =
   document.querySelector<HTMLButtonElement>('#font-decrease')!;
 const increaseButton =
@@ -81,6 +82,24 @@ if (
 }
 tokenInput.value = state.token;
 textInput.value = state.text;
+
+if (state.token) {
+  status.textContent = 'CHECKING';
+  try {
+    await getStatus(state.token);
+    status.textContent = 'READY';
+    pairing.hidden = true;
+  } catch {
+    state.token = '';
+    tokenInput.value = '';
+    await chrome.storage.local.remove('apiToken');
+    status.textContent = 'PAIRING REQUIRED';
+    pairing.hidden = false;
+  }
+} else {
+  status.textContent = 'PAIRING REQUIRED';
+  pairing.hidden = false;
+}
 
 function applyFontSize() {
   const value = `${state.fontSize}px`;
@@ -126,6 +145,7 @@ pairButton.addEventListener('click', async () => {
     await chrome.storage.local.set({ apiToken: token });
     state.token = token;
     status.textContent = 'PAIRED';
+    pairing.hidden = true;
     result.textContent = runtime.detail;
   } catch (error) {
     status.textContent = 'ERROR';

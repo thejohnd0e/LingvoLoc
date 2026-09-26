@@ -195,16 +195,14 @@ fn take_clipboard_request(
 
 #[tauri::command]
 fn lookup_lexicon(
-    app: tauri::AppHandle,
     query: String,
     language: Option<String>,
     enabled_dictionaries: Option<Vec<String>>,
+    directory: Option<String>,
 ) -> Vec<services::lexical::LexicalEntry> {
-    let directory = app
-        .path()
-        .app_data_dir()
-        .ok()
-        .map(|path| path.join("lexical").join("user"));
+    let directory = directory
+        .filter(|value| !value.trim().is_empty())
+        .map(std::path::PathBuf::from);
     services::lexical::lookup_with_user_directory(
         &query,
         language.as_deref(),
@@ -215,30 +213,13 @@ fn lookup_lexicon(
 
 #[tauri::command]
 fn list_user_dictionaries(
-    app: tauri::AppHandle,
+    directory: Option<String>,
 ) -> Result<Vec<services::lexical::UserDictionary>, RuntimeError> {
-    let directory = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| RuntimeError::Connection(error.to_string()))?
-        .join("lexical")
-        .join("user");
-    std::fs::create_dir_all(&directory)
-        .map_err(|error| RuntimeError::Connection(error.to_string()))?;
+    let directory = directory
+        .filter(|value| !value.trim().is_empty())
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| RuntimeError::Connection("dictionary folder is not selected".into()))?;
     Ok(services::lexical::list_user_dictionaries(&directory))
-}
-
-#[tauri::command]
-fn get_user_dictionary_directory(app: tauri::AppHandle) -> Result<String, RuntimeError> {
-    let directory = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| RuntimeError::Connection(error.to_string()))?
-        .join("lexical")
-        .join("user");
-    std::fs::create_dir_all(&directory)
-        .map_err(|error| RuntimeError::Connection(error.to_string()))?;
-    Ok(directory.display().to_string())
 }
 
 #[tauri::command]
@@ -297,6 +278,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
             let data_dir = app
                 .path()
@@ -372,7 +354,6 @@ pub fn run() {
             take_clipboard_request,
             lookup_lexicon,
             list_user_dictionaries,
-            get_user_dictionary_directory,
             translate_word
         ])
         .run(tauri::generate_context!())

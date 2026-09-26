@@ -9,15 +9,17 @@ import {
 interface TextSizeControlsProps {
   value: number;
   onChange: (value: number) => void;
+  onSave?: (value: number) => void;
 }
 
 export default function TextSizeControls({
   value,
   onChange,
+  onSave = saveTextScale,
 }: TextSizeControlsProps) {
   function changeBy(delta: number) {
     const next = clampTextScale(value + delta);
-    saveTextScale(next);
+    onSave(next);
     onChange(next);
   }
 

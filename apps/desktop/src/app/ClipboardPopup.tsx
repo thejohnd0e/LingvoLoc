@@ -1,3 +1,4 @@
+import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import { useEffect, useState } from 'react';
 import {
   detectLanguage,
@@ -6,7 +7,12 @@ import {
   writeClipboard,
   type TranslationResult,
 } from '../lib/commands';
-import { loadSettings, loadTextScale, type Settings } from '../lib/settings';
+import {
+  loadClipboardTextScale,
+  loadSettings,
+  saveClipboardTextScale,
+  type Settings,
+} from '../lib/settings';
 import { targetForDetectedLanguage } from '../lib/languagePair';
 import TextSizeControls from './TextSizeControls';
 
@@ -22,7 +28,7 @@ const defaultSettings: Settings = {
 
 export default function ClipboardPopup() {
   const [settings] = useState(() => loadSettings(defaultSettings));
-  const [textScale, setTextScale] = useState(loadTextScale);
+  const [textScale, setTextScale] = useState(loadClipboardTextScale);
   const [source, setSource] = useState('Waiting for clipboard…');
   const [result, setResult] = useState<TranslationResult | null>(null);
   const [status, setStatus] = useState('Ready');
@@ -75,6 +81,34 @@ export default function ClipboardPopup() {
   }, [settings]);
 
   useEffect(() => {
+    const resizeToContent = async () => {
+      try {
+        const currentWindow = getCurrentWindow();
+        const [scaleFactor, currentSize] = await Promise.all([
+          currentWindow.scaleFactor(),
+          currentWindow.innerSize(),
+        ]);
+        const contentHeight =
+          Math.max(
+            document.documentElement.scrollHeight,
+            document.body.scrollHeight,
+          ) + 24;
+        const height = Math.min(
+          Math.max(240, contentHeight),
+          Math.max(window.screen.availHeight - 40, 480),
+        );
+        await currentWindow.setSize(
+          new LogicalSize(currentSize.width / scaleFactor, height),
+        );
+      } catch {
+        // Browser preview does not expose a native window.
+      }
+    };
+    const timer = window.setTimeout(() => void resizeToContent(), 0);
+    return () => window.clearTimeout(timer);
+  }, [source, result, status, textScale]);
+
+  useEffect(() => {
     document.documentElement.style.setProperty(
       '--text-scale',
       String(textScale),
@@ -85,7 +119,11 @@ export default function ClipboardPopup() {
     <main className="clipboard-popup">
       <div className="clipboard-popup-heading">
         <span className="eyebrow">Clipboard translation</span>
-        <TextSizeControls value={textScale} onChange={setTextScale} />
+        <TextSizeControls
+          value={textScale}
+          onChange={setTextScale}
+          onSave={saveClipboardTextScale}
+        />
         <span className="status-pill">{status}</span>
       </div>
       <p className="clipboard-popup-source">{source}</p>

@@ -10,13 +10,18 @@
   box-sizing: border-box;
 }
 body {
-  width: 360px;
+  width: 420px;
+  min-height: 100vh;
   margin: 0;
   background:
     radial-gradient(circle at 100% 0%, #20303c 0, transparent 42%), #11161c;
 }
 .shell {
-  padding: 20px;
+  min-height: 100vh;
+  padding: 22px;
+}
+[hidden] {
+  display: none !important;
 }
 header,
 .row {

@@ -1,10 +1,10 @@
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
+import { open } from '@tauri-apps/plugin-dialog';
 import { useEffect, useRef, useState } from 'react';
 import {
   getRuntimeStatus,
   getApiToken,
-  getUserDictionaryDirectory,
   listUserDictionaries,
   detectLanguage,
   clearHistory,
@@ -43,6 +43,7 @@ const defaultSettings: Settings = {
 };
 
 const enabledDictionariesKey = 'lingvoloc.enabled-dictionaries';
+const dictionaryPathKey = 'lingvoloc.dictionary-path';
 
 function loadEnabledDictionaries(): string[] {
   try {
@@ -55,6 +56,10 @@ function loadEnabledDictionaries(): string[] {
   } catch {
     return [];
   }
+}
+
+function loadDictionaryPath(): string {
+  return localStorage.getItem(dictionaryPathKey) ?? '';
 }
 
 function errorDetail(reason: unknown): string {
@@ -108,11 +113,8 @@ async function fitWindowToContent() {
       currentWindow.innerSize(),
     ]);
     const availableHeight = Math.max(window.screen.availHeight, 720);
-    const contentHeight =
-      Math.max(
-        document.documentElement.scrollHeight,
-        document.body.scrollHeight,
-      ) + 48;
+    const shell = document.querySelector<HTMLElement>('.shell');
+    const contentHeight = (shell?.getBoundingClientRect().height ?? 0) + 48;
     const height = Math.min(contentHeight, availableHeight - 24);
     await currentWindow.setSize(
       new LogicalSize(currentSize.width / scaleFactor, Math.max(600, height)),
@@ -143,7 +145,8 @@ export default function App() {
   const [lexicalQuery, setLexicalQuery] = useState('');
   const [lexicalResults, setLexicalResults] = useState<LexicalEntry[]>([]);
   const [lexicalMessage, setLexicalMessage] = useState('');
-  const [userDictionaryPath, setUserDictionaryPath] = useState('');
+  const [selectedDictionaryPath, setSelectedDictionaryPath] =
+    useState(loadDictionaryPath);
   const [userDictionaries, setUserDictionaries] = useState<UserDictionary[]>(
     [],
   );
@@ -213,10 +216,9 @@ export default function App() {
   }, [settings.modelId]);
 
   useEffect(() => {
-    void getUserDictionaryDirectory()
-      .then(setUserDictionaryPath)
-      .catch(() => undefined);
-    void refreshUserDictionaries();
+    void refreshUserDictionaries(loadDictionaryPath());
+    // This initialization intentionally runs once; the selected folder is persisted locally.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function updateSettings(patch: Partial<Settings>) {
@@ -435,6 +437,7 @@ export default function App() {
         query,
         undefined,
         enabledDictionaries,
+        selectedDictionaryPath,
       );
       if (requestId !== lexicalRequestId.current) return;
       setLexicalQuery(query);
@@ -451,9 +454,11 @@ export default function App() {
     }
   }
 
-  async function refreshUserDictionaries() {
+  async function refreshUserDictionaries(
+    directory = selectedDictionaryPath,
+  ): Promise<UserDictionary[]> {
     try {
-      const dictionaries = await listUserDictionaries();
+      const dictionaries = await listUserDictionaries(directory);
       setUserDictionaries(dictionaries);
       setEnabledDictionaries((current) => {
         const available = new Set(
@@ -468,9 +473,22 @@ export default function App() {
           ? `${dictionaries.length} user dictionary${dictionaries.length === 1 ? '' : 'ies'} found.`
           : 'No user dictionaries found.',
       );
+      return dictionaries;
     } catch (reason) {
       setLexicalMessage(`Dictionary refresh failed · ${errorDetail(reason)}`);
+      return [];
     }
+  }
+
+  async function chooseDictionaryFolder() {
+    const selected = await open({ directory: true, multiple: false });
+    if (typeof selected !== 'string') return;
+    setSelectedDictionaryPath(selected);
+    localStorage.setItem(dictionaryPathKey, selected);
+    const dictionaries = await refreshUserDictionaries(selected);
+    const enabled = dictionaries.map((dictionary) => dictionary.id);
+    setEnabledDictionaries(enabled);
+    localStorage.setItem(enabledDictionariesKey, JSON.stringify(enabled));
   }
 
   function toggleUserDictionary(id: string) {
@@ -489,7 +507,12 @@ export default function App() {
     const requestId = ++lexicalRequestId.current;
     setLexicalResults([]);
     setLexicalMessage('Looking up…');
-    const entries = await lookupLexicon(word, undefined, enabledDictionaries);
+    const entries = await lookupLexicon(
+      word,
+      undefined,
+      enabledDictionaries,
+      selectedDictionaryPath,
+    );
     if (requestId !== lexicalRequestId.current) return;
     setLexicalQuery(word);
     setLexicalResults(entries);
@@ -711,55 +734,47 @@ export default function App() {
             <option value="uk">Ukrainian</option>
           </select>
         </label>
-        <label>
-          Pair from
-          <select
-            value={settings.primaryLanguage}
-            onChange={(event) =>
-              updateSettings({ primaryLanguage: event.target.value })
-            }
-          >
-            <option value="en">English</option>
-            <option value="ru">Russian</option>
-            <option value="de">German</option>
-            <option value="es">Spanish</option>
-            <option value="fr">French</option>
-            <option value="it">Italian</option>
-            <option value="pt">Portuguese</option>
-            <option value="pl">Polish</option>
-            <option value="uk">Ukrainian</option>
-          </select>
-        </label>
-        <label>
-          Pair to
-          <select
-            value={settings.secondaryLanguage}
-            onChange={(event) =>
-              updateSettings({ secondaryLanguage: event.target.value })
-            }
-          >
-            <option value="en">English</option>
-            <option value="ru">Russian</option>
-            <option value="de">German</option>
-            <option value="es">Spanish</option>
-            <option value="fr">French</option>
-            <option value="it">Italian</option>
-            <option value="pt">Portuguese</option>
-            <option value="pl">Polish</option>
-            <option value="uk">Ukrainian</option>
-          </select>
-        </label>
-        <label>
-          Adapter
-          <select
-            value={settings.adapterId}
-            onChange={(event) =>
-              updateSettings({ adapterId: event.target.value })
-            }
-          >
-            <option value="translategemma">TranslateGemma</option>
-          </select>
-        </label>
+        <div className="main-pair">
+          <span className="main-pair-label">Main pair</span>
+          <label>
+            <select
+              aria-label="Main pair source language"
+              value={settings.primaryLanguage}
+              onChange={(event) =>
+                updateSettings({ primaryLanguage: event.target.value })
+              }
+            >
+              <option value="en">English</option>
+              <option value="ru">Russian</option>
+              <option value="de">German</option>
+              <option value="es">Spanish</option>
+              <option value="fr">French</option>
+              <option value="it">Italian</option>
+              <option value="pt">Portuguese</option>
+              <option value="pl">Polish</option>
+              <option value="uk">Ukrainian</option>
+            </select>
+          </label>
+          <label>
+            <select
+              aria-label="Main pair target language"
+              value={settings.secondaryLanguage}
+              onChange={(event) =>
+                updateSettings({ secondaryLanguage: event.target.value })
+              }
+            >
+              <option value="en">English</option>
+              <option value="ru">Russian</option>
+              <option value="de">German</option>
+              <option value="es">Spanish</option>
+              <option value="fr">French</option>
+              <option value="it">Italian</option>
+              <option value="pt">Portuguese</option>
+              <option value="pl">Polish</option>
+              <option value="uk">Ukrainian</option>
+            </select>
+          </label>
+        </div>
         <div className="model-field">
           <span className="model-label">Model</span>
           <div className="model-row">
@@ -805,197 +820,234 @@ export default function App() {
             : `Local runtime · ${latency} ms · ${settings.modelId}`)}
         {detectedLanguage ? ` · detected ${detectedLanguage}` : ''}
       </div>
-      <section className="lexical" aria-label="Dictionary lookup">
-        <div className="lexical-heading">
-          <div>
-            <span className="panel-label">LOCAL LEXICON</span>
-            <h2>Dictionary lookup</h2>
-          </div>
-          <div className="lexical-search">
-            <input
-              aria-label="Dictionary word"
-              value={lexicalQuery}
-              onChange={(event) => setLexicalQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') void lookupWord();
-              }}
-              placeholder="learn"
-            />
-            <button className="translate" onClick={() => void lookupWord()}>
-              Look up
-            </button>
-            <button
-              className="quiet"
-              type="button"
-              onClick={() => {
-                lexicalRequestId.current += 1;
-                setLexicalQuery('');
-                setLexicalResults([]);
-                setLexicalMessage('');
-              }}
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-        {lexicalMessage && <p className="lexical-message">{lexicalMessage}</p>}
-        <div className="dictionary-sources">
-          <div>
-            <b>User StarDict dictionaries</b>
-            <p>
-              Extract each dictionary into its own folder with its `.ifo`,
-              `.idx` and `.dict` or `.dict.dz` files. The folder is scanned on
-              every lookup.
-            </p>
-            <code>
-              {userDictionaryPath || 'Application data / lexical / user'}
-            </code>
-            <div className="dictionary-list">
-              {userDictionaries.length ? (
-                userDictionaries.map((dictionary) => (
-                  <label key={dictionary.id}>
-                    <input
-                      type="checkbox"
-                      checked={enabledDictionaries.includes(dictionary.id)}
-                      onChange={() => toggleUserDictionary(dictionary.id)}
-                    />
-                    <span>
-                      {dictionary.name} ·{' '}
-                      {dictionary.entry_count.toLocaleString()} entries
-                    </span>
-                  </label>
-                ))
-              ) : (
-                <span>No dictionaries detected.</span>
-              )}
+      <details className="additional-options">
+        <summary>Additional options</summary>
+        <section className="lexical" aria-label="Dictionary lookup">
+          <div className="lexical-heading">
+            <div>
+              <span className="panel-label">LOCAL LEXICON</span>
+              <h2>Dictionary lookup</h2>
+            </div>
+            <div className="lexical-search">
+              <input
+                aria-label="Dictionary word"
+                value={lexicalQuery}
+                onChange={(event) => setLexicalQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void lookupWord();
+                }}
+                placeholder="learn"
+              />
+              <button className="translate" onClick={() => void lookupWord()}>
+                Look up
+              </button>
+              <button
+                className="quiet"
+                type="button"
+                onClick={() => {
+                  lexicalRequestId.current += 1;
+                  setLexicalQuery('');
+                  setLexicalResults([]);
+                  setLexicalMessage('');
+                }}
+              >
+                Clear
+              </button>
             </div>
           </div>
-          <button
-            className="quiet"
-            type="button"
-            onClick={() => void refreshUserDictionaries()}
-          >
-            Refresh dictionaries
-          </button>
-        </div>
-        <div className="lexical-results">
-          {lexicalResults.map((entry) => (
-            <article
-              className="lexical-entry"
-              key={`${entry.language}-${entry.lemma}-${entry.part_of_speech}`}
-            >
-              <div className="lexical-entry-title">
-                <strong>{entry.lemma}</strong>
-                <span>{entry.part_of_speech}</span>
-              </div>
-              <p className="lexical-translations">
-                {entry.translations.length
-                  ? entry.translations.join(' · ')
-                  : entry.part_of_speech === 'User dictionary'
-                    ? 'Definition from user dictionary.'
-                    : 'Translation unavailable until LM Studio is online and a model is selected.'}
-              </p>
-              {entry.part_of_speech === 'User dictionary' ? (
-                <div
-                  className="dictionary-definition-html"
-                  dangerouslySetInnerHTML={{
-                    __html: sanitizeDictionaryHtml(entry.definitions.join(' ')),
-                  }}
-                />
-              ) : (
-                <p>{entry.definitions.join(' ')}</p>
-              )}
-              {entry.examples.length > 0 && (
-                <div className="lexical-examples">
-                  <b>Examples</b>
-                  {entry.examples.map((example) => (
-                    <q key={example}>{example}</q>
-                  ))}
+          {lexicalMessage && (
+            <p className="lexical-message">{lexicalMessage}</p>
+          )}
+          <details className="dictionary-setup">
+            <summary>Dictionary setup</summary>
+            <div className="dictionary-sources">
+              <div>
+                <b>Your StarDict dictionaries</b>
+                <p>
+                  Choose the folder where you keep dictionary folders. Each
+                  dictionary needs its `.ifo`, `.idx` and `.dict` or `.dict.dz`
+                  files.
+                </p>
+                <code>{selectedDictionaryPath || 'No folder selected'}</code>
+                <div className="dictionary-list">
+                  {userDictionaries.length ? (
+                    userDictionaries.map((dictionary) => (
+                      <label key={dictionary.id}>
+                        <input
+                          type="checkbox"
+                          checked={enabledDictionaries.includes(dictionary.id)}
+                          onChange={() => toggleUserDictionary(dictionary.id)}
+                        />
+                        <span>
+                          {dictionary.name} ·{' '}
+                          {dictionary.entry_count.toLocaleString()} entries
+                        </span>
+                      </label>
+                    ))
+                  ) : (
+                    <span>No dictionaries detected.</span>
+                  )}
                 </div>
-              )}
-              <div className="lexical-facts">
-                <span>
-                  <b>Forms</b> {entry.forms.join(', ') || '—'}
-                </span>
-                <span>
-                  <b>Synonyms</b> {entry.synonyms.join(', ') || '—'}
-                </span>
-                <span>
-                  <b>Antonyms</b> {entry.antonyms.join(', ') || '—'}
-                </span>
-                <span>
-                  <b>Related</b> {entry.related_words.join(', ') || '—'}
-                </span>
-                <span>
-                  <b>Sources</b> {entry.providers.join(', ') || '—'}
-                </span>
               </div>
-            </article>
-          ))}
-        </div>
-      </section>
-      <section className="history" aria-label="Translation history">
-        <div className="history-heading">
-          <h2>Recent translations</h2>
-          <div className="history-tools">
-            <input
-              aria-label="Search history"
-              value={historyInput}
-              onChange={(event) => setHistoryInput(event.target.value)}
-              placeholder="Search"
-            />
-            <button className="quiet" onClick={() => void searchHistory()}>
-              Search
-            </button>
-            <button
-              className="quiet"
-              onClick={() => void removeHistory()}
-              disabled={!history.length}
-            >
-              Clear history
-            </button>
-            <button
-              className="quiet"
-              onClick={() => void exportTranslationHistory()}
-            >
-              Export CSV
-            </button>
-          </div>
-        </div>
-        {history.length === 0 ? (
-          <p className="history-empty">
-            Successful translations will be saved locally.
-          </p>
-        ) : (
-          <div className="history-list">
-            {history.map((entry) => (
-              <article className="history-entry" key={entry.id}>
-                <span>
-                  {entry.source_language} → {entry.target_language}
-                </span>
-                <strong>
-                  {highlightMatches(entry.source_text, historyQuery)}
-                </strong>
-                <p>{highlightMatches(entry.translated_text, historyQuery)}</p>
-                <button
-                  className="quiet history-favorite"
-                  onClick={() => void toggleFavorite(entry)}
-                >
-                  {entry.favorite ? 'Unfavorite' : 'Favorite'}
+              <button
+                className="translate"
+                type="button"
+                onClick={() => void chooseDictionaryFolder()}
+              >
+                Choose folder
+              </button>
+              <button
+                className="quiet"
+                type="button"
+                onClick={() =>
+                  void refreshUserDictionaries(selectedDictionaryPath)
+                }
+              >
+                Refresh dictionaries
+              </button>
+            </div>
+          </details>
+          {lexicalResults.length > 0 && (
+            <details className="lexical-results-disclosure" open>
+              <summary>Dictionary results ({lexicalResults.length})</summary>
+              <div className="lexical-results">
+                {lexicalResults.map((entry) => (
+                  <article
+                    className="lexical-entry"
+                    key={`${entry.language}-${entry.lemma}-${entry.part_of_speech}`}
+                  >
+                    <div className="lexical-entry-title">
+                      <strong>{entry.lemma}</strong>
+                      <span>{entry.part_of_speech}</span>
+                    </div>
+                    <p className="lexical-translations">
+                      {entry.translations.length
+                        ? entry.translations.join(' · ')
+                        : entry.part_of_speech === 'User dictionary'
+                          ? 'Definition from user dictionary.'
+                          : 'Translation unavailable until LM Studio is online and a model is selected.'}
+                    </p>
+                    {entry.part_of_speech === 'User dictionary' ? (
+                      <div
+                        className="dictionary-definition-html"
+                        dangerouslySetInnerHTML={{
+                          __html: sanitizeDictionaryHtml(
+                            entry.definitions.join(' '),
+                          ),
+                        }}
+                      />
+                    ) : (
+                      <p>{entry.definitions.join(' ')}</p>
+                    )}
+                    {entry.examples.length > 0 && (
+                      <div className="lexical-examples">
+                        <b>Examples</b>
+                        {entry.examples.map((example) => (
+                          <q key={example}>{example}</q>
+                        ))}
+                      </div>
+                    )}
+                    <div className="lexical-facts">
+                      {entry.forms.length > 0 && (
+                        <span>
+                          <b>Forms</b> {entry.forms.join(', ')}
+                        </span>
+                      )}
+                      {entry.synonyms.length > 0 && (
+                        <span>
+                          <b>Synonyms</b> {entry.synonyms.join(', ')}
+                        </span>
+                      )}
+                      {entry.antonyms.length > 0 && (
+                        <span>
+                          <b>Antonyms</b> {entry.antonyms.join(', ')}
+                        </span>
+                      )}
+                      {entry.related_words.length > 0 && (
+                        <span>
+                          <b>Related</b> {entry.related_words.join(', ')}
+                        </span>
+                      )}
+                      {entry.providers.length > 0 && (
+                        <span>
+                          <b>Sources</b> {entry.providers.join(', ')}
+                        </span>
+                      )}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </details>
+          )}
+        </section>
+        <details className="history-disclosure">
+          <summary>Recent translations</summary>
+          <section className="history" aria-label="Translation history">
+            <div className="history-heading">
+              <h2>Recent translations</h2>
+              <div className="history-tools">
+                <input
+                  aria-label="Search history"
+                  value={historyInput}
+                  onChange={(event) => setHistoryInput(event.target.value)}
+                  placeholder="Search"
+                />
+                <button className="quiet" onClick={() => void searchHistory()}>
+                  Search
                 </button>
-              </article>
-            ))}
-          </div>
-        )}
-        {hasMoreHistory && (
-          <button
-            className="quiet history-more"
-            onClick={() => void loadMoreHistory()}
-          >
-            Load more
-          </button>
-        )}
-      </section>
+                <button
+                  className="quiet"
+                  onClick={() => void removeHistory()}
+                  disabled={!history.length}
+                >
+                  Clear history
+                </button>
+                <button
+                  className="quiet"
+                  onClick={() => void exportTranslationHistory()}
+                >
+                  Export CSV
+                </button>
+              </div>
+            </div>
+            {history.length === 0 ? (
+              <p className="history-empty">
+                Successful translations will be saved locally.
+              </p>
+            ) : (
+              <div className="history-list">
+                {history.map((entry) => (
+                  <article className="history-entry" key={entry.id}>
+                    <span>
+                      {entry.source_language} → {entry.target_language}
+                    </span>
+                    <strong>
+                      {highlightMatches(entry.source_text, historyQuery)}
+                    </strong>
+                    <p>
+                      {highlightMatches(entry.translated_text, historyQuery)}
+                    </p>
+                    <button
+                      className="quiet history-favorite"
+                      onClick={() => void toggleFavorite(entry)}
+                    >
+                      {entry.favorite ? 'Unfavorite' : 'Favorite'}
+                    </button>
+                  </article>
+                ))}
+              </div>
+            )}
+            {hasMoreHistory && (
+              <button
+                className="quiet history-more"
+                onClick={() => void loadMoreHistory()}
+              >
+                Load more
+              </button>
+            )}
+          </section>
+        </details>
+      </details>
     </main>
   );
 }

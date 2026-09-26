@@ -114,8 +114,8 @@
 - **Reason:** Different parts of speech represent different lexical senses and must remain separate cards even when they share a spelling.
 - **Decision:** Key generated lexical records by language and lemma, and require explicit source-language options for Kaikki and morphology inputs.
 - **Reason:** The converter can safely grow to additional licensed language datasets without merging homographs across languages or guessing a dataset's source language.
-- **Decision:** Keep one preloaded EN/RU dictionary and require all other dictionaries to be user-selected StarDict folders.
-- **Reason:** Users need predictable dictionary sources and explicit control over large third-party datasets; extra bundled providers caused duplicate and unreadable lookup cards.
+- **Decision:** Do not preload dictionary records; require all dictionaries to be user-selected StarDict folders.
+- **Reason:** Users need explicit control over dictionary sources and licensing; bundled providers caused duplicate and unreadable lookup cards.
 - **Decision:** Prioritize `rus-eng` parsing and regression coverage over additional language-pair downloads.
 - **Reason:** Russian-English is the primary product workflow, and improving the quality of its existing 42,283 records has higher value than expanding the number of partially parsed providers.
 
@@ -123,3 +123,8 @@
 
 - **Decision:** Do not show partial WordNet or model-generated records in the default dictionary lookup.
 - **Reason:** Synonyms without a sourced definition, translation, and sense context are misleading when rendered as a normal dictionary card; missing coverage is safer to report explicitly.
+
+## User Dictionary Folder
+
+- **Decision:** Search only user-provided StarDict dictionaries from a folder selected through the native folder picker; do not create or fall back to an app-data dictionary folder.
+- **Reason:** Dictionary contents and licensing are user-controlled, while the application should not silently expose bundled or preloaded dictionary records.

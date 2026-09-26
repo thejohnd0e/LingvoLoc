@@ -23,6 +23,16 @@ pub fn detect_supported_language(text: &str) -> Result<DetectedLanguage, Runtime
         Lang::Por => "pt",
         Lang::Pol => "pl",
         Lang::Ukr => "uk",
+        _ if text.chars().any(|character| character.is_alphabetic())
+            && text.chars().all(|character| {
+                !character.is_ascii()
+                    || character.is_ascii_alphabetic()
+                    || character.is_ascii_whitespace()
+                    || character.is_ascii_punctuation()
+            }) =>
+        {
+            "en"
+        }
         _ => {
             return Err(RuntimeError::InvalidInput(format!(
                 "detected language is not supported: {:?}",
@@ -103,5 +113,10 @@ mod tests {
     #[test]
     fn rejects_empty_text() {
         assert!(detect_supported_language("  ").is_err());
+    }
+
+    #[test]
+    fn treats_short_latin_words_as_english_when_provider_guesses_unsupported_language() {
+        assert_eq!(detect_supported_language("girl").unwrap().code, "en");
     }
 }

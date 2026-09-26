@@ -17,7 +17,7 @@ LM Studio should expose its OpenAI-compatible API at `http://127.0.0.1:1234/v1`.
 ## Usage
 
 Run the web UI with `npm run dev` or the native desktop shell with `npm run desktop:dev`.
-The app persists endpoint, model, adapter, language selections, and two independently selected pair languages locally. Automatic source detection is enabled by default; successful translations are copied to the clipboard when WebView2 allows clipboard access.
+The app persists endpoint, model, adapter, language selections, two independently selected pair languages, and text-size settings locally. Automatic source detection is enabled by default; successful translations are copied to the clipboard when WebView2 allows clipboard access. The clipboard popup has its own text-size setting, can be resized, and fits its height to its content.
 
 ## Build
 
@@ -29,9 +29,9 @@ Run `npm test` for Vitest and `cargo test --manifest-path apps/desktop/src-tauri
 
 To build the compact lexical index from downloaded source files, run `npm run lexical:index -- --stardict-dir <directory> --stardict-dir <directory> --output <index.json>`. The converter accepts FreeDict StarDict directories, Kaikki JSONL (`--kaikki-language <code>`), and a tab-separated morphology file with `lemma<TAB>form` rows (`--morphology-language <code>`). It keeps language and lemma as separate identity fields, so additional legally compatible language pairs can be added without collisions. It preserves definitions, examples, forms, translations, and provider labels; retain the upstream license and attribution notices alongside the generated index.
 
-User StarDict dictionaries can be placed under the directory shown in the Dictionary lookup `User StarDict dictionaries` panel. Extract each archive into its own subdirectory, preserving `.ifo`, `.idx` or `.idx.gz`, and `.dict` or `.dict.dz`; then press `Refresh dictionaries` and enable the dictionaries with checkboxes. Nested `res.zip` files are optional resources and are ignored. The lookup scans only enabled dictionaries together with the bundled indexes.
+Use `Choose folder` in the Dictionary lookup `Dictionary setup` section to select the directory containing your StarDict dictionary folders. Extract each archive into its own subdirectory, preserving `.ifo`, `.idx` or `.idx.gz`, and `.dict` or `.dict.dz`; then press `Refresh dictionaries` and enable the dictionaries with checkboxes. The lookup scans only enabled dictionaries selected by the user. LingvoLoc no longer creates or uses an app-data dictionary directory.
 
-The native executable and NSIS installer build successfully on this machine with the branded LingvoLoc icon. Startup smoke passes; an interactive window smoke test remains pending.
+The native executable and NSIS installer build successfully on this machine with the branded LingvoLoc icon. The Chromium extension is packaged with `npm run extension:package` and uses the local loopback API after pairing.
 
 The project is licensed under MIT; see `LICENSE`.
 

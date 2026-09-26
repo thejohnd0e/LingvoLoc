@@ -2,11 +2,12 @@
   "$schema": "https://schema.tauri.app/config/2",
   "identifier": "main-capability",
   "description": "Main LingvoLoc window permissions",
-  "windows": ["main"],
+  "windows": ["main", "popup"],
   "permissions": [
     "core:default",
     "core:window:allow-inner-size",
     "core:window:allow-scale-factor",
-    "core:window:allow-set-size"
+    "core:window:allow-set-size",
+    "dialog:default"
   ]
 }

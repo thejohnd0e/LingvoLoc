@@ -123,18 +123,17 @@ export const lookupLexicon = (
   query: string,
   language?: string,
   enabledDictionaries?: string[],
+  directory?: string,
 ) =>
   invokeNative<LexicalEntry[]>('lookup_lexicon', {
     query,
     language,
     enabledDictionaries,
+    directory,
   });
 
-export const listUserDictionaries = () =>
-  invokeNative<UserDictionary[]>('list_user_dictionaries');
-
-export const getUserDictionaryDirectory = () =>
-  invokeNative<string>('get_user_dictionary_directory');
+export const listUserDictionaries = (directory?: string) =>
+  invokeNative<UserDictionary[]>('list_user_dictionaries', { directory });
 
 export const translateWord = (request: TranslationRequest) =>
   invokeNative<TranslationResult>('translate_word', { request });

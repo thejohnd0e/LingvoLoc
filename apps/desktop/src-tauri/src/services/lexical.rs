@@ -29,8 +29,10 @@ pub struct UserDictionary {
     pub entry_count: usize,
 }
 
+#[allow(dead_code)]
 static FREEDICT_ENTRIES: OnceLock<Vec<LexicalEntry>> = OnceLock::new();
 
+#[allow(dead_code)]
 fn freedict_entries() -> &'static [LexicalEntry] {
     FREEDICT_ENTRIES
         .get_or_init(|| {
@@ -40,6 +42,7 @@ fn freedict_entries() -> &'static [LexicalEntry] {
         .as_slice()
 }
 
+#[allow(dead_code)]
 fn seed_entries() -> Vec<LexicalEntry> {
     vec![
         LexicalEntry {
@@ -277,10 +280,8 @@ pub fn lookup_with_user_directory(
         return Vec::new();
     }
 
-    let matches: Vec<LexicalEntry> = seed_entries()
+    let matches: Vec<LexicalEntry> = user_entries(user_directory, enabled_user_dictionaries)
         .into_iter()
-        .chain(freedict_entries().iter().cloned())
-        .chain(user_entries(user_directory, enabled_user_dictionaries))
         .filter(|entry| {
             language.is_none_or(|value| entry.language == value)
                 && (entry.lemma == normalized || entry.forms.iter().any(|form| form == &normalized))
@@ -290,29 +291,44 @@ pub fn lookup_with_user_directory(
         return merge_entries(matches);
     }
 
-    Vec::new()
+    merge_entries(matches)
 }
 
 pub fn list_user_dictionaries(user_directory: &Path) -> Vec<UserDictionary> {
     let Ok(files) = fs::read_dir(user_directory) else {
         return Vec::new();
     };
-    files
-        .filter_map(Result::ok)
-        .filter(|file| file.path().is_dir())
-        .filter_map(|file| {
-            let entries = user_stardict_entries(&file.path());
-            entries.first().map(|entry| UserDictionary {
-                id: file.file_name().to_string_lossy().to_string(),
-                name: entry
-                    .providers
-                    .first()
-                    .cloned()
-                    .unwrap_or_else(|| "User StarDict".into()),
-                entry_count: entries.len(),
-            })
-        })
-        .collect()
+    let mut dictionaries = Vec::new();
+    let root_entries = user_stardict_entries(user_directory);
+    if let Some(entry) = root_entries.first() {
+        dictionaries.push(UserDictionary {
+            id: ".".into(),
+            name: entry
+                .providers
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "User StarDict".into()),
+            entry_count: root_entries.len(),
+        });
+    }
+    dictionaries.extend(
+        files
+            .filter_map(Result::ok)
+            .filter(|file| file.path().is_dir())
+            .filter_map(|file| {
+                let entries = user_stardict_entries(&file.path());
+                entries.first().map(|entry| UserDictionary {
+                    id: file.file_name().to_string_lossy().to_string(),
+                    name: entry
+                        .providers
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| "User StarDict".into()),
+                    entry_count: entries.len(),
+                })
+            }),
+    );
+    dictionaries
 }
 
 fn user_entries(
@@ -546,47 +562,9 @@ mod tests {
     }
 
     #[test]
-    fn finds_lemma_and_inflected_form() {
-        assert_eq!(lookup("learn", Some("en"))[0].lemma, "learn");
-        assert_eq!(lookup("learning", Some("en"))[0].lemma, "learn");
-        assert!(lookup("learn", Some("en"))[0]
-            .providers
-            .contains(&"LingvoLoc seed".into()));
-        assert!(!lookup("learn", Some("en"))[0].examples.is_empty());
-    }
-
-    #[test]
-    fn ignores_unknown_language_and_word() {
-        assert!(lookup("learn", Some("ru")).is_empty());
-        assert!(lookup("zzzznotaword", Some("en")).is_empty());
-    }
-
-    #[test]
-    fn finds_russian_lemma_and_form() {
-        assert_eq!(lookup("язык", Some("ru"))[0].translations[0], "language");
-        assert_eq!(lookup("языки", Some("ru"))[0].lemma, "язык");
-    }
-
-    #[test]
-    fn searches_all_languages_without_a_filter() {
-        assert_eq!(lookup("translate", None)[0].language, "en");
-        assert_eq!(lookup("перевод", None)[0].language, "ru");
-    }
-
-    #[test]
-    fn covers_words_from_translation_selection_flow() {
-        assert_eq!(lookup("roughly", None)[0].translations[0], "примерно");
-        assert_eq!(lookup("несколько", None)[0].translations[0], "several");
-    }
-
-    #[test]
-    fn does_not_show_partial_wordnet_records() {
-        let entries = lookup("beautiful", Some("en"));
-        assert!(!entries.is_empty());
-        assert!(entries
-            .iter()
-            .all(|entry| entry.part_of_speech != "WORDNET SYNONYMS"));
-        assert!(lookup("zzzznotaword", Some("en")).is_empty());
+    fn bundled_dictionaries_are_not_used() {
+        assert!(lookup("learn", Some("en")).is_empty());
+        assert!(lookup("дом", Some("ru")).is_empty());
     }
 
     #[test]
@@ -599,18 +577,6 @@ mod tests {
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].translations, vec!["a noun", "another noun"]);
         assert_eq!(entries[1].translations, vec!["a verb"]);
-    }
-
-    #[test]
-    fn finds_bilingual_freedict_entries() {
-        let english = lookup("house", Some("en"));
-        assert_eq!(english[0].part_of_speech, "FreeDict ENG-RUS");
-        assert!(!english[0].translations.is_empty());
-
-        let russian = lookup("дом", Some("ru"));
-        assert_eq!(russian[0].part_of_speech, "FreeDict RUS-ENG");
-        assert!(!russian[0].translations.is_empty());
-        assert_eq!(russian[0].providers, vec!["FreeDict RUS-ENG"]);
     }
 
     #[test]

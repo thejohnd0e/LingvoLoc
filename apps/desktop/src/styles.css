@@ -17,7 +17,6 @@ body {
     linear-gradient(135deg, #101820 0%, #101820 55%, #0d151b 100%);
 }
 .clipboard-popup {
-  min-height: 100vh;
   padding: 18px;
   background: #14232b;
 }
@@ -236,6 +235,29 @@ textarea::placeholder {
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  text-align: center;
+}
+.main-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: end;
+  gap: 12px;
+  height: fit-content;
+  margin: 0 8px;
+  padding: 0 12px;
+  border-right: 1px solid #29434c;
+  border-left: 1px solid #29434c;
+}
+.main-pair label {
+  align-self: end;
+}
+.main-pair-label {
+  grid-column: 1 / -1;
+  color: #86b8ad;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
 }
 .swap {
   align-self: end;
@@ -264,6 +286,7 @@ textarea::placeholder {
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  text-align: center;
 }
 .model-row {
   display: flex;
@@ -487,6 +510,45 @@ textarea::placeholder {
   gap: 10px;
   margin-top: 12px;
 }
+.lexical-results-disclosure,
+.history-disclosure {
+  margin-top: 12px;
+}
+.dictionary-setup {
+  margin-top: 14px;
+}
+.dictionary-setup summary {
+  padding: 10px 2px;
+  color: #c7f36b;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.dictionary-setup[open] summary {
+  margin-bottom: 0;
+}
+.additional-options {
+  margin-top: 12px;
+}
+.additional-options > summary {
+  padding: 10px 2px;
+  border-bottom: 1px solid #29434c;
+  color: #c7f36b;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.additional-options > summary::marker {
+  color: #c7f36b;
+}
+.lexical-results-disclosure summary,
+.history-disclosure summary {
+  color: #c7f36b;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+.lexical-results-disclosure[open] summary,
+.history-disclosure[open] summary {
+  margin-bottom: 10px;
+}
 .lexical-entry {
   padding: 14px;
   border: 1px solid #29434c;
@@ -589,6 +651,14 @@ textarea:focus {
   .controls input,
   .controls select {
     width: 100%;
+  }
+  .main-pair {
+    width: 100%;
+    margin: 0;
+    padding: 12px 0 0;
+    border-top: 1px solid #29434c;
+    border-right: 0;
+    border-left: 0;
   }
   .lexical-heading {
     align-items: stretch;
