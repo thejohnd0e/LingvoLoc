@@ -1,0 +1,20 @@
+LingvoLoc bundles a generated JSON index derived from these FreeDict StarDict
+archives:
+
+- https://download.freedict.org/dictionaries/eng-rus/2025.11.23/
+- https://download.freedict.org/dictionaries/rus-eng/2025.11.23/
+
+SHA-512 checksums of the source archives:
+
+- eng-rus: FFBFBBE9817DC9A2A84FB8556D99BA73B5BC572EAB18F91988029ADFC2A7917616DD20D13C94A99871857A047CE2A47A3538BDE545F97065EB7E531D7A6EF4B4
+- rus-eng: 5EE14615B10463CE54EFBE23F9998676C34BE92A295351947471B8AA18077F05897B6ED924DBE37BED941F8DE04A276E48D598974D1B531B96C20567F72BF625
+
+The source dictionaries identify themselves as FreeDict+WikDict dictionaries
+derived from Wiktionary data. The bundled source data is licensed under the
+Creative Commons Attribution-ShareAlike 3.0 Unported license. The original
+FreeDict COPYING text is included in FREEDICT-COPYING.txt.
+
+The JSON file is a generated transformation of the StarDict records. It is not
+an original upstream file and may be regenerated with:
+
+  npm run lexical:index -- --stardict-dir <directory> --output <index.json>

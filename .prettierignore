@@ -1,0 +1,9 @@
+node_modules
+dist
+src-tauri/target
+apps/desktop/src-tauri/gen
+apps/desktop/src-tauri/data/lexical/*.json
+package-lock.json
+LocalTranslate_Technical_Spec.md
+.playwright-mcp
+DIC/*.zip

@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "LingvoLoc",
+  "version": "0.1.0",
+  "description": "Translate selected text through your local LingvoLoc desktop app.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "contextMenus",
+    "windows"
+  ],
+  "host_permissions": ["http://127.0.0.1:47831/*"],
+  "background": {
+    "service_worker": "assets/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Translate with LingvoLoc",
+    "default_popup": "popup.html"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "lingvoloc",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @lingvoloc/desktop",
+    "desktop:dev": "npm run tauri:dev --workspace @lingvoloc/desktop",
+    "build": "npm run build --workspace @lingvoloc/desktop",
+    "desktop:build": "npm run tauri:build --workspace @lingvoloc/desktop",
+    "extension:build": "npm run build --workspace @lingvoloc/extension",
+    "extension:typecheck": "npm run typecheck --workspace @lingvoloc/extension",
+    "extension:test": "npm run test --workspace @lingvoloc/extension",
+    "extension:package": "pwsh -File scripts/package-extension.ps1",
+    "lexical:index": "node scripts/build-lexical-index.mjs",
+    "test": "npm run test --workspace @lingvoloc/desktop",
+    "lint": "npm run lint --workspace @lingvoloc/desktop",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "npm run typecheck --workspace @lingvoloc/desktop",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run extension:typecheck && npm run extension:test && npm test && cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check && cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2"
+  }
+}

@@ -1,0 +1,30 @@
+[package]
+name = "lingvoloc"
+version = "0.1.0"
+description = "Private local translation desktop application"
+authors = ["LingvoLoc"]
+license = "MIT"
+edition = "2021"
+
+[lib]
+name = "lingvoloc_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-global-shortcut = "2"
+arboard = "3"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+whatlang = "0.16"
+rusqlite = { version = "0.32", features = ["bundled"] }
+rand = "0.9"
+flate2 = "1"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
