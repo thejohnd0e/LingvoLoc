@@ -641,9 +641,8 @@ export default function App() {
           <p className="eyebrow">LOCAL TRANSLATION WORKBENCH</p>
           <h1>LingvoLoc</h1>
           <p className="build-label">
-            v1.45 <span aria-hidden="true">·</span> build{' '}
-            {import.meta.env.VITE_BUILD_NUMBER}
-            <span aria-hidden="true"> · </span>
+            v{import.meta.env.VITE_APP_VERSION}{' '}
+            <span aria-hidden="true">·</span>{' '}
             <a
               href="https://github.com/thejohnd0e/LingoLoc"
               onClick={(event) => {

@@ -59,7 +59,6 @@
 - [x] Add extension API integration tests and package the extension for distribution.
 - [x] Manually load the extension in Chrome and verify pairing, popup translation, and context-menu translation.
 - [x] Perform a focused UI/design polish pass for desktop and extension surfaces.
-- [x] Show and automatically increment the desktop build number on production builds.
 - [x] Add persisted +/- text-size controls to the main and clipboard windows.
 - [x] Keep Dictionary lookup transient and separate from translation history.
 - [x] Add richer StarDict/Wiktionary definitions, forms, examples, and provider aggregation.
@@ -78,6 +77,7 @@
 - [x] Add on-demand rendering for images referenced by user StarDict entries.
 - [x] Read StarDict media resources from `res.zip` archives.
 - [x] Translate the source text when Enter is pressed in the main input.
+- [x] Let the NSIS installer choose between per-user and all-users installation.
 - [x] Hide the extension pairing form after a stored token is validated.
 - [x] Add extension action icons and improve the context-menu fallback window.
 - [x] Decouple clipboard popup text scale, enable mouse resizing, and fit its height automatically.
@@ -85,6 +85,6 @@
 - [x] Group the automatic detection language pair under a visually separated Main pair label.
 - [x] Remove duplicate visible pair labels and vertically tighten the Main pair control.
 - [x] Use LM Studio's current `/api/v1/models` loaded LLM instances instead of stale OpenAI catalog entries.
-- [x] Add a muted GitHub repository link beside the desktop build number.
+- [x] Add a muted GitHub repository link beside the desktop version.
 - [x] Open the GitHub link through Tauri's system browser opener.
 - [x] Add Chinese, Korean, and Thai language selection and local detection.

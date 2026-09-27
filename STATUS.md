@@ -28,11 +28,11 @@
 - Closing the main window now hides it to the system tray instead of exiting; `Quit` is the explicit exit action.
 - The main window has a normal taskbar button while visible; after close-to-tray, the window and its taskbar button are hidden while the tray icon remains.
 - Desktop and extension surfaces now have a focused visual polish pass with stronger hierarchy, responsive narrow-window layouts, and visible keyboard focus states.
-- The desktop UI shows the semantic app version and an automatically incremented production build number; the latest installer contains build 17.
+- The desktop UI shows the semantic app version and the GitHub repository link.
 - Dictionary lookup results are transient: a new lookup clears the prior cards, stale asynchronous responses are ignored, and a Clear action is available. Dictionary/model word requests do not write translation history.
 - Both the main window and clipboard popup now expose persisted `-`/`+` text-size controls from 50% through 100%.
 - Clipboard popup text size is persisted independently from the main window, and the popup can be resized with automatic height fitting on open and content changes.
-- The installed build 6 was tested end to end: Russian clipboard text translated to English through the global shortcut and the translated result was written back to the clipboard.
+- Russian clipboard text was tested end to end through the global shortcut, including writing the translated result back to the clipboard.
 - Launching LingvoLoc from a pinned taskbar shortcut while it is hidden now focuses the existing process instead of creating a second copy.
 - Global shortcuts are implemented: `Ctrl+Shift+L` shows the app, and `Ctrl+Shift+T` translates the current clipboard text.
 - Clipboard translation now uses a compact always-on-top popup window with source preview, translated result, and copy feedback.
@@ -57,7 +57,7 @@
 ## In Progress
 
 - The functional desktop, loopback API, and Chromium extension slices are complete. Lexical dictionary quality remains deferred to a focused data/UX pass.
-- The latest release build is 46. Release `1.45.0` includes text-size controls, transient Dictionary lookup behavior, user-selected StarDict folder loading, visible dictionary refresh/checkboxes, preserved/sanitized StarDict HTML definitions, on-demand StarDict audio/image media, and Enter-to-translate input.
+- The latest release is `1.45.0`. It includes text-size controls, transient Dictionary lookup behavior, user-selected StarDict folder loading, visible dictionary refresh/checkboxes, preserved/sanitized StarDict HTML definitions, on-demand StarDict audio/image media, Enter-to-translate input, and selectable per-user/all-users installation.
 
 ## Known Issues
 
@@ -68,6 +68,7 @@
 - Detection currently supports twelve languages: English, Russian, German, Spanish, French, Italian, Portuguese, Polish, Ukrainian, Chinese, Korean, and Thai.
 - History currently supports paging, search/favorites/export, schema versioning, and a full clear action; retention is capped at 1,000 non-favorite rows.
 - The installed application must be updated manually from the latest NSIS artifact after local rebuilds.
+- The NSIS installer offers both per-user Local AppData and all-users Program Files installation modes.
 - Tray, close-to-tray, pinned-shortcut reactivation, clipboard popup, and extension workflows have been functionally smoke-tested; future polish and broader regression coverage remain.
 - Clipboard access depends on the WebView2 permission/context; the translation still succeeds and reports a notice if copying is unavailable.
 - Product-name review selected `LingvoLoc`; final trademark and domain review remain required before public release.
@@ -97,5 +98,5 @@
 - The next work item is to improve parsing and sense quality for user-provided `rus-eng` records and add optional language metadata mapping for user dictionaries.
 - Dictionary lookup results are intentionally transient and separate from Recent translations. Existing historical rows from earlier builds can be removed with Clear history.
 - RuWordNet was reviewed but is not being bundled: its public acquisition path requires a maintainer request and describes non-commercial distribution terms.
-- Latest installer: `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_1.45.0_x64-setup.exe` (build 46).
+- Latest installer: `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_1.45.0_x64-setup.exe`.
 - Verification baseline: `npm run check`, `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`, and `npm run desktop:build` pass.

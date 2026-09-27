@@ -21,7 +21,7 @@ The app persists endpoint, model, adapter, language selections, two independentl
 
 ## Build
 
-Use `npm run build` for the frontend production build. Each production build increments `BUILD_NUMBER`, which is shown in the desktop UI. Use `npm run desktop:build` to compile the Tauri executable and create the x64 NSIS installer at `apps/desktop/src-tauri/target/release/bundle/nsis/`.
+Use `npm run build` for the frontend production build. The application version is managed in the package, Tauri, and extension manifests and is shown in the desktop UI. Use `npm run desktop:build` to compile the Tauri executable and create the x64 NSIS installer at `apps/desktop/src-tauri/target/release/bundle/nsis/`. The installer lets the user choose between a per-user installation in Local AppData and an all-users installation in Program Files.
 
 ## Testing
 

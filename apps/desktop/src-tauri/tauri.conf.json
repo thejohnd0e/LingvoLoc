@@ -35,5 +35,14 @@
     ],
     "security": { "csp": null }
   },
-  "bundle": { "active": true, "targets": ["nsis"], "icon": ["icons/icon.png"] }
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/icon.png"],
+    "windows": {
+      "nsis": {
+        "installMode": "both"
+      }
+    }
+  }
 }

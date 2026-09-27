@@ -3,15 +3,14 @@ import react from '@vitejs/plugin-react';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-const buildNumber = readFileSync(
-  path.resolve(process.cwd(), '../../BUILD_NUMBER'),
-  'utf8',
-).trim();
+const appVersion = JSON.parse(
+  readFileSync(path.resolve(process.cwd(), '../../package.json'), 'utf8'),
+).version as string;
 
 export default defineConfig({
   plugins: [react()],
   define: {
-    'import.meta.env.VITE_BUILD_NUMBER': JSON.stringify(buildNumber),
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
   },
   test: {
     environment: 'jsdom',
