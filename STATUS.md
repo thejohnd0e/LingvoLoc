@@ -8,7 +8,7 @@
 - Phase 0 workspace scaffold, frontend checks, and Rust test harness are implemented.
 - Phase 1 LM Studio runtime, TranslateGemma adapter, normalized commands, and initial UI flow are implemented.
 - `npm run desktop:build` successfully produces the native executable.
-- NSIS x64 installer bundling succeeds with `LingvoLoc_1.45.0_x64-setup.exe`.
+- NSIS x64 installer bundling succeeds with `LingvoLoc_1.45.1_x64-setup.exe`.
 - Native startup smoke test succeeds with window title `LingvoLoc`.
 - Manual smoke test passed for English, Russian, and German translation flows.
 - The initial Model Manager now shows model owner and quantization metadata; the single TranslateGemma adapter remains an internal setting.
@@ -57,7 +57,7 @@
 ## In Progress
 
 - The functional desktop, loopback API, and Chromium extension slices are complete. Lexical dictionary quality remains deferred to a focused data/UX pass.
-- The latest release is `1.45.0`. It includes text-size controls, transient Dictionary lookup behavior, user-selected StarDict folder loading, visible dictionary refresh/checkboxes, preserved/sanitized StarDict HTML definitions, on-demand StarDict audio/image media, Enter-to-translate input, and selectable per-user/all-users installation.
+- The latest release is `1.45.1`. It includes independent extension language directions, in-page movable/resizable popup behavior, result copying, and reliable TranslateGemma direction prompts in addition to the 1.45 desktop features.
 
 ## Known Issues
 
@@ -86,10 +86,11 @@
 - An authenticated loopback API foundation is implemented for the future Chromium extension: status, models, language pair, and translation endpoints on `127.0.0.1:47831`.
 - A minimal Chromium MV3 extension now supports token pairing, selected-text capture, context-menu selection, and popup translation through the local API.
 - Extension build and typecheck pass; Chrome pairing, popup translation, and context-menu translation are functionally verified.
-- Extension API tests pass and a distributable ZIP is produced at `apps/extension/LingvoLoc-extension-1.45.0.zip`.
+- Extension API tests pass and a distributable ZIP is produced at `apps/extension/LingvoLoc-extension-1.45.1.zip`.
 - Extension pairing now has an explicit `Pair extension` confirmation and validates the token against the desktop status endpoint before storing it.
-- The extension validates stored pairing on popup startup, hides the pairing form after successful authorization, includes branded action icons, and uses a larger fallback popup window for context-menu translation.
+- The extension validates stored pairing on popup startup, hides the pairing form after successful authorization, includes branded action icons, and opens context-menu translation in an in-page popup.
 - Chrome MCP confirmed the local API is reachable and rejects unauthenticated requests with HTTP 401; direct extension toolbar interaction remains outside the MCP page API.
+- Extension auto-source requests are now resolved by the desktop API before prompting TranslateGemma, and context-menu translation opens an in-page extension popup without creating a browser window.
 - Desktop startup now restores the last persisted model, validates it against LM Studio, and synchronizes the selected model into native state before extension requests.
 - LM Studio model discovery now uses `/api/v1/models` and its loaded LLM instances, with a cache-busted `/v1/models` fallback for older LM Studio versions.
 
@@ -98,5 +99,5 @@
 - The next work item is to improve parsing and sense quality for user-provided `rus-eng` records and add optional language metadata mapping for user dictionaries.
 - Dictionary lookup results are intentionally transient and separate from Recent translations. Existing historical rows from earlier builds can be removed with Clear history.
 - RuWordNet was reviewed but is not being bundled: its public acquisition path requires a maintainer request and describes non-commercial distribution terms.
-- Latest installer: `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_1.45.0_x64-setup.exe`.
+- Latest installer: `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_1.45.1_x64-setup.exe`.
 - Verification baseline: `npm run check`, `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`, and `npm run desktop:build` pass.

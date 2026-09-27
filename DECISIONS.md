@@ -27,8 +27,8 @@
 
 ## TranslateGemma Phase 1 Payload
 
-- **Decision:** Send TranslateGemma a plain text OpenAI-compatible user message with explicit source and target language codes in the prompt; do not send language metadata as an object-valued `content` field.
-- **Reason:** The local LM Studio endpoint accepted string and text-part content, but rejected object-valued content with HTTP 400. The adapter keeps this provider-specific prompt shape out of the UI.
+- **Decision:** Send a plain LM Studio-compatible user message with explicit source and target language names and codes in the prompt.
+- **Reason:** The installed LM Studio GGUF accepts the structured payload but ignores its language metadata; the plain prompt is the working direction-control format for this runtime.
 
 ## Repository Visibility
 

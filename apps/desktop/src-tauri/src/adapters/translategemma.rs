@@ -20,8 +20,12 @@ impl TranslationModelAdapter for TranslateGemmaAdapter {
             messages: vec![ChatMessage {
                 role: "user".into(),
                 content: format!(
-                    "Translate the following text from {} to {}. Return only the translation.\n{}",
-                    request.source_language, request.target_language, request.text
+                    "Translate the following text from {} ({}) to {} ({}). Return only the translation in the target language. Do not answer in English unless English is the target language.\n{}",
+                    language_name(&request.source_language),
+                    request.source_language,
+                    language_name(&request.target_language),
+                    request.target_language,
+                    request.text
                 ),
             }],
             temperature: 0.0,
@@ -42,6 +46,24 @@ impl TranslationModelAdapter for TranslateGemmaAdapter {
             ));
         }
         Ok(strip_markdown_wrapper(text))
+    }
+}
+
+fn language_name(code: &str) -> &str {
+    match code {
+        "en" => "English",
+        "ru" => "Russian",
+        "de" => "German",
+        "es" => "Spanish",
+        "fr" => "French",
+        "it" => "Italian",
+        "pt" => "Portuguese",
+        "pl" => "Polish",
+        "uk" => "Ukrainian",
+        "zh" => "Chinese",
+        "ko" => "Korean",
+        "th" => "Thai",
+        other => other,
     }
 }
 
@@ -90,7 +112,9 @@ mod tests {
             .build_request(&request)
             .expect("request should build");
         assert_eq!(built.temperature, 0.0);
-        assert!(built.messages[0].content.contains("from en to fr"));
+        assert!(built.messages[0]
+            .content
+            .contains("from English (en) to French (fr)"));
     }
 
     #[test]

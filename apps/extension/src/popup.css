@@ -10,15 +10,17 @@
   box-sizing: border-box;
 }
 body {
-  width: 420px;
-  min-height: 100vh;
+  width: 360px;
   margin: 0;
-  background:
-    radial-gradient(circle at 100% 0%, #20303c 0, transparent 42%), #11161c;
+  background: #0f151b;
 }
 .shell {
-  min-height: 100vh;
-  padding: 22px;
+  padding: 17px;
+  background: radial-gradient(
+    circle at 100% 0%,
+    rgb(46 76 85 / 28%),
+    transparent 40%
+  );
 }
 [hidden] {
   display: none !important;
@@ -31,23 +33,49 @@ header,
 }
 header {
   align-items: flex-start;
-  margin-bottom: 20px;
+  margin-bottom: 17px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: grab;
+  user-select: none;
+}
+.brand:active {
+  cursor: grabbing;
+}
+.brand-mark {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid #586c79;
+  border-radius: 8px;
+  background: #d6f36b;
+  color: #17200d;
+  font:
+    700 17px Georgia,
+    serif;
 }
 .header-tools {
   display: grid;
   justify-items: end;
   gap: 7px;
 }
+body.embedded .header-tools {
+  padding-right: 28px;
+}
 .font-controls {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   color: #92a3b7;
   font-size: 11px;
 }
 .font-button {
-  width: 24px;
-  height: 22px;
+  width: 23px;
+  height: 21px;
   padding: 0;
   border: 1px solid #405264;
   border-radius: 4px;
@@ -57,9 +85,9 @@ header {
   line-height: 1;
 }
 h1 {
-  margin: 2px 0 0;
+  margin: 1px 0 0;
   font:
-    700 25px/1 Georgia,
+    700 22px/1 Georgia,
     serif;
   letter-spacing: -0.04em;
 }
@@ -67,7 +95,7 @@ h1 {
   display: block;
   width: 42px;
   height: 3px;
-  margin-top: 18px;
+  margin-top: 16px;
   border-radius: 999px;
   background: #d6f36b;
   content: '';
@@ -81,13 +109,22 @@ h1 {
   text-transform: uppercase;
 }
 .status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   color: #8be0b0;
-  padding-top: 4px;
+  padding-top: 2px;
+}
+.status i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
 }
 .field {
   display: grid;
   gap: 5px;
-  margin-bottom: 12px;
+  margin-bottom: 11px;
 }
 .pairing {
   display: grid;
@@ -101,15 +138,23 @@ h1 {
 .compact {
   flex: 1;
 }
+.pair-row {
+  align-items: end;
+}
+.direction {
+  padding-bottom: 10px;
+  color: #718095;
+  font-size: 16px;
+}
 input,
 select,
 textarea {
   width: 100%;
   border: 1px solid #2b3745;
-  border-radius: 7px;
-  background: #19212b;
+  border-radius: 8px;
+  background: #18212b;
   color: #f3f6fa;
-  padding: 9px;
+  padding: 9px 10px;
   font: inherit;
   transition:
     border-color 140ms ease,
@@ -117,20 +162,32 @@ textarea {
 }
 textarea {
   resize: vertical;
-  min-height: 88px;
+  min-height: 96px;
 }
 button {
   width: 100%;
   border: 0;
-  border-radius: 7px;
+  border-radius: 8px;
   background: #d6f36b;
   color: #17200d;
-  padding: 11px;
+  padding: 11px 12px;
   font-weight: 700;
   cursor: pointer;
   transition:
     filter 140ms ease,
     opacity 140ms ease;
+}
+button#translate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+button#translate b {
+  color: #62742e;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 button:hover:not(:disabled) {
   filter: brightness(1.08);
@@ -160,14 +217,37 @@ button:disabled {
 }
 output {
   display: block;
-  min-height: 54px;
-  margin-top: 14px;
-  padding: 11px;
-  border-radius: 7px;
-  background: #19212b;
+  min-height: 48px;
+  margin-top: 6px;
+  padding: 11px 12px;
+  border-radius: 8px;
+  background: #18212b;
   border: 1px solid #2b3745;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+.result-wrap {
+  margin-top: 14px;
+}
+.result-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.result-label {
+  color: #718095;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+.copy-button {
+  width: auto;
+  padding: 3px 8px;
+  border: 1px solid #526577;
+  border-radius: 5px;
+  background: transparent;
+  color: #d6f36b;
+  font-size: 10px;
+  line-height: 1.2;
 }
 .hint {
   margin: 12px 0 0;

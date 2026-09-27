@@ -133,10 +133,18 @@ fn translate(request: &HttpRequest, state: &AppState) -> (u16, String) {
             "a model must be selected in LingvoLoc".into(),
         ));
     }
+    let source_language = if body.source_language == "auto" {
+        match crate::services::detection::detect_supported_language(&body.text) {
+            Ok(language) => language.code,
+            Err(error) => return error_response(error),
+        }
+    } else {
+        body.source_language
+    };
     let request = TranslationRequest {
         model_id: settings.model_id.clone(),
         adapter_id: settings.adapter_id.clone(),
-        source_language: body.source_language,
+        source_language,
         target_language: body.target_language,
         text: body.text,
     };

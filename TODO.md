@@ -88,3 +88,4 @@
 - [x] Add a muted GitHub repository link beside the desktop version.
 - [x] Open the GitHub link through Tauri's system browser opener.
 - [x] Add Chinese, Korean, and Thai language selection and local detection.
+- [x] Resolve extension auto-source requests before model translation and keep context-menu translation inside the current page.
