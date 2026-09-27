@@ -80,3 +80,6 @@
 - [x] Remove the popup full-viewport minimum height so auto-fitting has no empty space.
 - [x] Group the automatic detection language pair under a visually separated Main pair label.
 - [x] Remove duplicate visible pair labels and vertically tighten the Main pair control.
+- [x] Use LM Studio's current `/api/v1/models` loaded LLM instances instead of stale OpenAI catalog entries.
+- [x] Add a muted GitHub repository link beside the desktop build number.
+- [x] Open the GitHub link through Tauri's system browser opener.

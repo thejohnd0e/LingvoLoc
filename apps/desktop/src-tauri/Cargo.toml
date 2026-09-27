@@ -20,6 +20,7 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-single-instance = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
 arboard = "3"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 whatlang = "0.16"

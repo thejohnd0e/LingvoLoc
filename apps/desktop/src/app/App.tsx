@@ -1,6 +1,7 @@
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { useEffect, useRef, useState } from 'react';
 import {
   getRuntimeStatus,
@@ -605,6 +606,16 @@ export default function App() {
           <p className="build-label">
             v0.1.0 <span aria-hidden="true">·</span> build{' '}
             {import.meta.env.VITE_BUILD_NUMBER}
+            <span aria-hidden="true"> · </span>
+            <a
+              href="https://github.com/thejohnd0e/LingoLoc"
+              onClick={(event) => {
+                event.preventDefault();
+                void openUrl('https://github.com/thejohnd0e/LingoLoc');
+              }}
+            >
+              GitHub
+            </a>
           </p>
         </div>
         <div className="masthead-actions">

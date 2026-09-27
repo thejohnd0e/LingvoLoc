@@ -57,7 +57,7 @@
 ## In Progress
 
 - The functional desktop, loopback API, and Chromium extension slices are complete. Lexical dictionary quality remains deferred to a focused data/UX pass.
-- The latest release build is 31. Text-size controls, transient Dictionary lookup behavior, user-selected StarDict folder loading, visible dictionary refresh/checkboxes, and preserved/sanitized StarDict HTML definitions are complete.
+- The latest release build is 35. Text-size controls, transient Dictionary lookup behavior, user-selected StarDict folder loading, visible dictionary refresh/checkboxes, and preserved/sanitized StarDict HTML definitions are complete.
 
 ## Known Issues
 
@@ -89,11 +89,12 @@
 - The extension validates stored pairing on popup startup, hides the pairing form after successful authorization, includes branded action icons, and uses a larger fallback popup window for context-menu translation.
 - Chrome MCP confirmed the local API is reachable and rejects unauthenticated requests with HTTP 401; direct extension toolbar interaction remains outside the MCP page API.
 - Desktop startup now restores the last persisted model, validates it against LM Studio, and synchronizes the selected model into native state before extension requests.
+- LM Studio model discovery now uses `/api/v1/models` and its loaded LLM instances, with a cache-busted `/v1/models` fallback for older LM Studio versions.
 
 ## Next Step
 
 - The next work item is to improve parsing and sense quality for user-provided `rus-eng` records and add optional language metadata mapping for user dictionaries.
 - Dictionary lookup results are intentionally transient and separate from Recent translations. Existing historical rows from earlier builds can be removed with Clear history.
 - RuWordNet was reviewed but is not being bundled: its public acquisition path requires a maintainer request and describes non-commercial distribution terms.
-- Latest installer: `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_0.1.0_x64-setup.exe` (build 31).
+- Latest installer: `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_0.1.0_x64-setup.exe` (build 35).
 - Verification baseline: `npm run check`, `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`, and `npm run desktop:build` pass.

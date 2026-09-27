@@ -4,7 +4,7 @@ use crate::domain::{
 };
 use reqwest::blocking::Client;
 use serde::Deserialize;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub struct LmStudioRuntime {
     endpoint: String,
@@ -45,11 +45,34 @@ impl LmStudioRuntime {
             detail: summarize(&detail),
         }
     }
+
+    fn fresh_models_url(&self) -> String {
+        let cache_bust = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+        format!("{}/models?cache_bust={cache_bust}", self.endpoint)
+    }
+
+    fn api_models_url(&self) -> String {
+        let base = self
+            .endpoint
+            .strip_suffix("/v1")
+            .unwrap_or(&self.endpoint)
+            .trim_end_matches('/');
+        format!("{base}/api/v1/models")
+    }
 }
 
 impl ModelRuntime for LmStudioRuntime {
     fn status(&self) -> Result<RuntimeStatus, RuntimeError> {
-        match self.client.get(format!("{}/models", self.endpoint)).send() {
+        match self
+            .client
+            .get(self.fresh_models_url())
+            .header("Cache-Control", "no-cache, no-store")
+            .header("Pragma", "no-cache")
+            .send()
+        {
             Ok(response) if response.status().is_success() => Ok(RuntimeStatus {
                 available: true,
                 endpoint: self.endpoint.clone(),
@@ -63,7 +86,53 @@ impl ModelRuntime for LmStudioRuntime {
     fn list_models(&self) -> Result<Vec<LocalModel>, RuntimeError> {
         let response = self
             .client
-            .get(format!("{}/models", self.endpoint))
+            .get(self.api_models_url())
+            .header("Cache-Control", "no-cache, no-store")
+            .header("Pragma", "no-cache")
+            .send()
+            .map_err(Self::map_request_error)?;
+        if response.status().is_success() {
+            let payload: ApiModelsResponse = response
+                .json()
+                .map_err(|error| RuntimeError::MalformedResponse(error.to_string()))?;
+            let models = payload
+                .models
+                .into_iter()
+                .filter(|model| model.model_type == "llm")
+                .flat_map(|model| {
+                    if model.loaded_instances.is_empty() {
+                        vec![LocalModel {
+                            id: model.key.clone(),
+                            owned_by: Some(model.publisher),
+                            quantization: model.quantization.map(|value| value.name),
+                        }]
+                    } else {
+                        model
+                            .loaded_instances
+                            .into_iter()
+                            .map(|instance| LocalModel {
+                                quantization: quantization_from_id(&instance.id).or_else(|| {
+                                    model.quantization.as_ref().map(|value| value.name.clone())
+                                }),
+                                id: instance.id,
+                                owned_by: Some(model.publisher.clone()),
+                            })
+                            .collect()
+                    }
+                })
+                .collect();
+            return Ok(models);
+        }
+
+        if response.status() != reqwest::StatusCode::NOT_FOUND {
+            return Err(Self::response_error(response));
+        }
+
+        let response = self
+            .client
+            .get(self.fresh_models_url())
+            .header("Cache-Control", "no-cache, no-store")
+            .header("Pragma", "no-cache")
             .send()
             .map_err(Self::map_request_error)?;
         if !response.status().is_success() {
@@ -118,6 +187,29 @@ impl ModelRuntime for LmStudioRuntime {
 #[derive(Deserialize)]
 struct ModelsResponse {
     data: Vec<ModelResponse>,
+}
+#[derive(Deserialize)]
+struct ApiModelsResponse {
+    models: Vec<ApiModelResponse>,
+}
+#[derive(Deserialize)]
+struct ApiModelResponse {
+    #[serde(rename = "type")]
+    model_type: String,
+    publisher: String,
+    key: String,
+    #[serde(default)]
+    quantization: Option<ApiQuantization>,
+    #[serde(default)]
+    loaded_instances: Vec<LoadedModelResponse>,
+}
+#[derive(Deserialize)]
+struct LoadedModelResponse {
+    id: String,
+}
+#[derive(Deserialize)]
+struct ApiQuantization {
+    name: String,
 }
 #[derive(Deserialize)]
 struct ModelResponse {
@@ -178,7 +270,7 @@ mod tests {
     #[test]
     fn lists_models_from_openai_compatible_response() {
         let endpoint = server(
-            r#"{"data":[{"id":"translategemma-4b-it@q8_0","owned_by":"local"}]}"#,
+            r#"{"models":[{"type":"llm","publisher":"local","key":"translategemma-4b-it","quantization":{"name":"Q8_0"},"loaded_instances":[{"id":"translategemma-4b-it@q8_0"}]}]}"#,
             "200 OK",
         );
         let models = LmStudioRuntime::new(&endpoint)
