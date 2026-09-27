@@ -135,5 +135,8 @@ export const lookupLexicon = (
 export const listUserDictionaries = (directory?: string) =>
   invokeNative<UserDictionary[]>('list_user_dictionaries', { directory });
 
+export const readDictionaryMedia = (directory: string, resource: string) =>
+  invokeNative<string>('read_dictionary_media', { directory, resource });
+
 export const translateWord = (request: TranslationRequest) =>
   invokeNative<TranslationResult>('translate_word', { request });

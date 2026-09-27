@@ -513,6 +513,25 @@ textarea::placeholder {
 .dictionary-definition-html strong {
   color: #eff5ef;
 }
+.dictionary-media {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  color: #9fb9b7;
+  font-size: 0.85rem;
+}
+.dictionary-media audio {
+  height: 30px;
+  max-width: 100%;
+}
+.dictionary-media img {
+  display: block;
+  max-width: min(100%, 360px);
+  max-height: 240px;
+  object-fit: contain;
+  border-radius: 6px;
+}
 .lexical-results {
   display: grid;
   gap: 10px;

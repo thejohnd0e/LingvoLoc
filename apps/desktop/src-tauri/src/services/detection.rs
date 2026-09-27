@@ -23,6 +23,9 @@ pub fn detect_supported_language(text: &str) -> Result<DetectedLanguage, Runtime
         Lang::Por => "pt",
         Lang::Pol => "pl",
         Lang::Ukr => "uk",
+        Lang::Cmn => "zh",
+        Lang::Kor => "ko",
+        Lang::Tha => "th",
         _ if text.chars().any(|character| character.is_alphabetic())
             && text.chars().all(|character| {
                 !character.is_ascii()
@@ -107,6 +110,24 @@ mod tests {
                 .unwrap()
                 .code,
             "uk"
+        );
+        assert_eq!(
+            detect_supported_language("这是一个本地翻译工具")
+                .unwrap()
+                .code,
+            "zh"
+        );
+        assert_eq!(
+            detect_supported_language("이것은 로컬 번역 도구입니다")
+                .unwrap()
+                .code,
+            "ko"
+        );
+        assert_eq!(
+            detect_supported_language("นี่คือเครื่องมือแปลภาษาในเครื่อง")
+                .unwrap()
+                .code,
+            "th"
         );
     }
 

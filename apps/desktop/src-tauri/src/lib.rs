@@ -212,6 +212,12 @@ fn lookup_lexicon(
 }
 
 #[tauri::command]
+fn read_dictionary_media(directory: String, resource: String) -> Result<String, RuntimeError> {
+    services::lexical::read_media_data_uri(std::path::Path::new(&directory), &resource)
+        .map_err(RuntimeError::InvalidInput)
+}
+
+#[tauri::command]
 fn list_user_dictionaries(
     directory: Option<String>,
 ) -> Result<Vec<services::lexical::UserDictionary>, RuntimeError> {
@@ -354,6 +360,7 @@ pub fn run() {
             export_history,
             take_clipboard_request,
             lookup_lexicon,
+            read_dictionary_media,
             list_user_dictionaries,
             translate_word
         ])

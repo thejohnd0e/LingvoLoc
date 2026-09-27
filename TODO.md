@@ -74,6 +74,10 @@
 - [x] Add one collapsed additional-options section around dictionary lookup and history.
 - [x] Keep Recent translations in its own nested collapsed section.
 - [x] Stop creating or using the legacy app-data dictionary folder.
+- [x] Add playback controls for audio pronunciation files referenced by user StarDict entries.
+- [x] Add on-demand rendering for images referenced by user StarDict entries.
+- [x] Read StarDict media resources from `res.zip` archives.
+- [x] Translate the source text when Enter is pressed in the main input.
 - [x] Hide the extension pairing form after a stored token is validated.
 - [x] Add extension action icons and improve the context-menu fallback window.
 - [x] Decouple clipboard popup text scale, enable mouse resizing, and fit its height automatically.
@@ -83,3 +87,4 @@
 - [x] Use LM Studio's current `/api/v1/models` loaded LLM instances instead of stale OpenAI catalog entries.
 - [x] Add a muted GitHub repository link beside the desktop build number.
 - [x] Open the GitHub link through Tauri's system browser opener.
+- [x] Add Chinese, Korean, and Thai language selection and local detection.

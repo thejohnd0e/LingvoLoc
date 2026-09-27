@@ -7,6 +7,7 @@ import {
   getRuntimeStatus,
   getApiToken,
   listUserDictionaries,
+  readDictionaryMedia,
   detectLanguage,
   clearHistory,
   exportHistory,
@@ -90,6 +91,19 @@ function sanitizeDictionaryHtml(value: string): string {
     ) {
       element.remove();
       continue;
+    }
+    if (['AUDIO', 'SOURCE', 'IMG'].includes(element.tagName)) {
+      const src = element.getAttribute('src') ?? '';
+      const hasDeferredMedia = element.hasAttribute(
+        'data-dictionary-media-resource',
+      );
+      if (
+        !hasDeferredMedia &&
+        !/^data:(audio|image)\/[a-z0-9.+-]+;base64,/i.test(src)
+      ) {
+        element.remove();
+        continue;
+      }
     }
     for (const attribute of [...element.attributes]) {
       if (attribute.name.toLowerCase().startsWith('on')) {
@@ -221,6 +235,29 @@ export default function App() {
     // This initialization intentionally runs once; the selected folder is persisted locally.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const media = document.querySelectorAll<HTMLElement>(
+      '.dictionary-definition-html [data-dictionary-media-resource]',
+    );
+    for (const element of media) {
+      const resource = element.getAttribute('data-dictionary-media-resource');
+      const directory = element
+        .closest('.dictionary-media')
+        ?.getAttribute('data-dictionary-media-directory');
+      if (!resource || !directory) continue;
+      void readDictionaryMedia(directory, resource)
+        .then((source) => {
+          if (active && element.isConnected)
+            element.setAttribute('src', source);
+        })
+        .catch(() => element.remove());
+    }
+    return () => {
+      active = false;
+    };
+  }, [lexicalResults]);
 
   function updateSettings(patch: Partial<Settings>) {
     const next = { ...settings, ...patch };
@@ -604,7 +641,7 @@ export default function App() {
           <p className="eyebrow">LOCAL TRANSLATION WORKBENCH</p>
           <h1>LingvoLoc</h1>
           <p className="build-label">
-            v0.1.0 <span aria-hidden="true">·</span> build{' '}
+            v1.45 <span aria-hidden="true">·</span> build{' '}
             {import.meta.env.VITE_BUILD_NUMBER}
             <span aria-hidden="true"> · </span>
             <a
@@ -648,7 +685,7 @@ export default function App() {
               );
             }}
             onKeyDown={(event) => {
-              if (event.ctrlKey && event.key === 'Enter') {
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
                 event.preventDefault();
                 void runTranslation();
               }
@@ -716,6 +753,9 @@ export default function App() {
             <option value="pt">Portuguese</option>
             <option value="pl">Polish</option>
             <option value="uk">Ukrainian</option>
+            <option value="zh">Chinese</option>
+            <option value="ko">Korean</option>
+            <option value="th">Thai</option>
           </select>
         </label>
         <button
@@ -728,12 +768,17 @@ export default function App() {
         <label>
           To
           <select
-            value={settings.targetLanguage}
+            value={
+              settings.sourceLanguage === 'auto'
+                ? 'auto'
+                : settings.targetLanguage
+            }
             disabled={settings.sourceLanguage === 'auto'}
             onChange={(event) =>
               updateSettings({ targetLanguage: event.target.value })
             }
           >
+            <option value="auto">Auto</option>
             <option value="en">English</option>
             <option value="ru">Russian</option>
             <option value="de">German</option>
@@ -743,6 +788,9 @@ export default function App() {
             <option value="pt">Portuguese</option>
             <option value="pl">Polish</option>
             <option value="uk">Ukrainian</option>
+            <option value="zh">Chinese</option>
+            <option value="ko">Korean</option>
+            <option value="th">Thai</option>
           </select>
         </label>
         <div className="main-pair">
@@ -764,6 +812,9 @@ export default function App() {
               <option value="pt">Portuguese</option>
               <option value="pl">Polish</option>
               <option value="uk">Ukrainian</option>
+              <option value="zh">Chinese</option>
+              <option value="ko">Korean</option>
+              <option value="th">Thai</option>
             </select>
           </label>
           <label>
@@ -783,6 +834,9 @@ export default function App() {
               <option value="pt">Portuguese</option>
               <option value="pl">Polish</option>
               <option value="uk">Ukrainian</option>
+              <option value="zh">Chinese</option>
+              <option value="ko">Korean</option>
+              <option value="th">Thai</option>
             </select>
           </label>
         </div>

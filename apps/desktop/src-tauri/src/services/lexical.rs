@@ -1,9 +1,11 @@
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{Cursor, Read};
 use std::path::Path;
 use std::sync::OnceLock;
+use zip::ZipArchive;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LexicalEntry {
@@ -391,7 +393,7 @@ fn user_stardict_entries(directory: &Path) -> Vec<LexicalEntry> {
         .unwrap_or_else(|| "User StarDict".into())
         .trim()
         .to_string();
-    parse_stardict_index(&index, &dictionary, provider)
+    parse_stardict_index_with_audio(&index, &dictionary, provider, Some(directory))
 }
 
 fn read_maybe_gzip(path: &Path, compressed_path: &Path) -> Result<Vec<u8>, std::io::Error> {
@@ -418,7 +420,17 @@ fn read_dictionary(path: &Path, compressed_path: &Path) -> Result<Vec<u8>, std::
     }
 }
 
+#[cfg(test)]
 fn parse_stardict_index(index: &[u8], dictionary: &[u8], provider: String) -> Vec<LexicalEntry> {
+    parse_stardict_index_with_audio(index, dictionary, provider, None)
+}
+
+fn parse_stardict_index_with_audio(
+    index: &[u8],
+    dictionary: &[u8],
+    provider: String,
+    audio_directory: Option<&Path>,
+) -> Vec<LexicalEntry> {
     let mut entries = Vec::new();
     let mut offset = 0;
     while offset < index.len() {
@@ -440,17 +452,16 @@ fn parse_stardict_index(index: &[u8], dictionary: &[u8], provider: String) -> Ve
             .saturating_add(content_length)
             .min(dictionary.len());
         if !lemma.is_empty() && content_offset < end {
-            let definition =
-                clean_user_definition(&String::from_utf8_lossy(&dictionary[content_offset..end]));
+            let raw_definition = String::from_utf8_lossy(&dictionary[content_offset..end]);
+            let definition = clean_user_definition(&raw_definition);
             if !definition.is_empty() {
+                let definition_html = add_audio_controls(&raw_definition, audio_directory);
                 entries.push(LexicalEntry {
                     lemma,
                     language: "und".into(),
                     part_of_speech: "User dictionary".into(),
                     translations: Vec::new(),
-                    definitions: vec![
-                        String::from_utf8_lossy(&dictionary[content_offset..end]).into_owned()
-                    ],
+                    definitions: vec![definition_html],
                     forms: Vec::new(),
                     synonyms: Vec::new(),
                     antonyms: Vec::new(),
@@ -463,6 +474,218 @@ fn parse_stardict_index(index: &[u8], dictionary: &[u8], provider: String) -> Ve
         offset = word_end + 9;
     }
     entries
+}
+
+fn add_audio_controls(value: &str, directory: Option<&Path>) -> String {
+    let Some(directory) = directory else {
+        return value.to_owned();
+    };
+    let mut controls: Vec<(String, String, &'static str)> = Vec::new();
+    for token in value.split(|character: char| {
+        character.is_whitespace()
+            || matches!(
+                character,
+                '"' | '\'' | '<' | '>' | '[' | ']' | '(' | ')' | ',' | ';'
+            )
+    }) {
+        let candidate = token
+            .trim_start_matches("src=")
+            .trim_start_matches("sound://")
+            .trim_start_matches("sound:")
+            .trim_matches(|character| matches!(character, '/' | '{' | '}'));
+        if candidate.is_empty() || candidate.contains("..") {
+            continue;
+        }
+        let path = Path::new(candidate);
+        let Some(extension) = path.extension().and_then(|value| value.to_str()) else {
+            continue;
+        };
+        let Some(kind) = media_kind(extension) else {
+            continue;
+        };
+        if path.is_absolute()
+            || path.components().any(|component| {
+                matches!(
+                    component,
+                    std::path::Component::ParentDir | std::path::Component::RootDir
+                )
+            })
+        {
+            continue;
+        }
+        let label = escape_html(candidate);
+        if !controls.iter().any(|control| control.0 == candidate) {
+            controls.push((candidate.to_owned(), label, kind));
+        }
+    }
+    if controls.is_empty() {
+        return value.to_owned();
+    }
+    let mut visible_value = value.to_owned();
+    for (resource, _, _) in &controls {
+        for reference in [
+            resource.clone(),
+            format!("sound://{resource}"),
+            format!("sound:{resource}"),
+            format!("src={resource}"),
+        ] {
+            visible_value = visible_value.replace(&reference, "");
+        }
+    }
+    if controls.iter().any(|(_, _, kind)| *kind == "image") {
+        visible_value = visible_value.replace("See picture:", "");
+        visible_value = visible_value.replace("See picture", "");
+    }
+    let audio_controls = controls
+        .into_iter()
+        .map(|(resource, _label, kind)| {
+            let resource = escape_html(&resource);
+            let directory = escape_html(&directory.to_string_lossy());
+            let tag = if kind == "audio" {
+                format!(
+                    "<audio controls preload=\"none\" data-dictionary-media-resource=\"{resource}\"></audio>"
+                )
+            } else {
+                format!(
+                    "<img loading=\"lazy\" data-dictionary-media-resource=\"{resource}\">"
+                )
+            };
+            format!("<div class=\"dictionary-media\" data-dictionary-media-directory=\"{directory}\">{tag}</div>")
+        })
+        .collect::<String>();
+    format!("{visible_value}{audio_controls}")
+}
+
+fn media_kind(extension: &str) -> Option<&'static str> {
+    match extension.to_ascii_lowercase().as_str() {
+        "wav" | "mp3" | "ogg" | "oga" | "flac" | "m4a" | "aac" => Some("audio"),
+        "jpg" | "jpeg" | "png" | "gif" | "webp" | "svg" => Some("image"),
+        _ => None,
+    }
+}
+
+pub fn read_media_data_uri(directory: &Path, resource: &str) -> Result<String, String> {
+    let path = Path::new(resource);
+    if resource.is_empty()
+        || path.is_absolute()
+        || path.components().any(|component| {
+            matches!(
+                component,
+                std::path::Component::ParentDir | std::path::Component::RootDir
+            )
+        })
+    {
+        return Err("invalid dictionary media path".into());
+    }
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "dictionary media extension is missing".to_string())?;
+    media_kind(extension).ok_or_else(|| "unsupported dictionary media type".to_string())?;
+    let mime = match extension.to_ascii_lowercase().as_str() {
+        "wav" => "audio/wav",
+        "mp3" => "audio/mpeg",
+        "ogg" | "oga" => "audio/ogg",
+        "flac" => "audio/flac",
+        "m4a" => "audio/mp4",
+        "aac" => "audio/aac",
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        _ => unreachable!(),
+    };
+    let bytes = read_media_bytes(directory, path)?;
+    Ok(format!("data:{mime};base64,{}", BASE64.encode(bytes)))
+}
+
+fn read_media_bytes(directory: &Path, resource: &Path) -> Result<Vec<u8>, String> {
+    if let Some(media_path) = find_media_path(directory, resource) {
+        return fs::read(media_path).map_err(|error| error.to_string());
+    }
+    let archive_path = find_archive_path(directory)
+        .ok_or_else(|| "dictionary media file was not found".to_string())?;
+    let archive_file = fs::File::open(archive_path).map_err(|error| error.to_string())?;
+    let mut archive = ZipArchive::new(archive_file).map_err(|error| error.to_string())?;
+    let resource_name = resource
+        .file_name()
+        .ok_or_else(|| "dictionary media filename is missing".to_string())?;
+    for index in 0..archive.len() {
+        let mut file = archive.by_index(index).map_err(|error| error.to_string())?;
+        let name = Path::new(file.name());
+        if name == resource || name.file_name() == Some(resource_name) {
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes)
+                .map_err(|error| error.to_string())?;
+            return Ok(bytes);
+        }
+    }
+    Err("dictionary media file was not found".into())
+}
+
+fn find_media_path(directory: &Path, resource: &Path) -> Option<std::path::PathBuf> {
+    let direct = directory.join(resource);
+    if direct.is_file() {
+        return Some(direct);
+    }
+    let file_name = resource.file_name()?;
+    find_media_file_recursive(directory, file_name).or_else(|| {
+        directory
+            .parent()
+            .and_then(|parent| find_media_file_recursive(parent, file_name))
+    })
+}
+
+fn find_media_file_recursive(
+    directory: &Path,
+    file_name: &std::ffi::OsStr,
+) -> Option<std::path::PathBuf> {
+    let entries = fs::read_dir(directory).ok()?;
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        if path.is_file() && path.file_name() == Some(file_name) {
+            return Some(path);
+        }
+        if path.is_dir() {
+            if let Some(found) = find_media_file_recursive(&path, file_name) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
+fn find_archive_path(directory: &Path) -> Option<std::path::PathBuf> {
+    find_file_recursive(directory, "res.zip").or_else(|| {
+        directory
+            .parent()
+            .and_then(|parent| find_file_recursive(parent, "res.zip"))
+    })
+}
+
+fn find_file_recursive(directory: &Path, file_name: &str) -> Option<std::path::PathBuf> {
+    let entries = fs::read_dir(directory).ok()?;
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        if path.is_file() && path.file_name().and_then(|value| value.to_str()) == Some(file_name) {
+            return Some(path);
+        }
+        if path.is_dir() {
+            if let Some(found) = find_file_recursive(&path, file_name) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
+fn escape_html(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 fn clean_user_definition(value: &str) -> String {
@@ -589,5 +812,70 @@ mod tests {
         assert_eq!(entries[0].lemma, "house");
         assert!(entries[0].definitions[0].contains("<b>Home</b>"));
         assert_eq!(entries[0].providers, vec!["Example"]);
+    }
+
+    #[test]
+    fn embeds_referenced_audio_files_in_user_records() {
+        let directory =
+            std::env::temp_dir().join(format!("lingvoloc-audio-test-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(directory.join("example.wav"), [0_u8, 1, 2, 3]).unwrap();
+        let mut index = b"house\0".to_vec();
+        index.extend_from_slice(&0_u32.to_be_bytes());
+        index.extend_from_slice(&25_u32.to_be_bytes());
+        let entries = super::parse_stardict_index_with_audio(
+            &index,
+            b"<b>Home</b> example.wav",
+            "Example".into(),
+            Some(&directory),
+        );
+        assert!(entries[0].definitions[0].contains("<audio controls"));
+        assert!(
+            entries[0].definitions[0].contains("data-dictionary-media-resource=\"example.wav\"")
+        );
+        assert!(!entries[0].definitions[0].contains("<b>Home</b> example.wav"));
+        assert_eq!(
+            super::read_media_data_uri(&directory, "example.wav").unwrap(),
+            "data:audio/wav;base64,AAECAw=="
+        );
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn finds_media_files_in_nested_dictionary_folders() {
+        let directory =
+            std::env::temp_dir().join(format!("lingvoloc-media-test-{}", std::process::id()));
+        let nested = directory.join("media");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(nested.join("example.wav"), [0_u8, 1, 2, 3]).unwrap();
+
+        assert_eq!(
+            super::read_media_data_uri(&directory, "example.wav").unwrap(),
+            "data:audio/wav;base64,AAECAw=="
+        );
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn reads_media_files_from_resource_zip() {
+        let directory =
+            std::env::temp_dir().join(format!("lingvoloc-zip-test-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let archive_file = std::fs::File::create(directory.join("res.zip")).unwrap();
+        let mut archive = zip::ZipWriter::new(archive_file);
+        archive
+            .start_file(
+                "sounds/example.wav",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+        std::io::Write::write_all(&mut archive, &[0_u8, 1, 2, 3]).unwrap();
+        archive.finish().unwrap();
+
+        assert_eq!(
+            super::read_media_data_uri(&directory, "example.wav").unwrap(),
+            "data:audio/wav;base64,AAECAw=="
+        );
+        std::fs::remove_dir_all(directory).unwrap();
     }
 }

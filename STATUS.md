@@ -8,12 +8,12 @@
 - Phase 0 workspace scaffold, frontend checks, and Rust test harness are implemented.
 - Phase 1 LM Studio runtime, TranslateGemma adapter, normalized commands, and initial UI flow are implemented.
 - `npm run desktop:build` successfully produces the native executable.
-- NSIS x64 installer bundling succeeds with `LingvoLoc_0.1.0_x64-setup.exe`.
+- NSIS x64 installer bundling succeeds with `LingvoLoc_1.45.0_x64-setup.exe`.
 - Native startup smoke test succeeds with window title `LingvoLoc`.
 - Manual smoke test passed for English, Russian, and German translation flows.
 - The initial Model Manager now shows model owner and quantization metadata; the single TranslateGemma adapter remains an internal setting.
 - Model Manager supports manual model-list refresh; richer fields remain explicitly unknown when LM Studio omits them.
-- Local language detection for English, Russian, German, Spanish, French, Italian, Portuguese, Polish, and Ukrainian is implemented without model inference.
+- Local language detection for English, Russian, German, Spanish, French, Italian, Portuguese, Polish, Ukrainian, Chinese, Korean, and Thai is implemented without model inference.
 - Translation history is persisted locally in SQLite and the UI shows paged entries.
 - History supports text search and favorite toggling.
 - History can be exported to a quoted CSV file in the system Downloads directory.
@@ -57,7 +57,7 @@
 ## In Progress
 
 - The functional desktop, loopback API, and Chromium extension slices are complete. Lexical dictionary quality remains deferred to a focused data/UX pass.
-- The latest release build is 35. Text-size controls, transient Dictionary lookup behavior, user-selected StarDict folder loading, visible dictionary refresh/checkboxes, and preserved/sanitized StarDict HTML definitions are complete.
+- The latest release build is 46. Release `1.45.0` includes text-size controls, transient Dictionary lookup behavior, user-selected StarDict folder loading, visible dictionary refresh/checkboxes, preserved/sanitized StarDict HTML definitions, on-demand StarDict audio/image media, and Enter-to-translate input.
 
 ## Known Issues
 
@@ -65,7 +65,7 @@
 - The branded LingvoLoc icon is now used for the executable and installer.
 - LM Studio returns valid UTF-8 Cyrillic output; the adapter still rejects actual U+FFFD replacement characters as a defensive malformed-response check.
 - Interactive control-level native smoke test is complete for the initial three languages.
-- Detection currently supports nine languages: English, Russian, German, Spanish, French, Italian, Portuguese, Polish, and Ukrainian.
+- Detection currently supports twelve languages: English, Russian, German, Spanish, French, Italian, Portuguese, Polish, Ukrainian, Chinese, Korean, and Thai.
 - History currently supports paging, search/favorites/export, schema versioning, and a full clear action; retention is capped at 1,000 non-favorite rows.
 - The installed application must be updated manually from the latest NSIS artifact after local rebuilds.
 - Tray, close-to-tray, pinned-shortcut reactivation, clipboard popup, and extension workflows have been functionally smoke-tested; future polish and broader regression coverage remain.
@@ -78,13 +78,14 @@
 - The reproducible lexical indexer now supports arbitrary FreeDict language pairs and explicit Kaikki/morphology source languages without cross-language lemma collisions.
 - The bundled lexical source is no longer used by the desktop lookup; only dictionaries in the user-selected StarDict folder are searched.
 - User StarDict directories are selected by the user, including `.dict.dz` compression; the Dictionary lookup UI has folder selection, refresh, and persisted per-dictionary checkboxes.
+- StarDict media references are supported for common audio and image files when the files are present beside the dictionary data or in `res.zip`; media is loaded on demand to avoid slowing dictionary scans.
 - Model translations are marked `MODEL TRANSLATION` so they remain distinguishable from local dictionary facts.
 - Lexical lookup still needs a broader legally compatible dataset and sense-aware aggregation; missing records are intentionally not filled with model-generated dictionary facts.
 - Dictionary facts remain optional: word-to-result highlighting uses the active translation model when a local lexical entry is unavailable.
 - An authenticated loopback API foundation is implemented for the future Chromium extension: status, models, language pair, and translation endpoints on `127.0.0.1:47831`.
 - A minimal Chromium MV3 extension now supports token pairing, selected-text capture, context-menu selection, and popup translation through the local API.
 - Extension build and typecheck pass; Chrome pairing, popup translation, and context-menu translation are functionally verified.
-- Extension API tests pass and a distributable ZIP is produced at `apps/extension/LingvoLoc-extension-0.1.0.zip`.
+- Extension API tests pass and a distributable ZIP is produced at `apps/extension/LingvoLoc-extension-1.45.0.zip`.
 - Extension pairing now has an explicit `Pair extension` confirmation and validates the token against the desktop status endpoint before storing it.
 - The extension validates stored pairing on popup startup, hides the pairing form after successful authorization, includes branded action icons, and uses a larger fallback popup window for context-menu translation.
 - Chrome MCP confirmed the local API is reachable and rejects unauthenticated requests with HTTP 401; direct extension toolbar interaction remains outside the MCP page API.
@@ -96,5 +97,5 @@
 - The next work item is to improve parsing and sense quality for user-provided `rus-eng` records and add optional language metadata mapping for user dictionaries.
 - Dictionary lookup results are intentionally transient and separate from Recent translations. Existing historical rows from earlier builds can be removed with Clear history.
 - RuWordNet was reviewed but is not being bundled: its public acquisition path requires a maintainer request and describes non-commercial distribution terms.
-- Latest installer: `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_0.1.0_x64-setup.exe` (build 35).
+- Latest installer: `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_1.45.0_x64-setup.exe` (build 46).
 - Verification baseline: `npm run check`, `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`, and `npm run desktop:build` pass.

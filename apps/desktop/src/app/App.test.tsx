@@ -37,4 +37,12 @@ describe('translation workspace', () => {
       screen.getByRole('button', { name: 'Refresh models' }),
     ).toBeInTheDocument();
   });
+
+  it('shows Auto as the target while source detection is automatic', () => {
+    render(<App />);
+    const targetSelect = screen.getAllByLabelText('To').at(-1)!;
+
+    expect(targetSelect).toHaveValue('auto');
+    expect(targetSelect).toBeDisabled();
+  });
 });
