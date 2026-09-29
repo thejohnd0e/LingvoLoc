@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 
 npm run extension:build
 $source = Join-Path $PSScriptRoot '..\apps\extension\dist'
-$destination = Join-Path $PSScriptRoot '..\apps\extension\LingvoLoc-extension-1.45.1.zip'
+$destination = Join-Path $PSScriptRoot '..\apps\extension\LingvoLoc-extension-1.45.2.zip'
 if (Test-Path -LiteralPath $destination) {
   Remove-Item -LiteralPath $destination -Force
 }

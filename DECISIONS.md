@@ -60,6 +60,8 @@
 - **Reason:** The visible application should remain pinnable and quickly accessible from the taskbar, while the hidden application should leave only its tray icon.
 - **Decision:** Build the Windows release executable with the GUI subsystem rather than the console subsystem.
 - **Reason:** A desktop Tauri application must not leave a blank console window or taskbar entry alongside its native window and tray icon.
+- **Decision:** Left-clicking the tray icon toggles the main window; the menu opens only on right-click.
+- **Reason:** Matches common Windows tray behavior and keeps quick show/hide one click away.
 - **Decision:** Use Tauri's single-instance plugin to route launches from a pinned shortcut to the existing hidden process.
 - **Reason:** Hiding on close keeps the application available in the tray, so a pinned shortcut must reactivate that process instead of launching another copy.
 
@@ -67,6 +69,8 @@
 
 - **Decision:** Register `Ctrl+Shift+L` to show LingvoLoc and `Ctrl+Shift+T` to translate the current clipboard text.
 - **Reason:** These shortcuts provide a fast Windows workflow while keeping the translation UI and clipboard permissions in the existing frontend.
+- **Decision:** Expose the same clipboard translation as a `Translate clipboard` tray menu item that shares the shortcut's native code path.
+- **Reason:** Users without the hotkey in mind can trigger the popup from the tray, with identical behavior.
 
 ## Clipboard Popup
 

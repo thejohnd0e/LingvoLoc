@@ -382,18 +382,53 @@ fn user_stardict_entries(directory: &Path) -> Vec<LexicalEntry> {
     let (Some(index), Some(dictionary)) = (index, dictionary) else {
         return Vec::new();
     };
-    let provider = fs::read_to_string(ifo.path())
-        .ok()
-        .and_then(|content| {
-            content
-                .lines()
-                .find_map(|line| line.strip_prefix("bookname="))
-                .map(str::to_owned)
-        })
-        .unwrap_or_else(|| "User StarDict".into())
+    let ifo_content = fs::read_to_string(ifo.path()).unwrap_or_default();
+    let provider = ifo_content
+        .lines()
+        .find_map(|line| line.strip_prefix("bookname="))
+        .unwrap_or("User StarDict")
         .trim()
         .to_string();
-    parse_stardict_index_with_audio(&index, &dictionary, provider, Some(directory))
+    let basename_text = basename
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let language = dictionary_source_language(&provider)
+        .or_else(|| dictionary_source_language(&basename_text))
+        .unwrap_or("und");
+    let mut entries =
+        parse_stardict_index_with_audio(&index, &dictionary, provider, Some(directory));
+    for entry in &mut entries {
+        entry.language = language.into();
+    }
+    entries
+}
+
+/// Maps the source side of a dictionary name such as `rus-eng` or
+/// `Russian-English` to an ISO 639-1 code.
+fn dictionary_source_language(name: &str) -> Option<&'static str> {
+    const LANGUAGES: [(&str, &str, &str); 12] = [
+        ("en", "eng", "english"),
+        ("ru", "rus", "russian"),
+        ("de", "deu", "german"),
+        ("fr", "fra", "french"),
+        ("es", "spa", "spanish"),
+        ("it", "ita", "italian"),
+        ("pt", "por", "portuguese"),
+        ("pl", "pol", "polish"),
+        ("uk", "ukr", "ukrainian"),
+        ("tr", "tur", "turkish"),
+        ("zh", "zho", "chinese"),
+        ("ja", "jpn", "japanese"),
+    ];
+    let lowered = name.to_lowercase();
+    let first = lowered
+        .split(|c: char| !c.is_alphabetic())
+        .find(|part| !part.is_empty())?;
+    LANGUAGES
+        .iter()
+        .find(|(short, code, full)| first == *short || first == *code || first == *full)
+        .map(|(short, _, _)| *short)
 }
 
 fn read_maybe_gzip(path: &Path, compressed_path: &Path) -> Result<Vec<u8>, std::io::Error> {
@@ -812,6 +847,48 @@ mod tests {
         assert_eq!(entries[0].lemma, "house");
         assert!(entries[0].definitions[0].contains("<b>Home</b>"));
         assert_eq!(entries[0].providers, vec!["Example"]);
+    }
+
+    #[test]
+    fn maps_dictionary_names_to_source_languages() {
+        use super::dictionary_source_language as map;
+        assert_eq!(map("rus-eng"), Some("ru"));
+        assert_eq!(map("Russian-English dictionary"), Some("ru"));
+        assert_eq!(map("eng-rus"), Some("en"));
+        assert_eq!(map("Big Explanatory"), None);
+        assert_eq!(map(""), None);
+    }
+
+    #[test]
+    fn user_stardict_folder_gets_language_from_bookname() {
+        let directory =
+            std::env::temp_dir().join(format!("lingvoloc-lang-test-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let word = "дом";
+        let body = "house";
+        let mut index = word.as_bytes().to_vec();
+        index.push(0);
+        index.extend_from_slice(&0_u32.to_be_bytes());
+        index.extend_from_slice(&(body.len() as u32).to_be_bytes());
+        std::fs::write(directory.join("d.idx"), index).unwrap();
+        std::fs::write(directory.join("d.dict"), body).unwrap();
+        std::fs::write(
+            directory.join("d.ifo"),
+            "StarDict's dict ifo file\nbookname=rus-eng\n",
+        )
+        .unwrap();
+        let entries = super::user_stardict_entries(&directory);
+        assert_eq!(entries[0].lemma, "дом");
+        assert_eq!(entries[0].language, "ru");
+        assert_eq!(entries[0].providers, vec!["rus-eng"]);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn ignores_truncated_index_records() {
+        let mut index = b"house\0".to_vec();
+        index.extend_from_slice(&0_u32.to_be_bytes());
+        assert!(super::parse_stardict_index(&index, b"Home", "Example".into()).is_empty());
     }
 
     #[test]

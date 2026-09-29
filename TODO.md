@@ -1,91 +1,11 @@
 # TODO
 
-- [x] Execute the workspace portion of Phase 0 from `docs/IMPLEMENTATION_PLAN.md`.
-- [x] Verify MSVC Build Tools, Windows SDK, and WebView2 for installer packaging.
-- [x] Compile the native Tauri executable with `npm run desktop:build`.
-- [x] Replace the bootstrap icon with the branded LingvoLoc icon.
-- [x] Execute the Phase 1 integration spike and verify model listing/completion against LM Studio.
-- [x] Run the interactive native desktop translation smoke test against LM Studio.
-- [x] Record the manual UI smoke result for translate, copy, swap, and `Ctrl+Enter`.
-- [x] Verify the apparent Cyrillic corruption was terminal rendering; raw LM Studio response is valid UTF-8.
-- [x] Add initial Model Manager metadata and explicit adapter selection.
-- [x] Add manual model-list refresh and document unavailable richer LM Studio metadata.
-- [x] Add local language detection for English, Russian, and German.
-- [x] Add SQLite-backed translation history with clear action.
-- [x] Add history search and favorite toggling.
-- [x] Add CSV export for translation history.
-- [x] Add paged history loading with `Load more`.
-- [x] Add visible history action feedback and frontend search/export fallbacks.
-- [x] Highlight search matches in history entries.
-- [x] Expand local language detection coverage beyond English, Russian, and German.
-- [x] Add history retention/migration improvements beyond the current 100-row query limit.
-- [x] Copy successful translation results to the clipboard automatically.
-- [x] Make automatic language detection the default source mode.
-- [x] Add a primary language pair setting for automatic target selection.
-- [x] Select the LingvoLoc product name and apply the project rename.
-- [x] Document available setup, usage, build, and test commands in `README.md`.
-- [x] Review the product name beyond GitHub before any public release.
-- [x] Select and apply a replacement product name before any public release.
-- [x] Decide on a license before making the repository public: MIT.
-- [x] Replace fixed language-pair presets with two independent pair selectors.
-- [x] Align the model selector and replace the text refresh action with an icon button.
-- [x] Fit the native window height to startup content without disabling scrolling or manual resize.
-- [x] Add explicit Tauri window permissions for startup auto-sizing.
-- [x] Add a system tray icon with show, hide, and quit actions.
-- [x] Hide the main window on close and reserve application exit for the tray menu.
-- [x] Disable the Windows console subsystem for the release executable.
-- [x] Focus the existing tray process when LingvoLoc is launched from a pinned taskbar shortcut.
-- [x] Add global hotkeys for opening the translator and translating clipboard text.
-- [x] Add clipboard popup workflow.
-- [x] Ensure the first clipboard popup hotkey event is not lost while the popup window initializes.
-- [x] Hand off clipboard text through native Rust state and IPC instead of a hidden-window event.
-- [x] Add Lexical MVP with a documented local seed dataset and dictionary lookup UI.
-- [x] Make dictionary lookup independent from the selected translation source language.
-- [x] Fill dictionary lookup from double-clicked words and highlight the selected translation word.
-- [x] Add WordNet-backed English fallback with an active-model translation for missing local entries.
-- [x] Add reliable active-model translation to WordNet fallback cards.
-- [x] Add a reproducible converter for OpenCorpora-derived morphology and Kaikki/Wiktionary Russian source data.
-- [x] Bundle the generated Russian lexical index with complete attribution, source versions, checksums, and license notices.
-- [x] Bundle the FreeDict+WikDict EN↔RU index with complete attribution and source license notices.
-- [x] Integrate the FreeDict index into the local dictionary lookup provider.
-- [ ] Rework Dictionary lookup into a production-quality local dictionary with reliable definitions, translations, forms, synonyms, antonyms, and Russian coverage.
-- [x] Revisit WordNet fallback and remove misleading partial cards from the default UX.
-- [x] Match source-side highlight candidates against the actual translation output.
-- [x] Use the active translation model for source-word alignment when local dictionary data is missing.
-- [x] Reverse-align a selected translated word back to the source textarea.
-- [x] Expand lexical coverage with a legally compatible documented dataset beyond the current English/Russian seed.
-- [x] Add an authenticated loopback API for the future Chromium extension.
-- [x] Build the thin Chromium extension client and explicit pairing flow on top of the local API.
-- [x] Add extension API integration tests and package the extension for distribution.
-- [x] Manually load the extension in Chrome and verify pairing, popup translation, and context-menu translation.
-- [x] Perform a focused UI/design polish pass for desktop and extension surfaces.
-- [x] Add persisted +/- text-size controls to the main and clipboard windows.
-- [x] Keep Dictionary lookup transient and separate from translation history.
-- [x] Add richer StarDict/Wiktionary definitions, forms, examples, and provider aggregation.
-- [x] Load user-provided StarDict dictionaries from a user-selected folder.
-- [x] Remove bundled dictionary records from the default lookup.
-- [x] Let the user choose the dictionary folder with a native folder picker.
-- [x] Collapse dictionary results and translation history behind disclosures.
-- [x] Add an English fallback when automatic detection returns an unsupported language for short Latin input.
-- [x] Collapse the local lexicon as a separate section and hide empty lexical facts.
-- [x] Remove the single-option adapter selector from the translation controls.
-- [x] Move dictionary folder controls into a dedicated collapsed setup section.
-- [x] Add one collapsed additional-options section around dictionary lookup and history.
-- [x] Keep Recent translations in its own nested collapsed section.
-- [x] Stop creating or using the legacy app-data dictionary folder.
-- [x] Add playback controls for audio pronunciation files referenced by user StarDict entries.
-- [x] Add on-demand rendering for images referenced by user StarDict entries.
-- [x] Read StarDict media resources from `res.zip` archives.
-- [x] Translate the source text when Enter is pressed in the main input.
-- [x] Let the NSIS installer choose between per-user and all-users installation.
-- [x] Hide the extension pairing form after a stored token is validated.
-- [x] Add extension action icons and improve the context-menu fallback window.
-- [x] Decouple clipboard popup text scale, enable mouse resizing, and fit its height automatically.
-- [x] Remove the popup full-viewport minimum height so auto-fitting has no empty space.
-- [x] Group the automatic detection language pair under a visually separated Main pair label.
-- [x] Remove duplicate visible pair labels and vertically tighten the Main pair control.
-- [x] Use LM Studio's current `/api/v1/models` loaded LLM instances instead of stale OpenAI catalog entries.
-- [x] Add a muted GitHub repository link beside the desktop version.
-- [x] Open the GitHub link through Tauri's system browser opener.
-- [x] Add Chinese, Korean, and Thai language selection and local detection.
-- [x] Resolve extension auto-source requests before model translation and keep context-menu translation inside the current page.
+## Next
+
+- [x] Map source language for user-selected StarDict dictionaries from `bookname`/file name (`rus-eng`, `Russian-English`, ...); target language is not mapped yet.
+- [ ] Improve StarDict record parsing and sense separation so common Russian-English dictionaries yield stable definitions, translations, forms, examples, synonyms, and antonyms where the source data provides them.
+- [ ] Add regression tests (truncated index and language mapping done) for malformed indexes, dictionary type/markup variants, language metadata, and multi-sense records before changing the dictionary UI contract.
+
+## Before Public Release
+
+- [ ] Complete formal trademark and domain review for the `LingvoLoc` name.

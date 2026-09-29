@@ -15,7 +15,7 @@ use services::{
 use std::sync::Mutex;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
-    tray::TrayIconBuilder,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, WindowEvent,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
@@ -242,6 +242,21 @@ fn translate_word(
     translation::translate(&current, request)
 }
 
+fn translate_clipboard(app: &tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("popup") else {
+        return;
+    };
+    let _ = window.show();
+    let _ = window.set_focus();
+    if let Ok(mut clipboard) = arboard::Clipboard::new() {
+        if let Ok(text) = clipboard.get_text() {
+            if let Ok(mut pending) = app.state::<AppState>().pending_clipboard.lock() {
+                *pending = Some(text);
+            }
+        }
+    }
+}
+
 pub fn run() {
     let show_shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyL);
     let translate_shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyT);
@@ -253,27 +268,11 @@ pub fn run() {
                     if event.state != ShortcutState::Pressed {
                         return;
                     }
-                    let is_translate = shortcut == &handler_translate_shortcut;
-                    let window = if is_translate {
-                        app.get_webview_window("popup")
-                    } else {
-                        app.get_webview_window("main")
-                    };
-                    let Some(window) = window else {
-                        return;
-                    };
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                    if is_translate {
-                        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                            if let Ok(text) = clipboard.get_text() {
-                                if let Ok(mut pending) =
-                                    app.state::<AppState>().pending_clipboard.lock()
-                                {
-                                    *pending = Some(text);
-                                }
-                            }
-                        }
+                    if shortcut == &handler_translate_shortcut {
+                        translate_clipboard(app);
+                    } else if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
                     }
                 })
                 .build(),
@@ -307,17 +306,43 @@ pub fn run() {
 
             let show = MenuItemBuilder::with_id("show", "Show LingvoLoc").build(app)?;
             let hide = MenuItemBuilder::with_id("hide", "Hide LingvoLoc").build(app)?;
+            let translate_clip =
+                MenuItemBuilder::with_id("translate_clipboard", "Translate clipboard")
+                    .build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
             let menu = MenuBuilder::new(app)
-                .items(&[&show, &hide])
+                .items(&[&show, &hide, &translate_clip])
                 .separator()
                 .item(&quit)
                 .build()?;
 
             let mut tray = TrayIconBuilder::new()
                 .menu(&menu)
+                .show_menu_on_left_click(false)
                 .tooltip("LingvoLoc")
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let Some(window) = tray.app_handle().get_webview_window("main") else {
+                            return;
+                        };
+                        if window.is_visible().unwrap_or(false) {
+                            let _ = window.hide();
+                        } else {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                })
                 .on_menu_event(|app, event| {
+                    if event.id().as_ref() == "translate_clipboard" {
+                        translate_clipboard(app);
+                        return;
+                    }
                     let Some(window) = app.get_webview_window("main") else {
                         return;
                     };
