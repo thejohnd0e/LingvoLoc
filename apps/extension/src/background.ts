@@ -75,6 +75,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         const frame = document.createElement('iframe');
         frame.src = popupUrl;
         frame.title = 'LingvoLoc';
+        frame.allow = 'clipboard-write';
         Object.assign(frame.style, {
           width: '100%',
           height: '100%',

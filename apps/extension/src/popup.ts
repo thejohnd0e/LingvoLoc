@@ -199,21 +199,31 @@ button.addEventListener('click', async () => {
   }
 });
 
+// Inside the page overlay (an iframe) the Clipboard API is usually blocked by the host
+// page's permissions policy and logs a violation, so only the standalone popup uses it.
+async function copyText(text: string) {
+  if (window.parent === window) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall back to the selection-based copy below.
+    }
+  }
+  const helper = document.createElement('textarea');
+  helper.value = text;
+  helper.style.position = 'fixed';
+  helper.style.opacity = '0';
+  document.body.append(helper);
+  helper.select();
+  document.execCommand('copy');
+  helper.remove();
+}
+
 copyButton.addEventListener('click', async () => {
   const text = result.textContent?.trim() ?? '';
   if (!text) return;
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    const helper = document.createElement('textarea');
-    helper.value = text;
-    helper.style.position = 'fixed';
-    helper.style.opacity = '0';
-    document.body.append(helper);
-    helper.select();
-    document.execCommand('copy');
-    helper.remove();
-  }
+  await copyText(text);
   const original = copyButton.textContent;
   copyButton.textContent = 'Copied';
   window.setTimeout(() => {
