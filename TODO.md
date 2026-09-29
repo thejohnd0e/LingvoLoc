@@ -26,3 +26,9 @@
 ## Before Public Release
 
 - [ ] Complete formal trademark and domain review for the `LingvoLoc` name.
+
+## Phase 7 EPUB
+
+- [x] Implement bounded spine-XHTML analysis, recoverable jobs, package-preserving export, format-aware commands/UI, and diagnostics.
+- [ ] Validate a deterministic translated EPUB with EPUBCheck or a real EPUB reader; no suitable validator/reader is installed on the current host.
+- [ ] Scope FB2 separately after EPUB reader/validator validation.

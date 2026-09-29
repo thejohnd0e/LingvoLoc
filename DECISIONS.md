@@ -184,3 +184,14 @@
 
 - **Decision:** Search only user-provided StarDict dictionaries from a folder selected through the native folder picker; do not create or fall back to an app-data dictionary folder.
 - **Reason:** Dictionary contents and licensing are user-controlled, while the application should not silently expose bundled or preloaded dictionary records.
+
+## Phase 7 EPUB
+
+- **Decision:** Process EPUB spine XHTML in spine order, translating ordinary paragraphs, headings, list items, and table cells; raw-copy all other ZIP entries and preserve unsupported XHTML with diagnostics.
+- **Reason:** This bounds reconstruction while retaining resources, CSS, anchors, links, identifiers, and package metadata.
+- **Decision:** Use `epub-v1` with the existing recoverable document-job/export pipeline and finish exports with warnings when diagnostics exist.
+- **Reason:** EPUB jobs need the same source/runtime safeguards as TXT and DOCX while unsupported constructs remain visible.
+- **Decision:** Leave navigation labels and OPF bibliographic metadata unchanged in the first EPUB increment.
+- **Reason:** The implemented rewrite scope has no dedicated mappings for those fields.
+- **Decision:** Treat an EPUB validator or reader smoke check as a release gate separate from automated tests.
+- **Reason:** Independent EPUB consumers require a separate validator or reader check.

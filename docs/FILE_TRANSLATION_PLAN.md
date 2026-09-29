@@ -456,3 +456,10 @@ If the user explicitly requests multiple agents, one can implement and another r
 - [ ] Phase 10: separately scoped OCR and quality improvements.
 
 **Current continuation point:** Phase 0 and Phase 1 are complete. Start Phase 2 only as a separately assigned task: implement the independent document-job model, persistence, valid state transitions, and recovery tests. Keep `pdfium-render` and all format-specific processing isolated; do not add production PDF dependencies, change versions, publish, or commit without separate instructions.
+
+## Phase 7 EPUB Handoff
+
+- EPUB implementation is complete for bounded spine XHTML paragraphs, headings, list items, and table cells, with persisted diagnostics and package-preserving export.
+- Navigation labels and OPF bibliographic metadata remain unchanged in this increment; FB2 is not included.
+- Automated checks pass, but the independent EPUB validator/reader gate remains open because no suitable local tool is installed.
+- Next action: run EPUBCheck or a reader against a deterministic translated fixture, then assign FB2 separately.

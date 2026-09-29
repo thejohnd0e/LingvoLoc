@@ -75,3 +75,11 @@
 - `apps/desktop/src/app/App.tsx`: dictionary folder selection, enabled dictionaries, lookup state, sanitization, and rendering.
 - `scripts/build-lexical-index.mjs`: offline lexical conversion path; do not conflate it with runtime user-dictionary lookup.
 - `apps/desktop/src-tauri/src/api.rs` and `apps/extension/src/`: loopback API and extension boundary if extension work resumes.
+
+## Phase 7 EPUB Handoff
+
+- EPUB implementation and automated package/XML review are complete for bounded spine XHTML paragraphs, headings, list items, and table cells; FB2 remains unimplemented.
+- Package-preserving export retains untouched ZIP entries, CSS, images, links, anchors, identifiers, and unsupported XHTML content. Navigation labels and OPF bibliographic metadata are not translated.
+- Required checks passed: `npm run check` (118 native tests and 23 frontend tests), strict Clippy, `npm run build`, focused EPUB tests (19 passing), and `git diff --check`.
+- Independent EPUB validator/reader validation was not run: `epubcheck`, Calibre/`ebook-convert`, Pandoc, and a repository EPUBCheck JAR are unavailable on this host.
+- Next action: validate a deterministic translated EPUB with EPUBCheck or a reader, record navigation/images/notes and package errors, then scope FB2 separately.
