@@ -165,6 +165,20 @@ mod tests {
     }
 
     #[test]
+    fn rejects_external_css_references_with_comments_between_url_and_parenthesis() {
+        for resource in [
+            r#"<p style="background: url/**/(https://example.test/image.png)">Text</p>"#,
+            r#"<style>body { background: url/**/(https://example.test/image.png); }</style>"#,
+            r#"<style><![CDATA[body { background: url/**/(https://example.test/image.png); }]]></style>"#,
+        ] {
+            let xml = format!(
+                r#"<html xmlns="http://www.w3.org/1999/xhtml"><head>{resource}</head><body><p>Text</p></body></html>"#
+            );
+            assert!(super::parse_document(xml.as_bytes(), "OPS/chapter.xhtml").is_err());
+        }
+    }
+
+    #[test]
     fn rejects_external_base_and_css_references_during_rewrite() {
         for resource in [
             r#"<base href="https://example.test/"/>"#,
@@ -670,10 +684,7 @@ fn css_has_external_reference(value: &str) -> bool {
         if bytes[index..].starts_with(b"url")
             && (index == 0 || !bytes[index - 1].is_ascii_alphanumeric())
         {
-            let mut open = index + 3;
-            while bytes.get(open).is_some_and(u8::is_ascii_whitespace) {
-                open += 1;
-            }
+            let open = skip_css_whitespace_and_comments(bytes, index + 3);
             if bytes.get(open) == Some(&b'(') {
                 if let Some(close) = bytes[open + 1..].iter().position(|byte| *byte == b')') {
                     let reference = value[open + 1..open + 1 + close].trim();
@@ -720,6 +731,24 @@ fn css_has_external_reference(value: &str) -> bool {
         index += 1;
     }
     false
+}
+
+fn skip_css_whitespace_and_comments(bytes: &[u8], mut index: usize) -> usize {
+    loop {
+        while bytes.get(index).is_some_and(u8::is_ascii_whitespace) {
+            index += 1;
+        }
+        if !bytes[index..].starts_with(b"/*") {
+            return index;
+        }
+        let Some(end) = bytes[index + 2..]
+            .windows(2)
+            .position(|window| window == b"*/")
+        else {
+            return bytes.len();
+        };
+        index += end + 4;
+    }
 }
 
 fn is_external_reference(value: &str) -> bool {

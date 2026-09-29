@@ -43,3 +43,11 @@ Validation: the focused EPUB suite passed (22 tests), the full native suite pass
 - Extended the existing resource-reference validator to inspect those contexts while continuing to allow package-relative paths, fragment-only anchors, and ordinary prose URLs.
 - Focused validation: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml documents::epub` passed (26 tests).
 - Full native validation and the required `git diff --check` were rerun for this follow-up; no independent EPUB validator/reader is installed on this host.
+
+## CSS Comment-Whitespace Security Follow-Up
+
+- Added a regression covering external CSS references in inline `style`, `<style>`, and CDATA CSS using `url/**/(https://example.test/...)`; it failed before the fix and passes after it.
+- Made the CSS `url` separator scan skip CSS comments as well as ASCII whitespace, preserving the existing external-reference classification.
+- Verified package-relative, fragment-only, and prose URLs remain allowed by the existing focused regression.
+- Focused validation: the targeted regression and allowed-reference test passed; full EPUB, native, formatting, clippy, and diff checks were run for this fix.
+- The independent EPUB validator/reader remains unavailable on this host.
