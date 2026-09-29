@@ -1,7 +1,7 @@
-use crate::adapters::translategemma::TranslateGemmaAdapter;
+use crate::adapters::Family;
 use crate::domain::{
     LocalModel, ModelRuntime, RuntimeError, RuntimeMode, RuntimeStatus, Settings,
-    TranslationModelAdapter, TranslationRequest, TranslationResult,
+    TranslationRequest, TranslationResult,
 };
 use crate::runtimes::{llama_server::StandaloneRuntime, lm_studio::LmStudioRuntime};
 use std::time::Instant;
@@ -29,15 +29,8 @@ pub fn translate(
     settings: &Settings,
     request: TranslationRequest,
 ) -> Result<TranslationResult, RuntimeError> {
-    if request.adapter_id != settings.adapter_id {
-        return Err(RuntimeError::UnsupportedAdapter(request.adapter_id));
-    }
-    let adapter = TranslateGemmaAdapter;
-    if adapter.id() != settings.adapter_id {
-        return Err(RuntimeError::UnsupportedAdapter(
-            settings.adapter_id.clone(),
-        ));
-    }
+    // The adapter follows the selected model, so the stored adapter id is informational.
+    let adapter = Family::from_model_id(&request.model_id).adapter(&request.model_id);
     let mut settings = settings.clone();
     settings.model_id = request.model_id.clone();
     let runtime = runtime(&settings)?;
@@ -47,7 +40,7 @@ pub fn translate(
     Ok(TranslationResult {
         text,
         model_id: request.model_id,
-        adapter_id: request.adapter_id,
+        adapter_id: adapter.id().into(),
         latency_ms: started.elapsed().as_millis(),
     })
 }

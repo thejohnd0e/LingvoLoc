@@ -1,3 +1,4 @@
+use crate::adapters::Family;
 use crate::domain::{
     CompletionRequest, CompletionResponse, LocalModel, ModelRuntime, RuntimeError, RuntimeStatus,
 };
@@ -421,12 +422,25 @@ fn ensure_server(exe: &Path, model: &Path) -> Result<String, RuntimeError> {
         .arg("-m")
         .arg(model)
         .args(["--host", "127.0.0.1", "--port", &port.to_string()])
+        .args(["-c", CONTEXT_SIZE, "-np", "1", "-ngl", "99"]);
+    match Family::from_model_id(&model.to_string_lossy()) {
         // --no-jinja: the app sends plain text, but TranslateGemma's embedded template
         // demands structured content and makes llama-server refuse to start.
         // --chat-template gemma: some conversions are not recognised by the legacy matcher
         // and fall back to ChatML, which leaks `<|im_start|>` tokens into the translation.
-        .args(["-c", CONTEXT_SIZE, "-np", "1", "-ngl", "99", "--no-jinja"])
-        .args(["--chat-template", "gemma"]);
+        Family::TranslateGemma => {
+            command.args(["--no-jinja", "--chat-template", "gemma"]);
+        }
+        Family::HunyuanMt => {
+            command.arg("--jinja");
+        }
+        // Qwen3 & co. ship a proper template; thinking is switched off for speed.
+        Family::Chat => {
+            command
+                .arg("--jinja")
+                .args(["--chat-template-kwargs", r#"{"enable_thinking":false}"#]);
+        }
+    }
     if let Some(device) = &device {
         command.args(["--device", device]);
     }

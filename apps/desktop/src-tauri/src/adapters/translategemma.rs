@@ -1,3 +1,4 @@
+use super::{clean_response, language_name, validate};
 use crate::domain::{
     ChatMessage, CompletionRequest, CompletionResponse, RuntimeError, TranslationModelAdapter,
     TranslationRequest,
@@ -34,65 +35,8 @@ impl TranslationModelAdapter for TranslateGemmaAdapter {
     }
 
     fn parse_response(&self, response: CompletionResponse) -> Result<String, RuntimeError> {
-        let text = response.content.trim().trim_matches('"').trim();
-        if text.is_empty() {
-            return Err(RuntimeError::MalformedResponse(
-                "translation content was empty".into(),
-            ));
-        }
-        if text.contains('\u{fffd}') {
-            return Err(RuntimeError::MalformedResponse(
-                "translation contains invalid Unicode replacement characters".into(),
-            ));
-        }
-        Ok(strip_markdown_wrapper(text))
+        clean_response(&response.content)
     }
-}
-
-fn language_name(code: &str) -> &str {
-    match code {
-        "en" => "English",
-        "ru" => "Russian",
-        "de" => "German",
-        "es" => "Spanish",
-        "fr" => "French",
-        "it" => "Italian",
-        "pt" => "Portuguese",
-        "pl" => "Polish",
-        "uk" => "Ukrainian",
-        "zh" => "Chinese",
-        "ko" => "Korean",
-        "th" => "Thai",
-        other => other,
-    }
-}
-
-fn validate(request: &TranslationRequest) -> Result<(), RuntimeError> {
-    if request.model_id.trim().is_empty()
-        || request.source_language.trim().is_empty()
-        || request.target_language.trim().is_empty()
-    {
-        return Err(RuntimeError::InvalidInput(
-            "model and language codes are required".into(),
-        ));
-    }
-    if request.text.trim().is_empty() {
-        return Err(RuntimeError::InvalidInput("text must not be empty".into()));
-    }
-    Ok(())
-}
-
-fn strip_markdown_wrapper(text: &str) -> String {
-    let lines: Vec<&str> = text.lines().collect();
-    if lines.len() >= 2
-        && lines
-            .first()
-            .is_some_and(|line| line.trim().starts_with("```"))
-        && lines.last().is_some_and(|line| line.trim() == "```")
-    {
-        return lines[1..lines.len() - 1].join("\n").trim().to_string();
-    }
-    text.to_string()
 }
 
 #[cfg(test)]
