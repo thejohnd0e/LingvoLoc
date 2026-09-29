@@ -42,7 +42,7 @@ Run the web UI with `npm run dev` or the native desktop shell with `npm run desk
 
 ### Standalone runtime internals
 
-In Standalone mode LingvoLoc downloads the newest llama.cpp Windows x64 release from GitHub into its app data folder (`llama.cpp/<release>/`), chooses the archive from the detected GPU, starts `llama-server` on a free local port when the first translation runs, restarts it when you switch models, and stops it on exit.
+In Standalone mode LingvoLoc downloads the newest llama.cpp Windows x64 release from GitHub into its app data folder (`llama.cpp/`, a fixed folder whose release is recorded in `version.txt`), chooses the archive from the detected GPU, starts `llama-server` on a free local port when the first translation runs, restarts it when you switch models, and stops it on exit.
 
 ### Build
 

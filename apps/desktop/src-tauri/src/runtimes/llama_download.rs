@@ -1,5 +1,5 @@
 use crate::domain::RuntimeError;
-use crate::runtimes::llama_server::find_in_directory;
+use crate::runtimes::llama_server::{find_in_directory, shutdown};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
@@ -9,6 +9,7 @@ use std::time::Duration;
 // `releases/latest` points at a tooling tag without binaries; real `bNNNN` builds are prereleases.
 const RELEASES_API: &str = "https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=20";
 const USER_AGENT: &str = "LingvoLoc";
+const VERSION_FILE: &str = "version.txt";
 
 #[derive(Debug, Clone, Deserialize)]
 struct Release {
@@ -259,18 +260,15 @@ fn extract_zip(archive: &Path, destination: &Path) -> Result<(), RuntimeError> {
     Ok(())
 }
 
-fn remove_other_versions(base: &Path, keep: &str) {
-    let Ok(entries) = std::fs::read_dir(base) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        if entry.file_name().to_string_lossy() != keep && entry.path().is_dir() {
-            let _ = std::fs::remove_dir_all(entry.path());
-        }
-    }
+fn sibling(base: &Path, suffix: &str) -> PathBuf {
+    let mut name = base.file_name().unwrap_or_default().to_os_string();
+    name.push(suffix);
+    base.with_file_name(name)
 }
 
 /// Downloads the newest llama.cpp Windows build that fits this machine into `base`.
+/// `base` has a fixed name, so the executable path stays the same across updates; the
+/// installed release is recorded in `base/version.txt`.
 pub fn download_latest(
     base: &Path,
     mut report: impl FnMut(DownloadProgress),
@@ -304,8 +302,19 @@ pub fn download_latest(
             )
         })?;
 
-    let target = base.join(&release.tag_name).join(variant.to_lowercase());
-    let staging = base.join(format!("{}.download", release.tag_name));
+    let stamp = format!("{} {}", release.tag_name, variant);
+    if std::fs::read_to_string(base.join(VERSION_FILE)).is_ok_and(|text| text.trim() == stamp) {
+        if let Some(exe) = find_in_directory(base) {
+            return Ok(DownloadedLlama {
+                path: exe.display().to_string(),
+                version: release.tag_name,
+                variant,
+            });
+        }
+    }
+
+    let staging = sibling(base, ".download");
+    let target = sibling(base, ".new");
     let _ = std::fs::remove_dir_all(&staging);
     let _ = std::fs::remove_dir_all(&target);
     std::fs::create_dir_all(&staging).map_err(io_error)?;
@@ -323,19 +332,34 @@ pub fn download_latest(
             });
             extract_zip(&archive, &target)?;
         }
+        std::fs::write(target.join(VERSION_FILE), &stamp).map_err(io_error)?;
         find_in_directory(&target).ok_or_else(|| {
             RuntimeError::MalformedResponse("llama-server.exe is missing from the archive".into())
         })
     })();
     let _ = std::fs::remove_dir_all(&staging);
-    let exe = match result {
-        Ok(exe) => exe,
-        Err(error) => {
-            let _ = std::fs::remove_dir_all(&target);
-            return Err(error);
-        }
-    };
-    remove_other_versions(base, &release.tag_name);
+    if let Err(error) = result {
+        let _ = std::fs::remove_dir_all(&target);
+        return Err(error);
+    }
+
+    // The running server locks its executable, so stop it before replacing the folder.
+    report(DownloadProgress {
+        percent: 100,
+        stage: "Installing".into(),
+    });
+    shutdown();
+    if base.exists() {
+        std::fs::remove_dir_all(base).map_err(|error| {
+            RuntimeError::Connection(format!(
+                "cannot replace the old llama.cpp (is it still running?): {error}"
+            ))
+        })?;
+    }
+    std::fs::rename(&target, base).map_err(io_error)?;
+    let exe = find_in_directory(base).ok_or_else(|| {
+        RuntimeError::MalformedResponse("llama-server.exe is missing after install".into())
+    })?;
     Ok(DownloadedLlama {
         path: exe.display().to_string(),
         version: release.tag_name,

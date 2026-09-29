@@ -4,7 +4,7 @@
 
 - **Decision:** Add a `standalone` runtime mode next to LM Studio that spawns the user's `llama-server.exe` (llama.cpp) with a `.gguf` chosen from a user-selected models folder, and talks to it over the same OpenAI-compatible API on a free `127.0.0.1` port.
 - **Reason:** It reuses the existing `ModelRuntime`/adapter split and needs no C++ toolchain, while letting users pick the CPU/CUDA/Vulkan build that suits their hardware.
-- **Decision:** Do not bundle `llama-server.exe` in the installer; the settings screen has a **Download llama.cpp** button that fetches the newest GitHub release into the app data folder (`llama.cpp/<tag>/`), choosing CUDA 12 + cudart for NVIDIA (detected via `nvcuda.dll`), Vulkan for other GPUs (`vulkan-1.dll`), and CPU otherwise. Choosing an existing folder, Find in PATH, and Check remain under **Advanced**.
+- **Decision:** Do not bundle `llama-server.exe` in the installer; the settings screen has a **Download llama.cpp** button that fetches the newest GitHub release into the app data folder (fixed folder `llama.cpp/`, release recorded in `version.txt`), choosing CUDA 12 + cudart for NVIDIA (detected via `nvcuda.dll`), Vulkan for other GPUs (`vulkan-1.dll`), and CPU otherwise. Choosing an existing folder, Find in PATH, and Check remain under **Advanced**.
 - **Reason:** Binaries differ per GPU and are large, so the installer stays small and end users never unpack archives by hand; the engine and its license still come straight from upstream.
 - **Decision:** `standalone` is the default runtime mode (Rust `RuntimeMode::default`, frontend defaults). Users with saved settings keep their stored mode.
 - **Reason:** New users should not need LM Studio or any other prerequisite.
