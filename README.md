@@ -18,13 +18,39 @@ LingvoLoc works out of the box in **Standalone** mode and needs no other softwar
 2. Choose the **Models folder** containing your `.gguf` files.
 3. Pick a model in the main window and translate.
 
-The first translation is slower while the model loads. LingvoLoc starts and stops the model server by itself. **Advanced** in the same window lets you point to an existing llama.cpp folder instead.
+The **GPU support** row shows your video card(s) and which llama.cpp build will be downloaded, and, once llama.cpp is installed, which device it actually uses. With several GPUs (for example a discrete card and an integrated one) LingvoLoc pins the strongest one. llama.cpp is installed into one fixed folder, so pressing **Update llama.cpp** later replaces it in place, reports when the latest release is already installed, and never changes the saved path.
+
+The first translation is slower while the model loads: LingvoLoc starts the model server on the first translation, restarts it when you switch models, and stops it on exit. **Add to PATH** puts the llama.cpp folder into your user PATH (no administrator rights needed) so you can also run it from a terminal. **Advanced** lets you point to an existing llama.cpp folder or find one already in PATH.
 
 Prefer LM Studio? Switch **Mode** to `LM Studio` and expose its OpenAI-compatible API at `http://127.0.0.1:1234/v1`.
 
+## Settings
+
+The **Settings** window (gear icon) has three sections:
+
+- **Model runtime**: Standalone or LM Studio mode, models folder, GPU support, and llama.cpp.
+- **Dictionaries**: choose the folder with your StarDict dictionaries and enable the ones to search. Articles from different dictionaries are shown as separate cards, each labeled with its dictionary name.
+- **Browser extension**: **Copy token** copies the pairing token for the browser extension.
+
+## Tray icon
+
+Left-click the tray icon to show or hide the main window. Right-click opens the menu:
+
+- **Open LingvoLoc** (`Ctrl+Shift+L`)
+- **Translate clipboard** (`Ctrl+Shift+T`): translates the clipboard text and shows it in a small popup window.
+- **Settings…**: opens the main window with the settings.
+- **Start with Windows**: starts LingvoLoc hidden in the tray when you sign in.
+- **Quit**
+
+## Browser extension
+
+The Chromium extension (`LingvoLoc-extension-x.y.z.zip` on the Releases page) translates selected text through the desktop app. Load it from `chrome://extensions` with Developer mode enabled, press **Copy token** in LingvoLoc Settings, and paste the token into the extension.
+
+Select text and use the toolbar button or the right-click menu **Translate selection with LingvoLoc**. Both open the same in-page window, which you can drag by its header and resize by its right edge, bottom edge, or corner; the text and translation fields grow with it and the size is remembered. The **⧉** button opens the current content in a separate browser window that stays open and keeps its content when you switch tabs. On pages where extensions cannot inject content (such as `chrome://` pages) the separate window opens instead. See `docs/BROWSER_EXTENSION.md` for details.
+
 ## Usage
 
-The app persists endpoint, model, adapter, language selections, two independently selected pair languages, and text-size settings locally. Automatic source detection is enabled by default; successful translations are copied to the clipboard when WebView2 allows clipboard access. The clipboard popup has its own text-size setting, can be resized, and fits its height to its content.
+The status pill in the header shows the runtime and the selected model. The app persists endpoint, model, adapter, language selections, two independently selected pair languages, and text-size settings locally. Automatic source detection is enabled by default; successful translations are copied to the clipboard when WebView2 allows clipboard access. The clipboard popup has its own text-size setting, can be resized, and fits its height to its content.
 
 ## Development
 

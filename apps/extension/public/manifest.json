@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LingvoLoc",
-  "version": "2.0.0",
+  "version": "2.0.5",
   "description": "Translate selected text through your local LingvoLoc desktop app.",
   "permissions": ["activeTab", "scripting", "storage", "contextMenus"],
   "host_permissions": ["http://127.0.0.1:47831/*"],

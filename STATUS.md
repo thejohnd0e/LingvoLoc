@@ -2,9 +2,9 @@
 
 ## Current Release
 
-- Version `2.0.0` is the current release across the root, desktop, extension, Tauri, Cargo, and extension packaging metadata.
+- Version `2.0.5` is the current release across the root, desktop, extension, Tauri, Cargo, and extension packaging metadata.
 - The last recorded release gate passed: `npm run check`, `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`, and `npm run desktop:build`.
-- Release artifacts are `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_2.0.0_x64-setup.exe` and `apps/extension/LingvoLoc-extension-2.0.0.zip`.
+- Release artifacts are `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_2.0.5_x64-setup.exe` and `apps/extension/LingvoLoc-extension-2.0.5.zip`.
 
 ## Completed
 
