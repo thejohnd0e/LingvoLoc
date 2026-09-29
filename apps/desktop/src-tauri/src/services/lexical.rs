@@ -543,7 +543,7 @@ fn parse_stardict_index_with_audio(
                 entries.push(LexicalEntry {
                     lemma,
                     language: "und".into(),
-                    part_of_speech: "User dictionary".into(),
+                    part_of_speech: USER_DICTIONARY_LABEL.into(),
                     translations: Vec::new(),
                     definitions: vec![definition_html],
                     forms: Vec::new(),
@@ -799,6 +799,10 @@ fn clean_user_definition(value: &str) -> String {
         .collect()
 }
 
+const USER_DICTIONARY_LABEL: &str = "User dictionary";
+
+/// Merges duplicate entries. Articles from different user dictionaries stay separate so
+/// each keeps its own dictionary name.
 fn merge_entries(entries: Vec<LexicalEntry>) -> Vec<LexicalEntry> {
     let mut results: Vec<LexicalEntry> = Vec::new();
     for entry in entries {
@@ -806,6 +810,8 @@ fn merge_entries(entries: Vec<LexicalEntry>) -> Vec<LexicalEntry> {
             existing.lemma == entry.lemma
                 && existing.language == entry.language
                 && existing.part_of_speech == entry.part_of_speech
+                && (entry.part_of_speech != USER_DICTIONARY_LABEL
+                    || existing.providers == entry.providers)
         }) {
             merge_entry(existing, entry);
         } else {
@@ -872,6 +878,20 @@ mod tests {
     fn bundled_dictionaries_are_not_used() {
         assert!(lookup("learn", Some("en")).is_empty());
         assert!(lookup("дом", Some("ru")).is_empty());
+    }
+
+    #[test]
+    fn keeps_user_dictionaries_separate_and_named() {
+        let mut first = test_entry("User dictionary", "");
+        first.providers = vec!["Oxford".into()];
+        let mut second = test_entry("User dictionary", "");
+        second.providers = vec!["Longman".into()];
+        let mut duplicate = test_entry("User dictionary", "");
+        duplicate.providers = vec!["Oxford".into()];
+        let entries = merge_entries(vec![first, second, duplicate]);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].providers, vec!["Oxford"]);
+        assert_eq!(entries[1].providers, vec!["Longman"]);
     }
 
     #[test]

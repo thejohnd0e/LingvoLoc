@@ -817,6 +817,9 @@ export default function App() {
             </a>
           </p>
         </div>
+        <div className="masthead-zoom">
+          <TextSizeControls value={textScale} onChange={setTextScale} />
+        </div>
         <div className="masthead-side">
           <div className="masthead-icons">
             <button
@@ -886,7 +889,6 @@ export default function App() {
             </button>
           </div>
           <div className="masthead-actions">
-            <TextSizeControls value={textScale} onChange={setTextScale} />
             <span className="status-pill">
               {status.startsWith('Checking') && <Spinner />}
               {status}
@@ -1395,20 +1397,33 @@ export default function App() {
               <div className="lexical-results">
                 {lexicalResults.map((entry) => (
                   <article
-                    className="lexical-entry"
-                    key={`${entry.language}-${entry.lemma}-${entry.part_of_speech}`}
+                    className={
+                      entry.part_of_speech === 'User dictionary'
+                        ? 'lexical-entry lexical-entry-user'
+                        : 'lexical-entry'
+                    }
+                    key={`${entry.language}-${entry.lemma}-${entry.part_of_speech}-${entry.providers.join('|')}`}
                   >
+                    {entry.part_of_speech === 'User dictionary' && (
+                      <div className="lexical-source">
+                        <span aria-hidden="true">▤</span>
+                        {entry.providers.join(', ') || 'User dictionary'}
+                      </div>
+                    )}
                     <div className="lexical-entry-title">
                       <strong>{entry.lemma}</strong>
-                      <span>{entry.part_of_speech}</span>
+                      {entry.part_of_speech !== 'User dictionary' && (
+                        <span>{entry.part_of_speech}</span>
+                      )}
                     </div>
-                    <p className="lexical-translations">
-                      {entry.translations.length
-                        ? entry.translations.join(' · ')
-                        : entry.part_of_speech === 'User dictionary'
-                          ? 'Definition from user dictionary.'
-                          : 'Translation unavailable until LM Studio is online and a model is selected.'}
-                    </p>
+                    {(entry.translations.length > 0 ||
+                      entry.part_of_speech !== 'User dictionary') && (
+                      <p className="lexical-translations">
+                        {entry.translations.length
+                          ? entry.translations.join(' · ')
+                          : 'Translation unavailable until a model is selected and running.'}
+                      </p>
+                    )}
                     {entry.part_of_speech === 'User dictionary' ? (
                       <div
                         className="dictionary-definition-html"
@@ -1450,11 +1465,12 @@ export default function App() {
                           <b>Related</b> {entry.related_words.join(', ')}
                         </span>
                       )}
-                      {entry.providers.length > 0 && (
-                        <span>
-                          <b>Sources</b> {entry.providers.join(', ')}
-                        </span>
-                      )}
+                      {entry.providers.length > 0 &&
+                        entry.part_of_speech !== 'User dictionary' && (
+                          <span>
+                            <b>Sources</b> {entry.providers.join(', ')}
+                          </span>
+                        )}
                     </div>
                   </article>
                 ))}

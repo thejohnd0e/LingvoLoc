@@ -88,11 +88,16 @@ textarea {
   padding: 40px 32px 64px;
 }
 .masthead {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr) auto minmax(0, 1fr);
   align-items: stretch;
   gap: 24px;
   margin-bottom: 34px;
+}
+.masthead-zoom {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
 }
 .eyebrow,
 .panel-label {
@@ -136,7 +141,8 @@ h1 {
   color: #9cc9c0;
   padding: 10px 14px;
   font-size: 0.8rem;
-  max-width: min(360px, 42vw);
+  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -144,7 +150,10 @@ h1 {
 .masthead-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 14px;
+  min-width: 0;
+  max-width: 100%;
 }
 .workspace {
   display: grid;
@@ -583,6 +592,24 @@ textarea::placeholder {
   background: #14232b;
   color: #a9c4bb;
 }
+.lexical-entry-user {
+  padding-top: 0;
+  overflow: hidden;
+  border-left: 4px solid #86b8ad;
+}
+.lexical-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 -14px 12px;
+  padding: 7px 14px;
+  background: #1d3a40;
+  color: #b6d4bc;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
 .lexical-entry-title {
   display: flex;
   align-items: baseline;
@@ -651,6 +678,7 @@ textarea:focus {
     padding: 28px 16px 42px;
   }
   .masthead {
+    display: flex;
     align-items: start;
     flex-direction: column;
     margin-bottom: 28px;
@@ -838,6 +866,7 @@ textarea:focus {
 .masthead-side {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
