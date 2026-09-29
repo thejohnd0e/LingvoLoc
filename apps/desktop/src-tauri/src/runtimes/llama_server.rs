@@ -61,7 +61,7 @@ impl StandaloneRuntime {
 impl ModelRuntime for StandaloneRuntime {
     fn status(&self) -> Result<RuntimeStatus, RuntimeError> {
         self.require_models_directory()?;
-        let exe = effective_server_path(&self.server_path)?;
+        effective_server_path(&self.server_path)?;
         let running = SERVER
             .lock()
             .map_err(|_| RuntimeError::Connection("llama-server lock is poisoned".into()))?
@@ -82,7 +82,15 @@ impl ModelRuntime for StandaloneRuntime {
             None => RuntimeStatus {
                 available: true,
                 endpoint: "standalone".into(),
-                detail: format!("Standalone · ready ({})", exe.display()),
+                detail: match self
+                    .model_id
+                    .rsplit('/')
+                    .next()
+                    .filter(|name| !name.is_empty())
+                {
+                    Some(name) => format!("Standalone · ready · {name}"),
+                    None => "Standalone · ready · no model selected".into(),
+                },
             },
         })
     }
