@@ -31,4 +31,4 @@
 
 ## Commit SHA
 
-- Task 3 implementation commit: pending
+- Task 3 implementation commit: `8f1590f`
