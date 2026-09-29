@@ -1,5 +1,10 @@
 # TODO
 
+## File Translation Plan
+
+- [x] Complete Phase 1 of [the file translation plan](docs/FILE_TRANSLATION_PLAN.md): extraction, rendering, controlled replacement, and overflow behavior are recorded in `docs/FILE_TRANSLATION_PHASE1_REPORT.md`. PDFium notice review remains a release prerequisite; preserve all existing workflows and follow the per-phase validation gates.
+- [ ] Start Phase 2: implement the independent document-job model, persistence, state transitions, and recovery tests before production format integration.
+
 ## Next
 
 - [ ] Manually verify on real machines: Download/Update llama.cpp on AMD/Intel and no-GPU setups (NVIDIA was confirmed); Start with Windows toggle; Add to PATH; installer on a machine without WebView2.

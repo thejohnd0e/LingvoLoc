@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:l="http://www.w3.org/1999/xlink">
+  <description><title-info><book-title>Signal Path Fixture</book-title><lang>en</lang></title-info></description>
+  <body><section><title><p>Signal Path</p></title><epigraph><p>Measure twice, translate once.</p></epigraph><p>The receiver converts the input signal before the second stage.</p><p>Keep <strong>ADC-02</strong> unchanged.</p><section><title><p>Note</p></title><p><a l:href="#n1">[1]</a> This is a self-authored fixture.</p></section></section></body>
+  <body name="notes"><section id="n1"><title><p>Translator note</p></title><p>The note remains linked to its reference.</p></section></body>
+</FictionBook>

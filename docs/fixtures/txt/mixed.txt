@@ -1,0 +1,8 @@
+Technical Notes: Signal Path
+
+The receiver converts the input signal before the second stage. Keep the
+sample rate at 48 kHz and preserve the identifier ADC-02 in translated output.
+
+See https://example.invalid/signal-path for the schematic.
+
+Русский абзац проверяет Unicode и границы абзацев.

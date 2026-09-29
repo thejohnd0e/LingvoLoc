@@ -1,0 +1,10 @@
+[package]
+name = "lingvoloc-pdf-feasibility"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+image = { version = "0.25", features = ["png"] }
+pdf-extract = "0.12.1"
+pdfium-render = "0.9.4"

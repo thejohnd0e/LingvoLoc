@@ -17,6 +17,9 @@ Thumbs.db
 *.temp
 tmp/
 temp/
+tools/pdf-feasibility/bin/
+tools/pdf-feasibility/*.tgz
+docs/fixtures/pdf/*-pdfium-page-*.png
 
 # Build and coverage output
 build/

@@ -33,7 +33,8 @@
 
 ## In Progress
 
-- No implementation is in progress; the worktree is clean at release `v2.1.1` (plus the handoff documentation commit).
+- File translation Phase 0 is complete: the baseline gate passed and self-authored TXT, DOCX, EPUB, and FB2 fixtures were added under `docs/fixtures/`. Phase 1 is complete as a feasibility investigation: the ignored spike runtime uses the official PDFium Windows x64 DLL; extraction, text bounds, rendering, and controlled replacement overflow are recorded in `docs/FILE_TRANSLATION_PHASE1_REPORT.md`.
+- No production file-translation code or PDF dependency has been added. The feasibility result is limited to extractable-text PDFs with embedded fonts, simple text regions, and vector graphics; raster text, complex tables/formulas, arbitrary reading order, and robust replacement remain production limitations.
 - The next product area is dictionary quality. The current generic StarDict parser renders cleaned record content but assigns `language: "und"` and `part_of_speech: "User dictionary"`; it now maps the source language from `bookname`/file name (falls back to `und`), but does not yet reliably split rich `rus-eng` records into structured senses and fields.
 
 ## Known Issues And Blockers
@@ -58,7 +59,8 @@
 
 ## Next Recommended Step
 
-- First do the manual verifications listed in `TODO.md` if hardware is available. Then, for product work: add language metadata mapping and representative `rus-eng` fixture tests around `user_stardict_entries` and `parse_stardict_index_with_audio` in `apps/desktop/src-tauri/src/services/lexical.rs`. Then improve record parsing only as needed to make those fixtures produce stable definitions, translations, examples, and sense separation. Run focused Rust tests first, followed by `npm run check`.
+- For file translation, proceed to Phase 2: implement the independent document-job state machine and recovery model. Keep PDFium isolated until production PDF phases and the required notice review are explicitly approved.
+- Separately, the existing product next step remains language metadata and representative `rus-eng` fixture tests around `user_stardict_entries` and `parse_stardict_index_with_audio` in `apps/desktop/src-tauri/src/services/lexical.rs`.
 
 ## Inspect First
 
