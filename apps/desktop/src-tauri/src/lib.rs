@@ -482,7 +482,11 @@ pub fn run() {
             lookup_lexicon,
             read_dictionary_media,
             list_user_dictionaries,
-            translate_word
+            translate_word,
+            documents::commands::analyze_epub,
+            documents::commands::start_epub_job,
+            documents::commands::resume_epub_job,
+            documents::commands::export_epub_job
         ])
         .build(tauri::generate_context!())
         .expect("error while building LingvoLoc")
