@@ -297,3 +297,18 @@ body.embedded .result-wrap.grow output {
 body.embedded .grow.field > span {
   margin-bottom: 5px;
 }
+
+.detach-button {
+  margin-left: 4px;
+  font-size: 13px;
+}
+body:not(.embedded) .detach-button,
+body.windowed .detach-button {
+  display: none;
+}
+body.windowed .header-tools {
+  padding-right: 0;
+}
+body.windowed .brand {
+  cursor: default;
+}

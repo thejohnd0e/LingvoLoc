@@ -29,6 +29,7 @@ app.innerHTML = `
           <button id="font-decrease" class="font-button" type="button" aria-label="Decrease text size">−</button>
           <span id="font-size">16px</span>
           <button id="font-increase" class="font-button" type="button" aria-label="Increase text size">+</button>
+          <button id="detach" class="font-button detach-button" type="button" title="Open in a separate window that stays open when you switch tabs" aria-label="Open in a separate window">⧉</button>
         </div>
          <span class="status" id="status"><i></i> READY</span>
       </div>
@@ -49,7 +50,12 @@ app.innerHTML = `
   </section>
 `;
 
-document.body.classList.toggle('embedded', window.parent !== window);
+const windowed = new URLSearchParams(window.location.search).has('window');
+document.body.classList.toggle(
+  'embedded',
+  window.parent !== window || windowed,
+);
+document.body.classList.toggle('windowed', windowed);
 
 const tokenInput = document.querySelector<HTMLInputElement>('#token')!;
 const sourceInput = document.querySelector<HTMLSelectElement>('#source')!;
@@ -68,6 +74,7 @@ const result = document.querySelector<HTMLOutputElement>('#result')!;
 const copyButton = document.querySelector<HTMLButtonElement>('#copy')!;
 
 const saved = await chrome.storage.local.get([
+  'detachState',
   'apiToken',
   'pendingSelection',
   'fontSize',
@@ -83,7 +90,9 @@ state.fontSize =
 state.text =
   typeof saved.pendingSelection === 'string'
     ? saved.pendingSelection
-    : await getSelectedText().catch(() => '');
+    : windowed
+      ? ''
+      : await getSelectedText().catch(() => '');
 state.source =
   typeof saved.extensionSource === 'string' ? saved.extensionSource : 'auto';
 state.target =
@@ -94,10 +103,25 @@ if (
 ) {
   await chrome.storage.local.remove('pendingSelection');
 }
+const detached = windowed
+  ? (saved.detachState as
+      | { text?: string; source?: string; target?: string; result?: string }
+      | undefined)
+  : undefined;
+if (detached) {
+  // Content handed over from the in-page overlay when it was moved to this window.
+  state.text = detached.text ?? state.text;
+  state.source = detached.source ?? state.source;
+  state.target = detached.target ?? state.target;
+  await chrome.storage.local.remove('detachState');
+}
 tokenInput.value = state.token;
 textInput.value = state.text;
 sourceInput.value = state.source;
 targetInput.value = state.target;
+if (detached?.result) {
+  result.textContent = detached.result;
+}
 
 if (state.token) {
   status.textContent = 'CHECKING';
@@ -230,6 +254,26 @@ copyButton.addEventListener('click', async () => {
     copyButton.textContent = original;
   }, 1200);
 });
+
+document
+  .querySelector<HTMLButtonElement>('#detach')
+  ?.addEventListener('click', async () => {
+    await chrome.storage.local.set({
+      detachState: {
+        text: textInput.value,
+        source: sourceInput.value,
+        target: targetInput.value,
+        result: result.textContent ?? '',
+      },
+    });
+    await chrome.windows.create({
+      url: chrome.runtime.getURL('popup.html?window=1'),
+      type: 'popup',
+      width: Math.max(380, window.innerWidth + 16),
+      height: Math.max(520, window.innerHeight + 40),
+    });
+    window.parent.postMessage({ type: 'lingvoloc-close' }, '*');
+  });
 
 const dragHandle = document.querySelector<HTMLElement>('#drag-handle');
 dragHandle?.addEventListener('pointerdown', (event) => {
