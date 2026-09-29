@@ -218,8 +218,8 @@ export default function DocumentsPanel({
           </span>
           {job.diagnostics.length > 0 && (
             <ul aria-label="Document diagnostics">
-              {job.diagnostics.map((diagnostic) => (
-                <li key={diagnostic}>{diagnostic}</li>
+              {job.diagnostics.map((diagnostic, index) => (
+                <li key={`${diagnostic}-${index}`}>{diagnostic}</li>
               ))}
             </ul>
           )}

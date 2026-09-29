@@ -73,6 +73,36 @@ const epubView = (state = 'ready', translatedBlocks = 0) => ({
   cancelled: false,
 });
 
+const documentCases = [
+  {
+    label: 'TXT',
+    extension: 'txt',
+    format: 'txt',
+    analyze: commands.analyzeTxt,
+    start: commands.startTxtJob,
+    resume: commands.resumeTxtJob,
+    export: commands.exportTxtJob,
+  },
+  {
+    label: 'DOCX',
+    extension: 'docx',
+    format: 'docx',
+    analyze: commands.analyzeDocx,
+    start: commands.startDocxJob,
+    resume: commands.resumeDocxJob,
+    export: commands.exportDocxJob,
+  },
+  {
+    label: 'EPUB',
+    extension: 'epub',
+    format: 'epub',
+    analyze: commands.analyzeEpub,
+    start: commands.startEpubJob,
+    resume: commands.resumeEpubJob,
+    export: commands.exportEpubJob,
+  },
+] as const;
+
 describe('translation workspace', () => {
   afterEach(() => {
     cleanup();
@@ -153,6 +183,137 @@ describe('translation workspace', () => {
 
     expect(targetSelect).toHaveValue('auto');
     expect(targetSelect).toBeDisabled();
+  });
+
+  it.each(documentCases)(
+    'preserves $label picker, job dispatch, and output behavior',
+    async ({
+      label,
+      extension,
+      format,
+      analyze,
+      start,
+      resume,
+      export: exportJob,
+    }) => {
+      const sourcePath = `C:\\books\\story.${extension}`;
+      const outputPath = `C:\\books\\story.translated.en.${extension}`;
+      const view = (state = 'ready', translatedBlocks = 0) => ({
+        ...epubView(state, translatedBlocks),
+        job: {
+          ...epubView(state, translatedBlocks).job,
+          format,
+          source_path: sourcePath,
+        },
+      });
+
+      dialogMocks.open.mockResolvedValue(sourcePath);
+      vi.mocked(analyze).mockResolvedValue(view());
+      render(
+        <DocumentsPanel
+          sourceLanguage="ru"
+          targetLanguage="en"
+          modelId="model"
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: /choose/i }));
+      await screen.findByRole('button', { name: 'Start translation' });
+      expect(analyze).toHaveBeenCalledWith(sourcePath, 'ru', 'en');
+      expect(dialogMocks.open).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filters: [
+            expect.objectContaining({
+              extensions: ['txt', 'docx', 'epub'],
+            }),
+          ],
+        }),
+      );
+
+      vi.mocked(start).mockResolvedValue(view('translating', 1));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Start translation' }),
+      );
+      await waitFor(() => expect(start).toHaveBeenCalledWith('epub-job'));
+
+      cleanup();
+      localStorage.clear();
+      localStorage.setItem('lingvoloc.document-job-id', 'epub-job');
+      vi.mocked(commands.getDocumentJob).mockResolvedValue(view('interrupted'));
+      render(
+        <DocumentsPanel
+          sourceLanguage="ru"
+          targetLanguage="en"
+          modelId="model"
+        />,
+      );
+      await screen.findByRole('button', { name: 'Resume' });
+      vi.mocked(resume).mockResolvedValue(view('translating', 1));
+      fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+      await waitFor(() => expect(resume).toHaveBeenCalledWith('epub-job'));
+
+      cleanup();
+      localStorage.clear();
+      localStorage.setItem('lingvoloc.document-job-id', 'epub-job');
+      vi.mocked(commands.getDocumentJob).mockResolvedValue(
+        view('translating', 1),
+      );
+      dialogMocks.save.mockResolvedValue(outputPath);
+      vi.mocked(exportJob).mockResolvedValue({
+        output_path: outputPath,
+        job: view('completed', 1),
+      });
+      render(
+        <DocumentsPanel
+          sourceLanguage="ru"
+          targetLanguage="en"
+          modelId="model"
+        />,
+      );
+      await screen.findByRole('button', { name: `Export translated ${label}` });
+      fireEvent.click(
+        screen.getByRole('button', { name: `Export translated ${label}` }),
+      );
+      await waitFor(() =>
+        expect(exportJob).toHaveBeenCalledWith('epub-job', outputPath),
+      );
+      expect(dialogMocks.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          defaultPath: outputPath,
+          filters: [expect.objectContaining({ extensions: [extension] })],
+        }),
+      );
+    },
+  );
+
+  it('renders duplicate diagnostics as separate accessible list items', async () => {
+    const diagnostics = [
+      'Unsupported script content',
+      'Unsupported script content',
+    ];
+    localStorage.setItem('lingvoloc.document-job-id', 'epub-job');
+    vi.mocked(commands.getDocumentJob).mockResolvedValue({
+      ...epubView('ready'),
+      diagnostics,
+    });
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+
+    render(
+      <DocumentsPanel
+        sourceLanguage="ru"
+        targetLanguage="en"
+        modelId="model"
+      />,
+    );
+
+    const list = await screen.findByRole('list', {
+      name: 'Document diagnostics',
+    });
+    expect(list.querySelectorAll('li')).toHaveLength(2);
+    expect(screen.getAllByText('Unsupported script content')).toHaveLength(2);
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
   it('accepts EPUB files and dispatches EPUB analysis', async () => {

@@ -23,3 +23,15 @@ Implemented the EPUB-aware Documents panel changes from Task 4.
 - Full repository gates were not run; Task 4 requested focused frontend tests and desktop typecheck.
 - EPUB reader/validator validation remains a later Task 5 concern.
 - The worktree contained unrelated pre-existing changes; they were not reverted or staged.
+
+## Task 4 Review Fixes
+
+- Added parameterized TXT, DOCX, and EPUB workflow coverage for picker filters, analysis, start, resume, export dispatch, output extension, and save filters.
+- Added direct command-wrapper tests covering native command names and payloads for all three formats.
+- Added accessible duplicate-diagnostics rendering coverage and changed diagnostic keys to include the item index.
+
+## Review-Fix Verification
+
+- Red: the new diagnostics test reproduced React's duplicate-key warning while the workflow and wrapper tests passed.
+- Green: focused frontend tests passed with 17 tests across `App.test.tsx` and `commands.test.ts`.
+- Desktop typecheck and Prettier checks passed.
