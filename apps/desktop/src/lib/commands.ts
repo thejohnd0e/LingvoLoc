@@ -88,6 +88,11 @@ export interface LlamaDownloadProgress {
   percent: number;
   stage: string;
 }
+export interface GpuInfo {
+  names: string[];
+  backend: 'CUDA' | 'Vulkan' | 'CPU';
+}
+export const getGpuInfo = () => invokeNative<GpuInfo>('get_gpu_info');
 export const downloadLlamaCpp = () =>
   invokeNative<DownloadedLlama>('download_llama_cpp');
 export const locateLlamaServer = (directory: string) =>

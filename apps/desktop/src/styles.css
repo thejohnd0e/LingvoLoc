@@ -800,6 +800,10 @@ textarea:focus {
   color: #b6d4bc;
   overflow-wrap: anywhere;
 }
+.runtime-label {
+  font-weight: 700;
+  color: #c4d2d1;
+}
 .runtime-buttons {
   display: flex;
   gap: 16px;

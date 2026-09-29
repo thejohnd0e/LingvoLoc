@@ -6,7 +6,8 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-const RELEASE_API: &str = "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest";
+// `releases/latest` points at a tooling tag without binaries; real `bNNNN` builds are prereleases.
+const RELEASES_API: &str = "https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=20";
 const USER_AGENT: &str = "LingvoLoc";
 
 #[derive(Debug, Clone, Deserialize)]
@@ -44,19 +45,97 @@ pub struct DownloadProgress {
     pub stage: String,
 }
 
-/// Detects the GPU class from the driver libraries Windows installs with it.
-pub fn detect_gpu() -> GpuKind {
+#[derive(Debug, Clone, Serialize)]
+pub struct GpuInfo {
+    pub names: Vec<String>,
+    /// Build that will be downloaded: CUDA, Vulkan or CPU.
+    pub backend: String,
+}
+
+fn video_controller_names() -> Vec<String> {
+    let mut command = std::process::Command::new("powershell.exe");
+    command.args([
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "(Get-CimInstance Win32_VideoController).Name",
+    ]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000);
+    }
+    command
+        .output()
+        .map(|output| {
+            String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn is_virtual_adapter(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    [
+        "basic render",
+        "remote display",
+        "virtual",
+        "parsec",
+        "displaylink",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker))
+}
+
+fn driver_libraries() -> (bool, bool) {
     let Some(root) = std::env::var_os("SystemRoot") else {
-        return GpuKind::None;
+        return (false, false);
     };
     let system32 = PathBuf::from(root).join("System32");
-    if system32.join("nvcuda.dll").is_file() {
+    (
+        system32.join("nvcuda.dll").is_file(),
+        system32.join("vulkan-1.dll").is_file(),
+    )
+}
+
+fn classify_gpu(names: &[String], cuda_driver: bool, vulkan_driver: bool) -> GpuKind {
+    let real: Vec<&String> = names.iter().filter(|n| !is_virtual_adapter(n)).collect();
+    let has_nvidia = real
+        .iter()
+        .any(|name| name.to_ascii_lowercase().contains("nvidia"));
+    if cuda_driver && (has_nvidia || real.is_empty()) {
         GpuKind::Nvidia
-    } else if system32.join("vulkan-1.dll").is_file() {
+    } else if vulkan_driver && (!real.is_empty() || names.is_empty()) {
         GpuKind::Other
     } else {
         GpuKind::None
     }
+}
+
+/// Detects the GPUs (by name) and which llama.cpp build fits them.
+pub fn detect_gpu_info() -> (GpuKind, GpuInfo) {
+    let names: Vec<String> = video_controller_names()
+        .into_iter()
+        .filter(|name| !is_virtual_adapter(name))
+        .collect();
+    let (cuda, vulkan) = driver_libraries();
+    let kind = classify_gpu(&names, cuda, vulkan);
+    let backend = match kind {
+        GpuKind::Nvidia => "CUDA",
+        GpuKind::Other => "Vulkan",
+        GpuKind::None => "CPU",
+    };
+    (
+        kind,
+        GpuInfo {
+            names,
+            backend: backend.into(),
+        },
+    )
 }
 
 fn is_windows_zip(name: &str) -> bool {
@@ -206,18 +285,24 @@ pub fn download_latest(
         .timeout(Duration::from_secs(1800))
         .build()
         .map_err(http_error)?;
-    let release: Release = client
-        .get(RELEASE_API)
+    let releases: Vec<Release> = client
+        .get(RELEASES_API)
         .send()
         .and_then(|response| response.error_for_status())
         .and_then(|response| response.json())
         .map_err(http_error)?;
-    let (variant, assets) = select_assets(detect_gpu(), &release.assets).ok_or_else(|| {
-        RuntimeError::InvalidInput(format!(
-            "release {} has no Windows x64 build for this computer",
-            release.tag_name
-        ))
-    })?;
+    let gpu = detect_gpu_info().0;
+    let (release, variant, assets) = releases
+        .into_iter()
+        .find_map(|release| {
+            let (variant, assets) = select_assets(gpu, &release.assets)?;
+            Some((release, variant, assets))
+        })
+        .ok_or_else(|| {
+            RuntimeError::InvalidInput(
+                "no llama.cpp Windows x64 build found for this computer".into(),
+            )
+        })?;
 
     let target = base.join(&release.tag_name).join(variant.to_lowercase());
     let staging = base.join(format!("{}.download", release.tag_name));
@@ -290,6 +375,18 @@ mod tests {
         selection
             .map(|(_, assets)| assets.into_iter().map(|asset| asset.name).collect())
             .unwrap_or_default()
+    }
+
+    #[test]
+    fn classifies_gpus_by_name_and_driver() {
+        let nvidia = vec!["NVIDIA GeForce RTX 3060".to_string()];
+        let amd = vec!["AMD Radeon RX 6600".to_string()];
+        let basic = vec!["Microsoft Basic Render Driver".to_string()];
+        assert_eq!(classify_gpu(&nvidia, true, true), GpuKind::Nvidia);
+        assert_eq!(classify_gpu(&nvidia, false, true), GpuKind::Other);
+        assert_eq!(classify_gpu(&amd, false, true), GpuKind::Other);
+        assert_eq!(classify_gpu(&basic, false, true), GpuKind::None);
+        assert_eq!(classify_gpu(&[], false, false), GpuKind::None);
     }
 
     #[test]

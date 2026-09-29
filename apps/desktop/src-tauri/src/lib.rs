@@ -140,6 +140,11 @@ fn locate_llama_server(directory: String) -> Result<String, RuntimeError> {
 }
 
 #[tauri::command(async)]
+fn get_gpu_info() -> runtimes::llama_download::GpuInfo {
+    runtimes::llama_download::detect_gpu_info().1
+}
+
+#[tauri::command(async)]
 fn download_llama_cpp(
     app: tauri::AppHandle,
 ) -> Result<runtimes::llama_download::DownloadedLlama, RuntimeError> {
@@ -428,6 +433,7 @@ pub fn run() {
             detect_language,
             check_llama_server,
             download_llama_cpp,
+            get_gpu_info,
             find_llama_server,
             locate_llama_server,
             list_history,

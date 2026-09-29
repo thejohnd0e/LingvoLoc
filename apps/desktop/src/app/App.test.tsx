@@ -5,6 +5,7 @@ import { highlightMatches } from './highlight';
 
 vi.mock('../lib/commands', () => ({
   getRuntimeStatus: vi.fn().mockRejectedValue(new Error('offline')),
+  getGpuInfo: vi.fn().mockResolvedValue({ names: [], backend: 'CPU' }),
   getUserDictionaryDirectory: vi.fn().mockResolvedValue('user-dictionaries'),
   listUserDictionaries: vi.fn().mockResolvedValue([]),
   lookupLexicon: vi.fn().mockResolvedValue([]),

@@ -8,6 +8,8 @@ import {
   getApiToken,
   checkLlamaServer,
   downloadLlamaCpp,
+  getGpuInfo,
+  type GpuInfo,
   findLlamaServer,
   type LlamaDownloadProgress,
   locateLlamaServer,
@@ -180,6 +182,7 @@ export default function App() {
   );
   const [translationHighlight, setTranslationHighlight] = useState('');
   const [serverCheck, setServerCheck] = useState('');
+  const [gpuInfo, setGpuInfo] = useState<GpuInfo | null>(null);
   const [llamaDownload, setLlamaDownload] =
     useState<LlamaDownloadProgress | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -586,6 +589,13 @@ export default function App() {
       setServerCheck(`Check failed · ${errorDetail(reason)}`);
     }
   }
+
+  useEffect(() => {
+    if (!settingsOpen || gpuInfo) return;
+    void getGpuInfo()
+      .then(setGpuInfo)
+      .catch(() => setGpuInfo({ names: [], backend: 'CPU' }));
+  }, [settingsOpen, gpuInfo]);
 
   async function installLlamaCpp() {
     setServerCheck('');
@@ -1104,6 +1114,25 @@ export default function App() {
                     <code>
                       {settings.modelsDirectory || 'No folder selected'}
                     </code>
+                  </div>
+                </div>
+                <div className="runtime-row">
+                  <div className="runtime-label">GPU support</div>
+                  <div>
+                    <code>
+                      {gpuInfo === null
+                        ? 'Detecting…'
+                        : gpuInfo.names.length > 0
+                          ? gpuInfo.names.join(', ')
+                          : 'No GPU detected'}
+                    </code>
+                    {gpuInfo && (
+                      <span className="runtime-note">
+                        {gpuInfo.backend === 'CPU'
+                          ? 'The CPU build will be used.'
+                          : `The ${gpuInfo.backend} build will be used.`}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="runtime-row">
