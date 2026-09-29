@@ -45,7 +45,6 @@ Recommendations:
 
 - **Russian and other European languages:** TranslateGemma 12B Q5_K_M, or Gemma 3 12B QAT Q4_0 if you want a smaller and faster model.
 - **Maximum speed on short text:** TranslateGemma 4B Q8_0.
-- **Avoid abliterated (uncensored fine-tuned) models for translation.** The `gemma-3-12b-it-qat-abliterated` builds dropped the last paragraph of a five-paragraph article and distorted the first one, while the regular models translated all five paragraphs.
 
 ## Settings
 

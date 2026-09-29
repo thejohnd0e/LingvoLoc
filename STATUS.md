@@ -2,9 +2,9 @@
 
 ## Current Release
 
-- Version `2.0.5` is the current release across the root, desktop, extension, Tauri, Cargo, and extension packaging metadata.
-- `v2.0.5` is published on GitHub Releases (installer and extension ZIP attached). The last recorded release gate passed: `npm run check`, `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`, and `npm run desktop:build`.
-- Release artifacts are `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_2.0.5_x64-setup.exe` and `apps/extension/LingvoLoc-extension-2.0.5.zip`.
+- Version `2.1.1` is the current release across the root, desktop, extension, Tauri, Cargo, and extension packaging metadata.
+- `v2.1.1` is published on GitHub Releases (installer and extension ZIP attached). The last recorded release gate passed: `npm run check`, `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`, and `npm run desktop:build`.
+- Release artifacts are `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_2.1.1_x64-setup.exe` and `apps/extension/LingvoLoc-extension-2.1.1.zip`.
 
 ## Completed
 
@@ -13,6 +13,7 @@
 - Dictionary lookup uses only user-selected StarDict folders. Dictionary selection is persisted; `.dict.dz`, common audio/image references, and `res.zip` media are supported. Bundled and app-data dictionary fallbacks are intentionally not used.
 - Translation word selection supports model-assisted forward and reverse highlighting without adding word requests to translation history.
 - The desktop and extension have responsive layouts, visible focus states, persisted text-size controls, and current LingvoLoc branding.
+- 2.1.1 work: the model adapter follows the model file name (TranslateGemma, Hunyuan-MT, generic chat for Qwen etc.) and llama-server gets matching chat-template flags; the status line shows response time and tokens/s; README documents the RTX 3060 model benchmark.
 - 2.0.5 work: Standalone is the default mode; Settings has Download/Update llama.cpp (GPU-aware, fixed install folder, up-to-date message), a GPU support row with the device in use, Add to PATH, and separate Model runtime / Dictionaries / Browser extension sections; the tray menu was reworked (see below); clipboard popup translation was fixed; user-dictionary articles are separate named cards; the extension overlay is fluid and opens from the toolbar button, with a detach-to-window button; the installer installs WebView2 when missing and links the C runtime statically.
 - Agent handoff guidance in `AGENTS.md` now records the repository shape, authoritative commands, runtime constraints, and version-update requirements.
 
@@ -32,7 +33,7 @@
 
 ## In Progress
 
-- No implementation is in progress; the worktree is clean at release `v2.0.5`.
+- No implementation is in progress; the worktree is clean at release `v2.1.1`.
 - The next product area is dictionary quality. The current generic StarDict parser renders cleaned record content but assigns `language: "und"` and `part_of_speech: "User dictionary"`; it now maps the source language from `bookname`/file name (falls back to `und`), but does not yet reliably split rich `rus-eng` records into structured senses and fields.
 
 ## Known Issues And Blockers
