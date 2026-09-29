@@ -80,6 +80,44 @@ mod tests {
         };
         assert!(super::rewrite_document(xml, "OPS/chapter.xhtml", &[block]).is_err());
     }
+
+    #[test]
+    fn reports_and_preserves_unsupported_ordinary_text_elements() {
+        let xml = br#"<html xmlns="http://www.w3.org/1999/xhtml"><body><blockquote>Quoted text</blockquote><p>Supported</p></body></html>"#;
+
+        let parsed = super::parse_document(xml, "OPS/chapter.xhtml").unwrap();
+        assert_eq!(parsed.blocks.len(), 1);
+        assert_eq!(parsed.blocks[0].source_text, "Supported");
+        assert!(parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("blockquote")));
+        let mut blocks = parsed.blocks;
+        blocks[0].translated_text = Some("translated".into());
+        let rewritten = super::rewrite_document(xml, "OPS/chapter.xhtml", &blocks).unwrap();
+        assert!(String::from_utf8(rewritten)
+            .unwrap()
+            .contains("<blockquote>Quoted text</blockquote>"));
+    }
+
+    #[test]
+    fn inherited_foreign_namespace_is_diagnostic_and_not_translated() {
+        let xml = br#"<html xmlns="http://www.w3.org/1999/xhtml"><body><section xmlns="urn:foreign"><p>Foreign text</p></section><p>Supported</p></body></html>"#;
+
+        let parsed = super::parse_document(xml, "OPS/chapter.xhtml").unwrap();
+        assert_eq!(parsed.blocks.len(), 1);
+        assert_eq!(parsed.blocks[0].source_text, "Supported");
+        assert!(parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("section")));
+        let mut blocks = parsed.blocks;
+        blocks[0].translated_text = Some("translated".into());
+        let rewritten = super::rewrite_document(xml, "OPS/chapter.xhtml", &blocks).unwrap();
+        let text = String::from_utf8(rewritten).unwrap();
+        assert!(text.contains("<p>Foreign text</p>"));
+        assert!(text.contains("<p>translated</p>"));
+    }
 }
 use std::collections::HashMap;
 
@@ -331,6 +369,7 @@ pub(super) fn rewrite_document(
     let mut depth = 0_usize;
     let mut element = Vec::new();
     let mut element_depth = 0_usize;
+    let mut element_has_foreign = false;
     let mut block_index = 0_usize;
 
     loop {
@@ -340,12 +379,23 @@ pub(super) fn rewrite_document(
         let is_eof = matches!(event, Event::Eof);
         let is_start = matches!(&event, Event::Start(_));
         let is_end = matches!(&event, Event::End(_));
+        let is_foreign =
+            matches!(&event, Event::Start(_) | Event::Empty(_) if !is_xhtml(&namespace));
         if !element.is_empty() {
             let closes_element = is_end && depth == element_depth;
+            element_has_foreign |= is_foreign;
             element.push(event.into_owned());
             if closes_element {
-                rewrite_element(&mut writer, &element, path, blocks, &mut block_index)?;
+                rewrite_element(
+                    &mut writer,
+                    &element,
+                    element_has_foreign,
+                    path,
+                    blocks,
+                    &mut block_index,
+                )?;
                 element.clear();
+                element_has_foreign = false;
             }
         } else if matches!(&event, Event::Start(value) if is_xhtml(&namespace) && semantic_type(local_name(value.name().as_ref())).is_some())
         {
@@ -381,10 +431,17 @@ pub(super) fn rewrite_document(
 fn rewrite_element(
     writer: &mut Writer<Vec<u8>>,
     events: &[Event<'static>],
+    has_foreign_namespace: bool,
     path: &str,
     blocks: &[DocumentBlock],
     block_index: &mut usize,
 ) -> Result<(), RuntimeError> {
+    if has_foreign_namespace {
+        for event in events {
+            writer.write_event(event.clone()).map_err(xml_write)?;
+        }
+        return Ok(());
+    }
     let Some(info) = element_info(events) else {
         for event in events {
             writer.write_event(event.clone()).map_err(xml_write)?;
@@ -540,7 +597,7 @@ fn semantic_type(name: &str) -> Option<BlockType> {
 fn unsupported(name: &str) -> bool {
     matches!(
         name,
-        "script" | "style" | "foreign" | "svg" | "math" | "object" | "iframe"
+        "blockquote" | "script" | "style" | "foreign" | "svg" | "math" | "object" | "iframe"
     )
 }
 

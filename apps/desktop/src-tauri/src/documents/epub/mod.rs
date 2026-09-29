@@ -98,6 +98,7 @@ fn coalesce_segments(blocks: &[DocumentBlock]) -> Result<Vec<DocumentBlock>, Run
         } else {
             let mut parent = block.clone();
             parent.id = parent_id.to_string();
+            parent.ordinal = block.ordinal.div_euclid(1_000_000);
             parent.translated_text = block.translated_text.clone();
             result.push(parent);
         }
@@ -210,22 +211,79 @@ mod tests {
     fn coalesces_segmented_epub_blocks_before_export() {
         let blocks = vec![
             DocumentBlock {
-                id: "OPS/chapter.xhtml#0::part-0000".into(),
-                ordinal: 0,
+                id: "OPS/chapter.xhtml#1::part-0000".into(),
+                ordinal: 1_000_000,
                 block_type: BlockType::Paragraph,
                 source_text: "one".into(),
                 translated_text: Some("first".into()),
             },
             DocumentBlock {
-                id: "OPS/chapter.xhtml#0::part-0001".into(),
-                ordinal: 1,
+                id: "OPS/chapter.xhtml#1::part-0001".into(),
+                ordinal: 1_000_001,
                 block_type: BlockType::Paragraph,
                 source_text: "two".into(),
                 translated_text: Some("second".into()),
             },
+            DocumentBlock {
+                id: "OPS/chapter.xhtml#2".into(),
+                ordinal: 2,
+                block_type: BlockType::Paragraph,
+                source_text: "later".into(),
+                translated_text: Some("later translated".into()),
+            },
         ];
         let combined = coalesce_segments(&blocks).unwrap();
-        assert_eq!(combined[0].id, "OPS/chapter.xhtml#0");
+        assert_eq!(
+            combined
+                .iter()
+                .map(|block| block.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["OPS/chapter.xhtml#1", "OPS/chapter.xhtml#2"]
+        );
+        assert_eq!(combined[0].ordinal, 1);
         assert_eq!(combined[0].translated_text.as_deref(), Some("first second"));
+    }
+
+    #[test]
+    fn export_keeps_multiple_segmented_blocks_in_document_order() {
+        let source = super::package::fixture_bytes();
+        let analysis = analyze(&source).unwrap();
+        let mut blocks = analysis.blocks;
+        let segmented = blocks.remove(1);
+        let later = blocks[1].clone();
+        blocks.push(DocumentBlock {
+            id: segmented.id.clone() + "::part-0000",
+            ordinal: 1_000_000,
+            block_type: segmented.block_type,
+            source_text: "first".into(),
+            translated_text: Some("first translated".into()),
+        });
+        blocks.push(DocumentBlock {
+            id: segmented.id + "::part-0001",
+            ordinal: 1_000_001,
+            block_type: later.block_type,
+            source_text: "second".into(),
+            translated_text: Some("second translated".into()),
+        });
+        for block in &mut blocks {
+            if block.translated_text.is_none() {
+                block.translated_text = Some(block.source_text.clone());
+            }
+        }
+
+        let exported = export(&source, &blocks).unwrap();
+        let chapter = zip::ZipArchive::new(std::io::Cursor::new(exported))
+            .unwrap()
+            .by_name("OPS/chapter-one.xhtml")
+            .unwrap()
+            .bytes()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let parsed = super::xml::parse_document(&chapter, "OPS/chapter-one.xhtml").unwrap();
+        assert_eq!(
+            parsed.blocks[1].source_text,
+            "first translated second translated"
+        );
+        assert_eq!(parsed.blocks[2].source_text, later.source_text);
     }
 }
