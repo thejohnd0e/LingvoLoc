@@ -12,6 +12,12 @@
 - [ ] Improve StarDict record parsing and sense separation so common Russian-English dictionaries yield stable definitions, translations, forms, examples, synonyms, and antonyms where the source data provides them.
 - [ ] Add regression tests (truncated index and language mapping done) for malformed indexes, dictionary type/markup variants, language metadata, and multi-sense records before changing the dictionary UI contract.
 
+## Models
+
+- [ ] Verify the Hunyuan-MT and Qwen adapters end to end in the desktop UI (only benchmark-script and unit-test coverage so far).
+- [ ] Optionally translate long text paragraph by paragraph (split on blank lines in `services/translation.rs`, join the results) so weaker models cannot skip trailing paragraphs.
+- [ ] Optionally show tokens/s in the extension popup (`apps/extension/src/popup.ts`); `completion_tokens` is already in the `TranslationResult` JSON returned by the loopback API.
+
 ## Before Public Release
 
 - [ ] Complete formal trademark and domain review for the `LingvoLoc` name.

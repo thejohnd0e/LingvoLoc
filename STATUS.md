@@ -8,7 +8,7 @@
 
 ## Completed
 
-- The Windows desktop app translates through the selected LM Studio TranslateGemma model, supports automatic detection for 12 languages, persists settings and SQLite history, copies successful results, and provides tray, single-instance, global-shortcut, and clipboard-popup workflows.
+- The Windows desktop app translates through the selected local model (Standalone llama.cpp or LM Studio), supports automatic detection for 12 languages, persists settings and SQLite history, copies successful results, and provides tray, single-instance, global-shortcut, and clipboard-popup workflows.
 - The authenticated API on `127.0.0.1:47831` supports the thin Chromium MV3 extension. Pairing, independent language directions, toolbar translation, and a movable/resizable in-page context-menu popup have been implemented and smoke-tested.
 - Dictionary lookup uses only user-selected StarDict folders. Dictionary selection is persisted; `.dict.dz`, common audio/image references, and `res.zip` media are supported. Bundled and app-data dictionary fallbacks are intentionally not used.
 - Translation word selection supports model-assisted forward and reverse highlighting without adding word requests to translation history.
@@ -19,7 +19,7 @@
 
 ## Currently Works
 
-- Standalone mode (default; Settings window): press Download llama.cpp (GPU-appropriate build fetched automatically, with progress), choose a models folder, pick a `.gguf`, and translate without LM Studio. An existing llama.cpp folder can still be chosen under Advanced. The download flow has unit tests for asset selection and was confirmed on an NVIDIA machine (CUDA build, fixed folder). `llama-server` is started with `--no-jinja --chat-template gemma` because TranslateGemma's embedded Jinja template rejects plain-text messages and some conversions fall back to ChatML. Verified manually on Windows with llama.cpp build b11243 (CUDA 13.4, RTX 3060) using TranslateGemma 4B Q8_0 and 12B Q4_K_S.
+- Standalone mode (default; Settings window): press Download llama.cpp (GPU-appropriate build fetched automatically, with progress), choose a models folder, pick a `.gguf`, and translate without LM Studio. An existing llama.cpp folder can still be chosen under Advanced. The download flow has unit tests for asset selection and was confirmed on an NVIDIA machine (CUDA build, fixed folder). `llama-server` template flags depend on the model family (`adapters::Family`, derived from the model file name): `gemma` → `--no-jinja --chat-template gemma` (TranslateGemma's embedded Jinja template rejects plain-text messages and some conversions fall back to ChatML); `hunyuan` → `--jinja`; anything else (Qwen etc.) → `--jinja --chat-template-kwargs {"enable_thinking":false}`. Verified manually on Windows with llama.cpp build b11243 (CUDA 13.4, RTX 3060) using TranslateGemma 4B Q8_0 and 12B Q4_K_S.
 - Blocking native commands run off the UI thread and parsed StarDict folders are cached, so lookups no longer freeze the window; waits show a spinner. Dictionary, runtime, and extension-token settings live in the Settings window.
 
 - `npm run dev`, `npm run desktop:dev`, desktop frontend builds, native Tauri/NSIS builds, and extension build/package commands are established in the root `package.json`.
@@ -33,11 +33,15 @@
 
 ## In Progress
 
-- No implementation is in progress; the worktree is clean at release `v2.1.1`.
+- No implementation is in progress; the worktree is clean at release `v2.1.1` (plus the handoff documentation commit).
 - The next product area is dictionary quality. The current generic StarDict parser renders cleaned record content but assigns `language: "und"` and `part_of_speech: "User dictionary"`; it now maps the source language from `bookname`/file name (falls back to `und`), but does not yet reliably split rich `rus-eng` records into structured senses and fields.
 
 ## Known Issues And Blockers
 
+- The Hunyuan-MT and generic chat (Qwen) adapters were verified only through a standalone benchmark script that reproduced the adapter prompts and `llama-server` flags, plus unit tests; they were not exercised through the desktop UI. The Gemma family (Gemma 3 QAT, TranslateGemma 4B/12B) was used in the UI and works.
+- Abliterated Gemma fine-tunes drop trailing paragraphs of long text (reproduced with `gemma-3-12b-it-qat-abliterated` q4_k_m/q6_k on a five-paragraph article). Regular Gemma 3 QAT and TranslateGemma 12B translated it fully. There is no per-paragraph chunking, so a weak model can still omit text; the UI does not warn about it.
+- Tokens/s is completion tokens divided by the whole request time, so the first request after a model switch is slower (it includes model loading). The browser extension popup still shows latency only.
+- The adapter is chosen from the model file name; a renamed file (for example without `hunyuan`/`gemma` in its name) gets the generic chat adapter. The `adapterId` setting is informational and no longer validated against the request.
 - Not yet verified on real hardware or a clean machine: the Download llama.cpp flow on AMD/Intel/no-GPU machines (on the maintainer's NVIDIA machine it produced the fixed `llama.cpp/` folder with `version.txt` = `b11247 CUDA`), the Start with Windows toggle, the Add to PATH button in a fresh profile, the installer on a machine without WebView2, and the `+crt-static` build on other machines. Layout changes (header, dictionary cards, extension overlay) were checked by the user on one machine only.
 - The integrated-GPU name list in `runtimes/llama_server.rs` (`is_integrated`) is heuristic; an unusual integrated GPU could be preferred over a discrete Vulkan card.
 - The `Start with Windows` registry value stores the executable path; after moving the install folder the checkbox must be toggled off and on. The installer has no uninstall hook that removes the value.

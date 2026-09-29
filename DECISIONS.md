@@ -168,6 +168,13 @@
 - **Decision:** Prioritize `rus-eng` parsing and regression coverage over additional language-pair downloads.
 - **Reason:** Russian-English is the primary product workflow, and improving the quality of its existing 42,283 records has higher value than expanding the number of partially parsed providers.
 
+## Model Adapter Selection
+
+- **Decision:** Choose the translation adapter and the `llama-server` chat-template flags from the model file/id (`adapters::Family::from_model_id`): `gemma` → TranslateGemma prompt, `hunyuan` → Hunyuan-MT prompt, otherwise a generic system+user translator prompt (Qwen3 gets `/no_think` and `enable_thinking:false`). The stored `adapterId` setting is informational; the result reports the adapter actually used.
+- **Reason:** The UI must not depend on one model family, and each family needs a different prompt and template handling; deriving it from the model name avoids a new setting and a mismatch between adapter and model.
+- **Decision:** Recommend Gemma 3 12B QAT Q4_0 and TranslateGemma 12B (Q5_K_M as the quality/speed balance) for Russian on an RTX 3060 12 GB; do not recommend abliterated fine-tunes, Hunyuan-MT-7B or Qwen3-14B for Russian. Measurements are in `README.md` ("Choosing a model").
+- **Reason:** Benchmarked on 12 texts including a five-paragraph article; abliterated models dropped text, Qwen3 produced invented idioms and stray characters, Hunyuan was wordy and merged paragraphs.
+
 ## WordNet Dictionary Fallback
 
 - **Decision:** Do not show partial WordNet or model-generated records in the default dictionary lookup.
