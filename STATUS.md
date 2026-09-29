@@ -33,8 +33,8 @@
 
 ## In Progress
 
-- File translation Phase 0 is complete: the baseline gate passed and self-authored TXT, DOCX, EPUB, and FB2 fixtures were added under `docs/fixtures/`. Phase 1 is complete as a feasibility investigation: the ignored spike runtime uses the official PDFium Windows x64 DLL; extraction, text bounds, rendering, and controlled replacement overflow are recorded in `docs/FILE_TRANSLATION_PHASE1_REPORT.md`.
-- No production file-translation code or PDF dependency has been added. The feasibility result is limited to extractable-text PDFs with embedded fonts, simple text regions, and vector graphics; raster text, complex tables/formulas, arbitrary reading order, and robust replacement remain production limitations.
+- File translation Phase 0 is complete: the baseline gate passed and self-authored TXT, DOCX, EPUB, and FB2 fixtures were added under `docs/fixtures/`. Phase 1 is complete as a feasibility investigation: the ignored spike runtime uses the official PDFium Windows x64 DLL; extraction, text bounds, rendering, and controlled replacement overflow are recorded in `docs/FILE_TRANSLATION_PHASE1_REPORT.md`. Phase 2 is complete: the isolated document-job store now persists jobs and blocks, enforces transitions, hashes sources, and recovers interrupted work. Phase 3 is complete: all interactive translation entry points share a one-request inference coordinator, and document blocks have a yielding background seam. Phase 4 is complete: oversized blocks are split conservatively and the worker persists each successful segment independently. Phase 5 is complete: TXT jobs can be analyzed, translated, paused/resumed/cancelled between blocks, recovered after restart, and exported to a separate file. Phase 6 DOCX implementation and automated package/security review are complete. Phase 7 EPUB implementation and automated package/XML review are complete; FB2 remains unimplemented.
+- TXT supports UTF-8 with or without BOM and UTF-16 with BOM. Text is normalized to LF and non-empty paragraphs become persisted blocks. DOCX supports bounded analysis and package-preserving export for supported paragraphs in `word/document.xml`; unsupported stories and constructs remain unchanged and produce diagnostics. EPUB supports bounded, package-preserving translation of spine XHTML paragraphs, headings, list items, and table cells, with diagnostics for unsupported XHTML content. EPUB navigation labels and OPF bibliographic metadata are not translated. Outputs are written through a same-directory temporary file and rename; existing outputs and source replacement are rejected.
 - The next product area is dictionary quality. The current generic StarDict parser renders cleaned record content but assigns `language: "und"` and `part_of_speech: "User dictionary"`; it now maps the source language from `bookname`/file name (falls back to `und`), but does not yet reliably split rich `rus-eng` records into structured senses and fields.
 
 ## Known Issues And Blockers
@@ -59,8 +59,22 @@
 
 ## Next Recommended Step
 
-- For file translation, proceed to Phase 2: implement the independent document-job state machine and recovery model. Keep PDFium isolated until production PDF phases and the required notice review are explicitly approved.
+- Phase 7 EPUB package/XML processing is implemented in `documents/epub/{mod,package,xml}.rs`, with format-aware native commands and Documents UI integration. Automated checks pass, but an EPUB validator or reader smoke check is blocked because no suitable local validator/reader is installed. Run that check against a deterministic translated EPUB before release; then keep FB2 and PDF separately scoped.
 - Separately, the existing product next step remains language metadata and representative `rus-eng` fixture tests around `user_stardict_entries` and `parse_stardict_index_with_audio` in `apps/desktop/src-tauri/src/services/lexical.rs`.
+
+## Session Handoff
+
+- Phase 7 EPUB implementation and automated package/security review are complete; EPUB validator/reader validation remains blocked because `epubcheck`, Calibre/`ebook-convert`, Pandoc, and a repository EPUBCheck JAR are unavailable on this host.
+- Phase 6 manual viewer validation remains blocked because Word and LibreOffice are not installed on this host.
+- TXT, DOCX, and EPUB entry points are registered in `apps/desktop/src-tauri/src/lib.rs`; EPUB uses `analyze_epub`, `start_epub_job`, `resume_epub_job`, and `export_epub_job`.
+- TXT parsing and export are in `apps/desktop/src-tauri/src/documents/txt.rs`; job orchestration is in `documents/commands.rs`; segmentation and persisted translation are in `documents/segmentation.rs` and `documents/worker.rs`.
+- The frontend workflow is `apps/desktop/src/app/DocumentsPanel.tsx`, mounted from `App.tsx`; command types/wrappers are in `apps/desktop/src/lib/commands.ts` and styles are in `apps/desktop/src/styles.css`.
+- Jobs live in app data `document-jobs.sqlite`. Startup calls `recover_interrupted`; the active job id is kept in local storage under `lingvoloc.document-job-id`.
+- TXT output normalizes CRLF/CR to LF and joins non-empty paragraphs with a blank LF line. Existing output files and source replacement are rejected.
+- The native worker pauses or cancels only between blocking model requests; the active HTTP request is not forcibly interrupted.
+- Verified for Phase 7: `npm run check` (126 native tests and 24 frontend tests), `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`, `npm run build`, `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml documents::epub` (27 passing), and `git diff --check`. The deterministic EPUB tests cover reverse ZIP/spine ordering, package limits and unsafe paths, unsupported-content diagnostics, external resource and CSS URL rejection, escaped/whitespace-preserving XHTML rewrite, segmentation coalescing, and unchanged resources.
+- Not verified: opening a translated EPUB in a real reader or running EPUBCheck because no suitable local validator/reader is installed; real model translation, Windows pause/resume/cancel, clean-machine installer behavior, and Word/LibreOffice DOCX validation also remain unverified.
+- Exact next action: run EPUBCheck or open a deterministic translated fixture in an EPUB reader on a machine with one available, record navigation/images/notes and package errors, then scope FB2 as a separate task. Do not claim EPUB release acceptance until that validation is recorded.
 
 ## Inspect First
 
@@ -75,11 +89,3 @@
 - `apps/desktop/src/app/App.tsx`: dictionary folder selection, enabled dictionaries, lookup state, sanitization, and rendering.
 - `scripts/build-lexical-index.mjs`: offline lexical conversion path; do not conflate it with runtime user-dictionary lookup.
 - `apps/desktop/src-tauri/src/api.rs` and `apps/extension/src/`: loopback API and extension boundary if extension work resumes.
-
-## Phase 7 EPUB Handoff
-
-- EPUB implementation and automated package/XML review are complete for bounded spine XHTML paragraphs, headings, list items, and table cells; FB2 remains unimplemented.
-- Package-preserving export retains untouched ZIP entries, CSS, images, links, anchors, identifiers, and unsupported XHTML content. Navigation labels and OPF bibliographic metadata are not translated.
-- Required checks passed: `npm run check` (118 native tests and 23 frontend tests), strict Clippy, `npm run build`, focused EPUB tests (19 passing), and `git diff --check`.
-- Independent EPUB validator/reader validation was not run: `epubcheck`, Calibre/`ebook-convert`, Pandoc, and a repository EPUBCheck JAR are unavailable on this host.
-- Next action: validate a deterministic translated EPUB with EPUBCheck or a reader, record navigation/images/notes and package errors, then scope FB2 separately.

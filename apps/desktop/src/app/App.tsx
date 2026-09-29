@@ -48,6 +48,7 @@ import { highlightMatches } from './highlight';
 import Modal from './Modal';
 import Spinner from './Spinner';
 import TextSizeControls from './TextSizeControls';
+import DocumentsPanel from './DocumentsPanel';
 
 const defaultSettings: Settings = {
   runtimeMode: 'standalone',
@@ -1100,6 +1101,11 @@ export default function App() {
               : `Local runtime · ${timing} · ${settings.modelId}`)}
         {detectedLanguage ? ` · detected ${detectedLanguage}` : ''}
       </div>
+      <DocumentsPanel
+        sourceLanguage={settings.sourceLanguage}
+        targetLanguage={settings.targetLanguage}
+        modelId={settings.modelId}
+      />
       {settingsOpen && (
         <Modal title="Settings" onClose={() => setSettingsOpen(false)}>
           <section

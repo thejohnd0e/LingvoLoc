@@ -148,7 +148,10 @@ fn translate(request: &HttpRequest, state: &AppState) -> (u16, String) {
         target_language: body.target_language,
         text: body.text,
     };
-    match translation::translate(&settings, request.clone()) {
+    let snapshot = crate::services::inference_coordinator::snapshot(&settings, &request.model_id);
+    match state.inference.run_interactive(&snapshot, || {
+        translation::translate(&settings, request.clone())
+    }) {
         Ok(result) => {
             let history_result = state
                 .history

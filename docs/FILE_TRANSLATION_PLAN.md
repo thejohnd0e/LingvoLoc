@@ -3,7 +3,7 @@
 ## Status and purpose
 
 - Created: 2026-09-29.
-- Status: Phase 0 and Phase 1 complete; production file-translation implementation has not started.
+- Status: Phase 0 through Phase 6 DOCX and Phase 7 EPUB implementation complete in code; DOCX viewer validation and EPUB validator/reader validation remain open, and FB2/PDF implementation has not started.
 - Inspected baseline: `8ada3cc` on `master`, following release `v2.1.1` (`8d20985`). Recheck the actual repository state before starting.
 - Intended readers: Codex, Claude Code, and other implementation/review agents.
 - This document records the agreed direction and phased implementation tasks. It does not authorize automatically executing every phase, publishing a release, or making commits.
@@ -64,7 +64,7 @@ apps/desktop/src-tauri/src/
     export.rs
     formats/
       txt.rs
-      docx.rs
+      documents/docx/{mod,package,xml}.rs
       epub.rs
       fb2.rs
       pdf/
@@ -445,21 +445,16 @@ If the user explicitly requests multiple agents, one can implement and another r
 
 - [x] Phase 0: baseline and fixtures. Baseline checks pass; TXT, DOCX, EPUB, and FB2 self-authored fixtures are present.
 - [x] Phase 1: PDF feasibility and dependency decision. `pdfium-render` is the isolated candidate for the documented initial class; reconstruction remains a later production phase and must report overflow and unsupported content.
-- [ ] Phase 2: persistent jobs and recovery.
-- [ ] Phase 3: inference coordination with regression coverage.
-- [ ] Phase 4: segmentation and block translation.
-- [ ] Phase 5: end-to-end TXT and UI.
-- [ ] Phase 6: DOCX; first user-facing release milestone.
-- [ ] Phase 7: EPUB/FB2.
+- [x] Phase 2: persistent jobs and recovery.
+- [x] Phase 3: inference coordination with regression coverage.
+- [x] Phase 4: segmentation and block translation.
+- [x] Phase 5: end-to-end TXT and UI.
+- [x] Phase 6: DOCX implementation complete; first user-facing release milestone remains pending Word/LibreOffice viewer validation.
+- [x] Phase 7: EPUB implementation complete for bounded spine XHTML paragraphs, headings, list items, and table cells; validator/reader smoke validation remains open. FB2 is not included.
 - [ ] Phase 8: technical PDF layout preservation.
 - [ ] Phase 9: PDF to DOCX/EPUB.
 - [ ] Phase 10: separately scoped OCR and quality improvements.
 
-**Current continuation point:** Phase 0 and Phase 1 are complete. Start Phase 2 only as a separately assigned task: implement the independent document-job model, persistence, valid state transitions, and recovery tests. Keep `pdfium-render` and all format-specific processing isolated; do not add production PDF dependencies, change versions, publish, or commit without separate instructions.
+**Current continuation point:** Phase 0 through Phase 6 and the EPUB portion of Phase 7 are implemented. EPUB supports bounded spine XHTML analysis, persisted diagnostics, recoverable translation, package-preserving export, and format-aware Documents UI; navigation labels and OPF bibliographic metadata are not translated. Automated checks pass, but EPUB validator/reader validation remains open on this host. The next action is to validate a deterministic translated EPUB with EPUBCheck or a reader, then assign FB2 separately; keep `pdfium-render` and production PDF processing isolated.
 
-## Phase 7 EPUB Handoff
-
-- EPUB implementation is complete for bounded spine XHTML paragraphs, headings, list items, and table cells, with persisted diagnostics and package-preserving export.
-- Navigation labels and OPF bibliographic metadata remain unchanged in this increment; FB2 is not included.
-- Automated checks pass, but the independent EPUB validator/reader gate remains open because no suitable local tool is installed.
-- Next action: run EPUBCheck or a reader against a deterministic translated fixture, then assign FB2 separately.
+**New-session handoff:** Before release, run EPUBCheck or open a deterministic translated EPUB in a reader and record package validity, navigation, images, and notes. Also manually open a deterministic translated DOCX fixture in Microsoft Word and LibreOffice, confirm no repair prompt, and record the results. After those validation steps, scope FB2 as a separate implementation task. The current TXT workflow is the regression baseline and must remain unchanged.

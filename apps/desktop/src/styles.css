@@ -360,6 +360,64 @@ textarea::placeholder {
   color: #86b8ad;
   font-size: 0.78rem;
 }
+.documents-panel {
+  margin-top: 16px;
+  padding: 20px;
+  border: 1px solid #29434c;
+  border-radius: 10px;
+  background: #122029;
+}
+.documents-heading,
+.document-job-meta,
+.document-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.documents-heading {
+  justify-content: space-between;
+}
+.documents-heading h2 {
+  margin: 6px 0 4px;
+  color: #e8edf1;
+  font-size: 1.1rem;
+}
+.documents-heading p,
+.document-message,
+.document-progress {
+  margin: 0;
+  color: #86b8ad;
+  font-size: 0.82rem;
+}
+.document-job {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #29434c;
+}
+.document-job-meta {
+  color: #d8e6df;
+  font-size: 0.82rem;
+}
+.document-job-meta span {
+  color: #86b8ad;
+}
+.document-job progress {
+  width: 100%;
+  height: 8px;
+  accent-color: #c7f36b;
+}
+.document-actions {
+  justify-content: flex-start;
+}
+.documents-panel .quiet {
+  color: #c7f36b;
+}
+.documents-panel .danger {
+  color: #ef9a92;
+}
 .history {
   margin-top: 26px;
 }

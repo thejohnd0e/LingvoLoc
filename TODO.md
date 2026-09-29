@@ -3,7 +3,14 @@
 ## File Translation Plan
 
 - [x] Complete Phase 1 of [the file translation plan](docs/FILE_TRANSLATION_PLAN.md): extraction, rendering, controlled replacement, and overflow behavior are recorded in `docs/FILE_TRANSLATION_PHASE1_REPORT.md`. PDFium notice review remains a release prerequisite; preserve all existing workflows and follow the per-phase validation gates.
-- [ ] Start Phase 2: implement the independent document-job model, persistence, state transitions, and recovery tests before production format integration.
+- [x] Complete Phase 2: implement the independent document-job model, persistence, state transitions, and recovery tests before production format integration.
+- [x] Complete Phase 3: serialize interactive and document inference, prioritize interactive requests, quiesce runtime lifecycle changes, and cover recovery/error/shutdown behavior. The document worker itself remains Phase 4 work.
+- [x] Complete Phase 4: add conservative bounded segmentation and a recoverable persisted-block worker. Format parsers, export, and the user-facing file workflow remain Phase 5+ work.
+- [x] Complete Phase 5: add TXT UTF-8/UTF-16 parsing, persisted file jobs, safe separate export, restart recovery, and the first Documents UI with pause/resume/cancel controls.
+- [x] Implement Phase 6 DOCX package/XML processing, bounded analysis, package-preserving export, format-aware commands/UI, and diagnostics. Preserve untouched ZIP parts and relationships.
+- [x] Implement Phase 7 EPUB package/XML processing, recoverable jobs, package-preserving export, format-aware commands/UI, and diagnostics for supported spine XHTML. Keep navigation metadata, FB2, and PDF separately scoped.
+- [ ] Validate a deterministic translated EPUB with EPUBCheck or a real EPUB reader. No suitable validator/reader is installed on the current host.
+- [ ] Manually validate translated DOCX output in Microsoft Word and LibreOffice. This remains blocked on viewers not being installed on the current host.
 
 ## Next
 
@@ -26,9 +33,3 @@
 ## Before Public Release
 
 - [ ] Complete formal trademark and domain review for the `LingvoLoc` name.
-
-## Phase 7 EPUB
-
-- [x] Implement bounded spine-XHTML analysis, recoverable jobs, package-preserving export, format-aware commands/UI, and diagnostics.
-- [ ] Validate a deterministic translated EPUB with EPUBCheck or a real EPUB reader; no suitable validator/reader is installed on the current host.
-- [ ] Scope FB2 separately after EPUB reader/validator validation.

@@ -1,5 +1,26 @@
 # Decisions
 
+## Phase 6 DOCX
+
+- **Decision:** Keep DOCX analysis bounded and in-memory. Require only `[Content_Types].xml`, `_rels/.rels`, and `word/document.xml`; preserve unsupported package parts for export and report diagnostics rather than silently dropping them.
+- **Reason:** Real DOCX files may omit numbering, styles, or settings, while ZIP traversal, duplicate names, encryption, and decompression limits must be rejected before content is trusted.
+- **Decision:** Use direct `quick-xml = "0.42"` with `NsReader`; use `SimpleFileOptions`/`start_file` for rewritten XML and `raw_copy_file` for untouched ZIP entries.
+- **Reason:** These are the documented APIs for the pinned dependencies and preserve relationships/media without extracting user files.
+- **Decision:** Persist diagnostics transactionally and finish DOCX exports as `CompletedWithWarnings` when diagnostics exist; retain TXT export behavior unchanged.
+- **Reason:** Unsupported stories must be visible to users without making a partially preserved document look fully clean.
+- **Decision:** Word and LibreOffice validation is a release gate, not an automated substitute. The current host lacks both viewers.
+
+## Phase 7 EPUB
+
+- **Decision:** Process only the EPUB spine XHTML in spine order, translating ordinary paragraphs, headings, list items, and table cells; raw-copy all other ZIP entries and preserve unsupported XHTML unchanged with diagnostics.
+- **Reason:** This bounds reconstruction while retaining resources, CSS, anchors, links, identifiers, and package metadata without silently presenting unsupported content as translated.
+- **Decision:** Use `epub-v1` for the parser/configuration version and the existing recoverable document-job/export pipeline, with `CompletedWithWarnings` when diagnostics are present.
+- **Reason:** EPUB jobs must resume and export under the same source/runtime safeguards as TXT and DOCX, while unsupported constructs remain visible to users.
+- **Decision:** Leave EPUB navigation labels and OPF bibliographic metadata unchanged in the first EPUB increment.
+- **Reason:** The implemented scope rewrites supported spine XHTML only; changing navigation or metadata without dedicated block mappings would risk altering unrelated package content. This is a documented follow-up limitation.
+- **Decision:** Treat an EPUB validator or reader smoke check as a release gate separate from automated tests. The current host has no `epubcheck`, Calibre/`ebook-convert`, Pandoc, or repository EPUBCheck JAR.
+- **Reason:** Package/XML tests prove deterministic reconstruction and preservation, but they cannot prove that an independent EPUB consumer accepts and renders the output.
+
 ## Standalone Runtime
 
 - **Decision:** Add a `standalone` runtime mode next to LM Studio that spawns the user's `llama-server.exe` (llama.cpp) with a `.gguf` chosen from a user-selected models folder, and talks to it over the same OpenAI-compatible API on a free `127.0.0.1` port.
@@ -180,18 +201,39 @@
 - **Decision:** Do not show partial WordNet or model-generated records in the default dictionary lookup.
 - **Reason:** Synonyms without a sourced definition, translation, and sense context are misleading when rendered as a normal dictionary card; missing coverage is safer to report explicitly.
 
+## Document Jobs
+
+- **Decision:** Store document jobs and translated blocks in a separate `document-jobs.sqlite`; persist SHA-256 source hashes, parser/configuration versions, and a runtime snapshot. Save each block with an idempotent transaction.
+- **Reason:** File translation must not add block rows to ordinary translation history, must detect changed sources reliably, and must resume without duplicating committed work.
+- **Decision:** Mark active jobs `interrupted` during recovery and require an explicit resume with matching runtime and configuration snapshots.
+- **Reason:** Startup must not consume GPU resources automatically or silently mix results produced by different models/configurations.
+
+## Inference Coordination
+
+- **Decision:** Route desktop, API, clipboard/word, and future document-block requests through one in-process coordinator. Permit one blocking model request at a time, give waiting interactive requests priority, and require document callers to acquire the slot separately for each block.
+- **Reason:** The current runtimes use blocking HTTP and Standalone owns one shared server; yielding between blocks keeps interactive translation responsive without forcibly cancelling an active request.
+- **Decision:** Runtime lifecycle changes and application exit quiesce the coordinator before replacing or stopping the shared llama-server; lifecycle operations do not permanently disable normal inference unless the application is shutting down.
+- **Reason:** Updating llama.cpp or changing settings must not stop a server underneath an active request or race a queued document block.
+
+## Document Segmentation
+
+- **Decision:** When a tokenizer is unavailable, bound document input with a conservative character budget after reserving space for the adapter prompt and model output. Split paragraphs at sentence boundaries, then whitespace, and finally Unicode scalar boundaries for a single oversized token.
+- **Reason:** Character counts are not token counts, but a conservative reserve prevents unbounded context requests without adding a model-specific tokenizer dependency to the document subsystem.
+- **Decision:** Subdivided blocks use stable `parent-id::part-NNNN` identities and ordered derived ordinals. Code, formula, and image blocks are not split automatically when oversized.
+- **Reason:** Reconstruction needs stable mapping, while splitting protected content can corrupt identifiers or structure; unsupported oversized content must become an explicit job diagnostic.
+- **Decision:** The Phase 4 worker persists each translated segment immediately and skips already translated rows. A runtime/model mismatch pauses the job; other block failures fail the job while retaining prior results.
+- **Reason:** Process interruption and individual model failures must not discard committed work or silently mix translations from incompatible runtime snapshots.
+
+## TXT Documents
+
+- **Decision:** Phase 5 accepts UTF-8 with or without BOM and UTF-16 little/big endian only when a BOM is present. Ambiguous legacy encodings are rejected rather than guessed.
+- **Reason:** Silent replacement of undecodable text would corrupt source content and make a later export impossible to audit.
+- **Decision:** Normalize CRLF/CR to LF and represent non-empty double-newline-separated paragraphs as independent blocks. Export joins translated blocks with LF blank lines and never replaces the source.
+- **Reason:** This gives stable, bounded reconstruction for TXT without pretending to preserve unknown whitespace semantics; the original remains available for comparison.
+- **Decision:** The first Documents UI stores the active job id locally, while the native SQLite job remains authoritative. Startup marks interrupted active jobs recoverable before the UI queries them.
+- **Reason:** UI notifications can be missed or the app can close during a blocking request; reopening must recover from persisted state rather than rely on frontend memory.
+
 ## User Dictionary Folder
 
 - **Decision:** Search only user-provided StarDict dictionaries from a folder selected through the native folder picker; do not create or fall back to an app-data dictionary folder.
 - **Reason:** Dictionary contents and licensing are user-controlled, while the application should not silently expose bundled or preloaded dictionary records.
-
-## Phase 7 EPUB
-
-- **Decision:** Process EPUB spine XHTML in spine order, translating ordinary paragraphs, headings, list items, and table cells; raw-copy all other ZIP entries and preserve unsupported XHTML with diagnostics.
-- **Reason:** This bounds reconstruction while retaining resources, CSS, anchors, links, identifiers, and package metadata.
-- **Decision:** Use `epub-v1` with the existing recoverable document-job/export pipeline and finish exports with warnings when diagnostics exist.
-- **Reason:** EPUB jobs need the same source/runtime safeguards as TXT and DOCX while unsupported constructs remain visible.
-- **Decision:** Leave navigation labels and OPF bibliographic metadata unchanged in the first EPUB increment.
-- **Reason:** The implemented rewrite scope has no dedicated mappings for those fields.
-- **Decision:** Treat an EPUB validator or reader smoke check as a release gate separate from automated tests.
-- **Reason:** Independent EPUB consumers require a separate validator or reader check.

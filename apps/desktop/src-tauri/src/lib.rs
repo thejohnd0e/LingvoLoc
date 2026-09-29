@@ -1,5 +1,6 @@
 mod adapters;
 mod api;
+pub mod documents;
 mod domain;
 mod runtimes;
 mod services;
@@ -24,6 +25,7 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 pub struct AppState {
     pub(crate) settings: Mutex<Settings>,
     pub(crate) history: Mutex<HistoryStore>,
+    pub(crate) inference: services::inference_coordinator::InferenceCoordinator,
     pub(crate) pending_clipboard: Mutex<Option<String>>,
     pub(crate) api_token: String,
 }
@@ -44,6 +46,7 @@ impl AppState {
                 secondary_language: "ru".into(),
             }),
             history: Mutex::new(history),
+            inference: services::inference_coordinator::InferenceCoordinator::default(),
             pending_clipboard: Mutex::new(None),
             api_token: api::generate_token(),
         }
@@ -93,7 +96,10 @@ fn translate(
             "a model must be selected".into(),
         ));
     }
-    let result = translation::translate(&current, request.clone())?;
+    let snapshot = services::inference_coordinator::snapshot(&current, &request.model_id);
+    let result = state.inference.run_interactive(&snapshot, || {
+        translation::translate(&current, request.clone())
+    })?;
     state
         .history
         .lock()
@@ -117,12 +123,21 @@ fn update_settings(
             "endpoint and adapter are required".into(),
         ));
     }
-    let mut current = state
-        .settings
-        .lock()
-        .map_err(|_| RuntimeError::Connection("settings lock is poisoned".into()))?;
-    *current = next.clone();
-    Ok(next)
+    let result = state.inference.run_lifecycle(|| {
+        let mut current = state
+            .settings
+            .lock()
+            .map_err(|_| RuntimeError::Connection("settings lock is poisoned".into()))?;
+        *current = next.clone();
+        Ok(next)
+    })?;
+    state
+        .inference
+        .set_desired_snapshot(&services::inference_coordinator::snapshot(
+            &result,
+            &result.model_id,
+        ))?;
+    Ok(result)
 }
 
 #[tauri::command(async)]
@@ -162,6 +177,7 @@ fn get_gpu_info() -> runtimes::llama_download::GpuInfo {
 #[tauri::command(async)]
 fn download_llama_cpp(
     app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
 ) -> Result<runtimes::llama_download::DownloadedLlama, RuntimeError> {
     static BUSY: AtomicBool = AtomicBool::new(false);
     if BUSY.swap(true, Ordering::SeqCst) {
@@ -169,7 +185,7 @@ fn download_llama_cpp(
             "llama.cpp is already being downloaded".into(),
         ));
     }
-    let result = (|| {
+    let result = state.inference.run_lifecycle(|| {
         let base = app
             .path()
             .app_data_dir()
@@ -178,7 +194,7 @@ fn download_llama_cpp(
         runtimes::llama_download::download_latest(&base, |progress| {
             let _ = app.emit("llama-download-progress", progress);
         })
-    })();
+    });
     BUSY.store(false, Ordering::SeqCst);
     result
 }
@@ -306,7 +322,10 @@ fn translate_word(
             "a model must be selected".into(),
         ));
     }
-    translation::translate(&current, request)
+    let snapshot = services::inference_coordinator::snapshot(&current, &request.model_id);
+    state
+        .inference
+        .run_interactive(&snapshot, || translation::translate(&current, request))
 }
 
 fn translate_clipboard(app: &tauri::AppHandle) {
@@ -367,6 +386,11 @@ pub fn run() {
             };
             let history = HistoryStore::open(&history_path).map_err(std::io::Error::other)?;
             app.manage(AppState::new(history));
+            if let Ok(document_store) =
+                documents::DocumentJobStore::open(&data_dir.join("document-jobs.sqlite"))
+            {
+                let _ = document_store.recover_interrupted();
+            }
             api::start(app.handle().clone());
             app.global_shortcut().register(show_shortcut)?;
             app.global_shortcut().register(translate_shortcut)?;
@@ -483,15 +507,29 @@ pub fn run() {
             read_dictionary_media,
             list_user_dictionaries,
             translate_word,
+            documents::commands::analyze_txt,
+            documents::commands::analyze_docx,
             documents::commands::analyze_epub,
+            documents::commands::start_txt_job,
+            documents::commands::start_docx_job,
             documents::commands::start_epub_job,
+            documents::commands::resume_txt_job,
+            documents::commands::resume_docx_job,
             documents::commands::resume_epub_job,
+            documents::commands::get_document_job,
+            documents::commands::pause_document_job,
+            documents::commands::cancel_document_job,
+            documents::commands::export_txt_job,
+            documents::commands::export_docx_job,
             documents::commands::export_epub_job
         ])
         .build(tauri::generate_context!())
         .expect("error while building LingvoLoc")
         .run(|_app, event| {
             if let tauri::RunEvent::Exit = event {
+                if let Some(state) = _app.try_state::<AppState>() {
+                    state.inference.shutdown();
+                }
                 runtimes::llama_server::shutdown();
             }
         });
