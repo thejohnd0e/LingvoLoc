@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">EPUB Fixture</dc:title></metadata>
+  <manifest>
+    <item id="chapter-one" href="chapter-one.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter-two" href="chapter-two.xhtml" media-type="application/xhtml+xml"/>
+    <item id="styles" href="styles.css" media-type="text/css"/>
+    <item id="diagram" href="images/diagram.svg" media-type="image/svg+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="chapter-one"/>
+    <itemref idref="chapter-two"/>
+  </spine>
+</package>
