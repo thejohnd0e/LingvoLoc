@@ -30,16 +30,16 @@ The prompt format follows the model file name: names containing `gemma` use the 
 
 Benchmark on an RTX 3060 12 GB (llama.cpp, CUDA, 8K context, all layers on the GPU; 12 short and long texts covering idioms, technical, medical and legal wording, and a five-paragraph news article; en, ru, de and zh). Quality was judged by reading the output, without a reference metric, so treat it as a guide rather than a formal benchmark.
 
-| Model | Size | Speed | Notes |
-| --- | --- | --- | --- |
-| TranslateGemma 4B Q8_0 | 3.9 GB | ~55 tok/s | Fastest; good for short text, occasional wording errors. |
-| TranslateGemma 12B Q4_K_S | 6.5 GB | ~34 tok/s | Good quality and speed. |
-| TranslateGemma 12B Q4_K_M | 6.8 GB | ~33 tok/s | No better than Q4_K_S; not worth it. |
-| TranslateGemma 12B Q5_K_M | 7.9 GB | ~26 tok/s | **Best balance:** close to Q6_K, about 25% faster. |
-| TranslateGemma 12B Q6_K | 9.0 GB | ~20 tok/s | Best wording, but 70% slower than Q4_K_S. |
-| Gemma 3 12B QAT Q4_0 | 6.4 GB | ~34 tok/s | Quality on par with TranslateGemma 12B; the QAT 4-bit build loses almost nothing, so larger quantizations are pointless. |
-| Hunyuan-MT-7B Q6_K | 5.7 GB | ~42 tok/s | Wordy for Russian, merged paragraphs and added details in a long text; better suited to Asian languages. |
-| Qwen3-14B Q4_K_M | 8.4 GB | ~32 tok/s | Weakest for Russian: invented idioms and stray non-Cyrillic characters. |
+| Model                     | Size   | Speed     | Notes                                                                                                                    |
+| ------------------------- | ------ | --------- | ------------------------------------------------------------------------------------------------------------------------ |
+| TranslateGemma 4B Q8_0    | 3.9 GB | ~55 tok/s | Fastest; good for short text, occasional wording errors.                                                                 |
+| TranslateGemma 12B Q4_K_S | 6.5 GB | ~34 tok/s | Good quality and speed.                                                                                                  |
+| TranslateGemma 12B Q4_K_M | 6.8 GB | ~33 tok/s | No better than Q4_K_S; not worth it.                                                                                     |
+| TranslateGemma 12B Q5_K_M | 7.9 GB | ~26 tok/s | **Best balance:** close to Q6_K, about 25% faster.                                                                       |
+| TranslateGemma 12B Q6_K   | 9.0 GB | ~20 tok/s | Best wording, but 70% slower than Q4_K_S.                                                                                |
+| Gemma 3 12B QAT Q4_0      | 6.4 GB | ~34 tok/s | Quality on par with TranslateGemma 12B; the QAT 4-bit build loses almost nothing, so larger quantizations are pointless. |
+| Hunyuan-MT-7B Q6_K        | 5.7 GB | ~42 tok/s | Wordy for Russian, merged paragraphs and added details in a long text; better suited to Asian languages.                 |
+| Qwen3-14B Q4_K_M          | 8.4 GB | ~32 tok/s | Weakest for Russian: invented idioms and stray non-Cyrillic characters.                                                  |
 
 Recommendations:
 
