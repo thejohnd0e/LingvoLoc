@@ -79,6 +79,17 @@ export const getRuntimeStatus = () =>
   invokeNative<RuntimeStatus>('get_runtime_status');
 export const checkLlamaServer = (path: string) =>
   invokeNative<string>('check_llama_server', { path });
+export interface DownloadedLlama {
+  path: string;
+  version: string;
+  variant: string;
+}
+export interface LlamaDownloadProgress {
+  percent: number;
+  stage: string;
+}
+export const downloadLlamaCpp = () =>
+  invokeNative<DownloadedLlama>('download_llama_cpp');
 export const locateLlamaServer = (directory: string) =>
   invokeNative<string>('locate_llama_server', { directory });
 export const findLlamaServer = () =>

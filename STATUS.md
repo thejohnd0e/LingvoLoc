@@ -17,7 +17,7 @@
 
 ## Currently Works
 
-- Standalone mode (Settings window): choose a models folder and a llama.cpp folder (LingvoLoc locates `llama-server.exe`), pick a `.gguf`, and translate without LM Studio. `llama-server` is started with `--no-jinja --chat-template gemma` because TranslateGemma's embedded Jinja template rejects plain-text messages and some conversions fall back to ChatML. Verified manually on Windows with llama.cpp build b11243 (CUDA 13.4, RTX 3060) using TranslateGemma 4B Q8_0 and 12B Q4_K_S.
+- Standalone mode (default; Settings window): press Download llama.cpp (GPU-appropriate build fetched automatically, with progress), choose a models folder, pick a `.gguf`, and translate without LM Studio. An existing llama.cpp folder can still be chosen under Advanced. The download flow has unit tests for asset selection but has not been exercised end to end against GitHub yet. `llama-server` is started with `--no-jinja --chat-template gemma` because TranslateGemma's embedded Jinja template rejects plain-text messages and some conversions fall back to ChatML. Verified manually on Windows with llama.cpp build b11243 (CUDA 13.4, RTX 3060) using TranslateGemma 4B Q8_0 and 12B Q4_K_S.
 - Blocking native commands run off the UI thread and parsed StarDict folders are cached, so lookups no longer freeze the window; waits show a spinner. Dictionary and runtime settings open from header icons.
 
 - `npm run dev`, `npm run desktop:dev`, desktop frontend builds, native Tauri/NSIS builds, and extension build/package commands are established in the root `package.json`.
@@ -33,7 +33,7 @@
 
 ## Known Issues And Blockers
 
-- In LM Studio mode, LM Studio must be running at `http://127.0.0.1:1234/v1` with a compatible model loaded; in Standalone mode a valid llama.cpp folder and models folder are required. Translation and extension requests otherwise fail.
+- In LM Studio mode, LM Studio must be running at `http://127.0.0.1:1234/v1` with a compatible model loaded; in Standalone mode llama.cpp must be downloaded (or an existing folder chosen) and a models folder selected. Translation and extension requests otherwise fail.
 - Native builds require Rust, WebView2, and Windows C++ build tools/Windows SDK. Visual Studio provides the compiler tools on this machine, but they may not be on the general `PATH`.
 - Dictionary coverage and quality depend entirely on dictionaries selected by the user. Missing records are intentionally not replaced with model-generated dictionary facts.
 - StarDict language metadata is not mapped, and complex dictionary markup/senses are only cleaned and displayed rather than semantically parsed. This is the main unfinished product work.

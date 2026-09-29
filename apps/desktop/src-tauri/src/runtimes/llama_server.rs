@@ -178,7 +178,7 @@ fn effective_server_path(configured: &str) -> Result<PathBuf, RuntimeError> {
     if configured.trim().is_empty() {
         return find_on_path().ok_or_else(|| {
             RuntimeError::InvalidInput(
-                "llama-server.exe is not configured; choose it in the runtime settings".into(),
+                "llama.cpp is not installed; open Settings and press Download llama.cpp".into(),
             )
         });
     }

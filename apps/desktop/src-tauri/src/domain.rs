@@ -40,8 +40,8 @@ pub struct DetectedLanguage {
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum RuntimeMode {
-    #[default]
     LmStudio,
+    #[default]
     Standalone,
 }
 
@@ -149,7 +149,7 @@ mod tests {
         .expect("frontend settings should deserialize");
         assert_eq!(settings.model_id, "translategemma-4b-it@q8_0");
         assert_eq!(settings.secondary_language, "ru");
-        assert_eq!(settings.runtime_mode, RuntimeMode::LmStudio);
+        assert_eq!(settings.runtime_mode, RuntimeMode::Standalone);
     }
 
     #[test]

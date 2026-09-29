@@ -809,6 +809,15 @@ textarea:focus {
   color: #86b8ad;
   overflow-wrap: anywhere;
 }
+.runtime-advanced {
+  display: grid;
+  gap: 12px;
+  color: #8fa7a8;
+}
+.runtime-advanced summary {
+  cursor: pointer;
+  margin-bottom: 12px;
+}
 .runtime-help ol {
   margin: 6px 0 0;
   padding-left: 20px;

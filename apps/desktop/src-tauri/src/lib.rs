@@ -12,11 +12,12 @@ use services::{
     history::{HistoryEntry, HistoryStore},
     translation,
 };
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, WindowEvent,
+    Emitter, Manager, WindowEvent,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
@@ -31,7 +32,7 @@ impl AppState {
     fn new(history: HistoryStore) -> Self {
         Self {
             settings: Mutex::new(Settings {
-                runtime_mode: RuntimeMode::LmStudio,
+                runtime_mode: RuntimeMode::Standalone,
                 models_directory: String::new(),
                 llama_server_path: String::new(),
                 endpoint: "http://127.0.0.1:1234/v1".into(),
@@ -136,6 +137,30 @@ fn locate_llama_server(directory: String) -> Result<String, RuntimeError> {
         .ok_or_else(|| {
             RuntimeError::InvalidInput("llama-server.exe was not found in that folder".into())
         })
+}
+
+#[tauri::command(async)]
+fn download_llama_cpp(
+    app: tauri::AppHandle,
+) -> Result<runtimes::llama_download::DownloadedLlama, RuntimeError> {
+    static BUSY: AtomicBool = AtomicBool::new(false);
+    if BUSY.swap(true, Ordering::SeqCst) {
+        return Err(RuntimeError::InvalidInput(
+            "llama.cpp is already being downloaded".into(),
+        ));
+    }
+    let result = (|| {
+        let base = app
+            .path()
+            .app_data_dir()
+            .map_err(|error| RuntimeError::Connection(format!("app data folder: {error}")))?
+            .join("llama.cpp");
+        runtimes::llama_download::download_latest(&base, |progress| {
+            let _ = app.emit("llama-download-progress", progress);
+        })
+    })();
+    BUSY.store(false, Ordering::SeqCst);
+    result
 }
 
 #[tauri::command(async)]
@@ -402,6 +427,7 @@ pub fn run() {
             update_settings,
             detect_language,
             check_llama_server,
+            download_llama_cpp,
             find_llama_server,
             locate_llama_server,
             list_history,

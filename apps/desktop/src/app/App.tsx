@@ -7,7 +7,9 @@ import {
   getRuntimeStatus,
   getApiToken,
   checkLlamaServer,
+  downloadLlamaCpp,
   findLlamaServer,
+  type LlamaDownloadProgress,
   locateLlamaServer,
   listUserDictionaries,
   readDictionaryMedia,
@@ -40,7 +42,7 @@ import Spinner from './Spinner';
 import TextSizeControls from './TextSizeControls';
 
 const defaultSettings: Settings = {
-  runtimeMode: 'lmStudio',
+  runtimeMode: 'standalone',
   modelsDirectory: '',
   llamaServerPath: '',
   endpoint: 'http://127.0.0.1:1234/v1',
@@ -178,6 +180,8 @@ export default function App() {
   );
   const [translationHighlight, setTranslationHighlight] = useState('');
   const [serverCheck, setServerCheck] = useState('');
+  const [llamaDownload, setLlamaDownload] =
+    useState<LlamaDownloadProgress | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [dictionariesOpen, setDictionariesOpen] = useState(false);
   const [additionalOpen, setAdditionalOpen] = useState(false);
@@ -580,6 +584,25 @@ export default function App() {
       setServerCheck(`OK · ${await checkLlamaServer(path)}`);
     } catch (reason) {
       setServerCheck(`Check failed · ${errorDetail(reason)}`);
+    }
+  }
+
+  async function installLlamaCpp() {
+    setServerCheck('');
+    setLlamaDownload({ percent: 0, stage: 'Starting…' });
+    const unlisten = await listen<LlamaDownloadProgress>(
+      'llama-download-progress',
+      (event) => setLlamaDownload(event.payload),
+    );
+    try {
+      const installed = await downloadLlamaCpp();
+      updateSettings({ llamaServerPath: installed.path });
+      await verifyLlamaServer(installed.path);
+    } catch (reason) {
+      setServerCheck(`Download failed · ${errorDetail(reason)}`);
+    } finally {
+      unlisten();
+      setLlamaDownload(null);
     }
   }
 
@@ -1087,34 +1110,21 @@ export default function App() {
                   <button
                     className="translate"
                     type="button"
-                    onClick={() => void chooseLlamaFolder()}
+                    disabled={llamaDownload !== null}
+                    onClick={() => void installLlamaCpp()}
                   >
-                    Choose folder
+                    {settings.llamaServerPath
+                      ? 'Update llama.cpp'
+                      : 'Download llama.cpp'}
                   </button>
                   <div>
-                    <b>llama.cpp folder</b>
+                    <b>llama.cpp</b>
                     <code>
-                      {settings.llamaServerPath ||
-                        'Not selected (PATH is used)'}
+                      {llamaDownload
+                        ? `${llamaDownload.stage} · ${llamaDownload.percent}%`
+                        : settings.llamaServerPath ||
+                          'Not installed. Press Download to install it automatically.'}
                     </code>
-                    <div className="runtime-buttons">
-                      <button
-                        className="quiet"
-                        type="button"
-                        onClick={() => void detectLlamaServer()}
-                      >
-                        Find in PATH
-                      </button>
-                      <button
-                        className="quiet"
-                        type="button"
-                        onClick={() =>
-                          void verifyLlamaServer(settings.llamaServerPath)
-                        }
-                      >
-                        Check
-                      </button>
-                    </div>
                   </div>
                 </div>
                 {serverCheck && (
@@ -1123,31 +1133,44 @@ export default function App() {
                     {serverCheck}
                   </p>
                 )}
+                <details className="runtime-advanced">
+                  <summary>Advanced</summary>
+                  <div className="runtime-row">
+                    <button
+                      className="translate"
+                      type="button"
+                      onClick={() => void chooseLlamaFolder()}
+                    >
+                      Choose folder
+                    </button>
+                    <div>
+                      <b>Existing llama.cpp folder</b>
+                      <code>{settings.llamaServerPath || 'Not selected'}</code>
+                      <div className="runtime-buttons">
+                        <button
+                          className="quiet"
+                          type="button"
+                          onClick={() => void detectLlamaServer()}
+                        >
+                          Find in PATH
+                        </button>
+                        <button
+                          className="quiet"
+                          type="button"
+                          onClick={() =>
+                            void verifyLlamaServer(settings.llamaServerPath)
+                          }
+                        >
+                          Check
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </details>
                 <div className="runtime-help">
                   <b>How to set up</b>
                   <ol>
-                    <li>
-                      Download a Windows build of llama.cpp from{' '}
-                      <a
-                        className="external-link"
-                        href="https://github.com/ggml-org/llama.cpp/releases"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          void openUrl(event.currentTarget.href);
-                        }}
-                      >
-                        https://github.com/ggml-org/llama.cpp/releases
-                      </a>{' '}
-                      (open the newest <code>bNNNNN</code> release, Assets, and
-                      download <code>llama-bNNNNN-bin-win-vulkan-x64.zip</code>{' '}
-                      for any GPU, <code>…-cpu-x64.zip</code> without a GPU, or{' '}
-                      <code>…-cuda-…-x64.zip</code> for NVIDIA plus the matching{' '}
-                      <code>cudart-…</code> zip).
-                    </li>
-                    <li>
-                      Unzip it into one folder (both zips into the same folder
-                      for CUDA) and choose that folder above.
-                    </li>
+                    <li>Press Download llama.cpp.</li>
                     <li>
                       Choose the folder with your .gguf models and pick one in
                       the Model list. The first translation is slower while the

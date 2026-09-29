@@ -17,7 +17,7 @@
 
 ## Runtime Constraints
 
-- Desktop translation has two runtime modes (`runtimeMode` setting). `lmStudio` (default) expects LM Studio's OpenAI-compatible API at `http://127.0.0.1:1234/v1`. `standalone` scans a user-selected folder for `.gguf` models and runs them through a user-supplied `llama-server.exe` (llama.cpp) that the app spawns on a free loopback port (`runtimes/llama_server.rs`). Both use the TranslateGemma adapter.
+- Desktop translation has two runtime modes (`runtimeMode` setting). `standalone` (default) scans a user-selected folder for `.gguf` models and runs them through a `llama-server.exe` (llama.cpp) that the app downloads itself (`runtimes/llama_download.rs`) or that the user points to, spawning it on a free loopback port (`runtimes/llama_server.rs`). `lmStudio` expects LM Studio's OpenAI-compatible API at `http://127.0.0.1:1234/v1`. Both use the TranslateGemma adapter.
 - Native builds require Rust, WebView2, and Windows C++ build tools/Windows SDK. The compiler tools may be available through Visual Studio without being on the normal `PATH`.
 - User dictionaries are selected StarDict folders only; do not restore the removed app-data or bundled dictionary fallback. Dictionary media may be beside the dictionary or in `res.zip`.
 - Release version `2.0.0` is duplicated in the root, desktop, extension, Tauri, Cargo, and extension packaging metadata. Update all relevant locations together when changing it.
