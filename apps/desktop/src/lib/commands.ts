@@ -49,6 +49,17 @@ export interface TranslationResult {
   model_id: string;
   adapter_id: string;
   latency_ms: number;
+  completion_tokens?: number | null;
+}
+
+/** "1234 ms · 32.4 tok/s"; the speed is omitted when the runtime reports no token count. */
+export function formatTiming(
+  result: Pick<TranslationResult, 'latency_ms' | 'completion_tokens'>,
+) {
+  const { latency_ms: latency, completion_tokens: tokens } = result;
+  return tokens && latency > 0
+    ? `${latency} ms · ${((tokens * 1000) / latency).toFixed(1)} tok/s`
+    : `${latency} ms`;
 }
 
 export interface DetectedLanguage {

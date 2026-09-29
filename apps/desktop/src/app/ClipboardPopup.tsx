@@ -6,6 +6,7 @@ import {
   takeClipboardRequest,
   translate,
   writeClipboard,
+  formatTiming,
   type TranslationResult,
 } from '../lib/commands';
 import {
@@ -80,7 +81,7 @@ export default function ClipboardPopup() {
         });
         setResult(translated);
         await writeClipboard(translated.text);
-        setStatus(`Copied · ${translated.latency_ms} ms`);
+        setStatus(`Copied · ${formatTiming(translated)}`);
       } catch (reason) {
         setStatus(`Translation failed · ${errorDetail(reason)}`);
       }

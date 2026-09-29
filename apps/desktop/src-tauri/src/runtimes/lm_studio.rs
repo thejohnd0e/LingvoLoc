@@ -180,6 +180,7 @@ impl ModelRuntime for LmStudioRuntime {
         Ok(CompletionResponse {
             model: payload.model,
             content: choice.message.content,
+            completion_tokens: payload.usage.and_then(|usage| usage.completion_tokens),
         })
     }
 }
@@ -228,6 +229,12 @@ struct ChatCompletionRequest {
 struct ChatCompletionResponse {
     model: String,
     choices: Vec<Choice>,
+    #[serde(default)]
+    usage: Option<Usage>,
+}
+#[derive(Deserialize)]
+struct Usage {
+    completion_tokens: Option<u32>,
 }
 #[derive(Deserialize)]
 struct Choice {

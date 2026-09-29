@@ -66,6 +66,7 @@ mod tests {
         let response = CompletionResponse {
             model: "model".into(),
             content: "```text\n\"Bonjour\"\n```".into(),
+            completion_tokens: None,
         };
         assert_eq!(
             TranslateGemmaAdapter.parse_response(response).unwrap(),
@@ -78,6 +79,7 @@ mod tests {
         let response = CompletionResponse {
             model: "model".into(),
             content: "Прив�т".into(),
+            completion_tokens: None,
         };
         assert!(matches!(
             TranslateGemmaAdapter.parse_response(response),

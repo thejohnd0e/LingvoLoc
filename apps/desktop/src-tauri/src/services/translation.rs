@@ -36,11 +36,13 @@ pub fn translate(
     let runtime = runtime(&settings)?;
     let started = Instant::now();
     let completion = runtime.complete(adapter.build_request(&request)?)?;
+    let completion_tokens = completion.completion_tokens;
     let text = adapter.parse_response(completion)?;
     Ok(TranslationResult {
         text,
         model_id: request.model_id,
         adapter_id: adapter.id().into(),
         latency_ms: started.elapsed().as_millis(),
+        completion_tokens,
     })
 }

@@ -29,6 +29,8 @@ pub struct TranslationResult {
     pub model_id: String,
     pub adapter_id: String,
     pub latency_ms: u128,
+    #[serde(default)]
+    pub completion_tokens: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -118,6 +120,7 @@ pub struct ChatMessage {
 pub struct CompletionResponse {
     pub model: String,
     pub content: String,
+    pub completion_tokens: Option<u32>,
 }
 
 pub trait TranslationModelAdapter {

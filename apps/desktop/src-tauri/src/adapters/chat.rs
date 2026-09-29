@@ -80,6 +80,7 @@ mod tests {
         let response = CompletionResponse {
             model: "m".into(),
             content: "<think>\n\n</think>\n\nПривет".into(),
+            completion_tokens: None,
         };
         assert_eq!(
             ChatAdapter { no_think: false }

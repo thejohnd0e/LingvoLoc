@@ -20,6 +20,7 @@ import {
   listUserDictionaries,
   readDictionaryMedia,
   detectLanguage,
+  formatTiming,
   clearHistory,
   exportHistory,
   listModels,
@@ -146,7 +147,7 @@ export default function App() {
   const [status, setStatus] = useState('Checking runtime…');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [latency, setLatency] = useState<number | null>(null);
+  const [timing, setTiming] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [detectedLanguage, setDetectedLanguage] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -325,7 +326,7 @@ export default function App() {
         text: input,
       });
       setTranslation(result.text);
-      setLatency(result.latency_ms);
+      setTiming(formatTiming(result));
       void getRuntimeStatus()
         .then((runtime) => setStatus(runtime.detail))
         .catch(() => undefined);
@@ -1094,9 +1095,9 @@ export default function App() {
           : error ||
             notice ||
             historyMessage ||
-            (latency === null
+            (timing === null
               ? 'Local runtime · no request yet'
-              : `Local runtime · ${latency} ms · ${settings.modelId}`)}
+              : `Local runtime · ${timing} · ${settings.modelId}`)}
         {detectedLanguage ? ` · detected ${detectedLanguage}` : ''}
       </div>
       {settingsOpen && (
