@@ -317,7 +317,9 @@ export default function DocumentsPanel({
                 </button>
               </>
             )}
-            {(state === 'completed' || state === 'cancelled') && (
+            {(state === 'completed' ||
+              state === 'completed_with_warnings' ||
+              state === 'cancelled') && (
               <button
                 className="quiet"
                 type="button"

@@ -428,4 +428,23 @@ describe('translation workspace', () => {
       }),
     );
   });
+
+  it('allows clearing a completed EPUB job with warnings', async () => {
+    localStorage.setItem('lingvoloc.document-job-id', 'epub-job');
+    vi.mocked(commands.getDocumentJob).mockResolvedValue(
+      epubView('completed_with_warnings', 1),
+    );
+
+    render(
+      <DocumentsPanel
+        sourceLanguage="ru"
+        targetLanguage="en"
+        modelId="model"
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear job' }));
+    expect(screen.queryByText('story.epub')).not.toBeInTheDocument();
+    expect(localStorage.getItem('lingvoloc.document-job-id')).toBeNull();
+  });
 });

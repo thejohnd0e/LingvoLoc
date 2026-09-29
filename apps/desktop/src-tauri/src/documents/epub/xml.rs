@@ -118,6 +118,53 @@ mod tests {
         assert!(text.contains("<p>Foreign text</p>"));
         assert!(text.contains("<p>translated</p>"));
     }
+
+    #[test]
+    fn rejects_external_xhtml_resource_references_during_analysis() {
+        for resource in [
+            r#"<img src="https://example.test/image.png"/>"#,
+            r#"<link rel="stylesheet" href="//example.test/style.css"/>"#,
+            r#"<object data="data:text/plain,remote"/>"#,
+        ] {
+            let xml = format!(
+                r#"<html xmlns="http://www.w3.org/1999/xhtml"><body>{resource}</body></html>"#
+            );
+            assert!(super::parse_document(xml.as_bytes(), "OPS/chapter.xhtml").is_err());
+        }
+    }
+
+    #[test]
+    fn rejects_external_xhtml_resource_references_during_rewrite() {
+        let xml = br#"<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Text</p><img src="https://example.test/image.png"/></body></html>"#;
+        let blocks = [super::super::super::DocumentBlock {
+            id: "OPS/chapter.xhtml#0".into(),
+            ordinal: 0,
+            block_type: BlockType::Paragraph,
+            source_text: "Text".into(),
+            translated_text: Some("Translated".into()),
+        }];
+        let error = super::rewrite_document(xml, "OPS/chapter.xhtml", &blocks).unwrap_err();
+        assert!(error.to_string().contains("external EPUB XHTML resource"));
+    }
+
+    #[test]
+    fn rejects_oversized_and_deep_xhtml_during_analysis_and_rewrite() {
+        let oversized = vec![b'x'; super::MAX_DOCUMENT_BYTES + 1];
+        assert!(super::parse_document(&oversized, "OPS/chapter.xhtml").is_err());
+        assert!(super::rewrite_document(&oversized, "OPS/chapter.xhtml", &[]).is_err());
+
+        let mut deep = String::from("<html xmlns=\"http://www.w3.org/1999/xhtml\">");
+        for _ in 0..=super::MAX_DEPTH {
+            deep.push_str("<div>");
+        }
+        deep.push_str("text");
+        for _ in 0..=super::MAX_DEPTH {
+            deep.push_str("</div>");
+        }
+        deep.push_str("</html>");
+        assert!(super::parse_document(deep.as_bytes(), "OPS/chapter.xhtml").is_err());
+        assert!(super::rewrite_document(deep.as_bytes(), "OPS/chapter.xhtml", &[]).is_err());
+    }
 }
 use std::collections::HashMap;
 
@@ -131,6 +178,8 @@ use crate::domain::RuntimeError;
 use quick_xml::XmlVersion;
 
 const XHTML_NS: &[u8] = b"http://www.w3.org/1999/xhtml";
+const MAX_DOCUMENT_BYTES: usize = 8 * 1024 * 1024;
+const MAX_DEPTH: usize = 128;
 
 #[derive(Debug, Clone)]
 pub(super) struct ManifestItem {
@@ -243,6 +292,7 @@ pub(super) fn parse_opf(
 }
 
 pub(super) fn parse_document(bytes: &[u8], path: &str) -> Result<ParsedDocument, RuntimeError> {
+    validate_document_size(bytes)?;
     let mut reader = NsReader::from_reader(bytes);
     let mut buffer = Vec::new();
     let mut depth = 0_usize;
@@ -258,7 +308,13 @@ pub(super) fn parse_document(bytes: &[u8], path: &str) -> Result<ParsedDocument,
         match event {
             Event::Start(element) => {
                 depth += 1;
+                if depth > MAX_DEPTH {
+                    return Err(RuntimeError::InvalidInput(
+                        "EPUB XHTML nesting is too deep".into(),
+                    ));
+                }
                 let name = local_name(element.name().as_ref()).to_string();
+                validate_resource_references(&element, &name)?;
                 if let Some(skip) = &mut skipped {
                     let _ = skip;
                 } else if !is_xhtml(&namespace) || unsupported(&name) {
@@ -285,6 +341,7 @@ pub(super) fn parse_document(bytes: &[u8], path: &str) -> Result<ParsedDocument,
             Event::Empty(element) => {
                 let qualified_name = element.name();
                 let name = local_name(qualified_name.as_ref());
+                validate_resource_references(&element, name)?;
                 if (!is_xhtml(&namespace) && has_text_attribute(&element)) || unsupported(name) {
                     diagnostics.push(format!("unsupported EPUB XHTML element: {name}"));
                     if let Some(candidate) = &mut current {
@@ -363,6 +420,7 @@ pub(super) fn rewrite_document(
     path: &str,
     blocks: &[DocumentBlock],
 ) -> Result<Vec<u8>, RuntimeError> {
+    validate_document_size(source)?;
     let mut reader = NsReader::from_reader(source);
     let mut writer = Writer::new(Vec::new());
     let mut buffer = Vec::new();
@@ -381,6 +439,17 @@ pub(super) fn rewrite_document(
         let is_end = matches!(&event, Event::End(_));
         let is_foreign =
             matches!(&event, Event::Start(_) | Event::Empty(_) if !is_xhtml(&namespace));
+        if is_start {
+            if depth + 1 > MAX_DEPTH {
+                return Err(RuntimeError::InvalidInput(
+                    "EPUB XHTML nesting is too deep".into(),
+                ));
+            }
+            depth += 1;
+        }
+        if let Event::Start(element) | Event::Empty(element) = &event {
+            validate_resource_references(element, local_name(element.name().as_ref()))?;
+        }
         if !element.is_empty() {
             let closes_element = is_end && depth == element_depth;
             element_has_foreign |= is_foreign;
@@ -399,14 +468,12 @@ pub(super) fn rewrite_document(
             }
         } else if matches!(&event, Event::Start(value) if is_xhtml(&namespace) && semantic_type(local_name(value.name().as_ref())).is_some())
         {
-            element_depth = depth + 1;
+            element_depth = depth;
             element.push(event.into_owned());
         } else {
             writer.write_event(event.into_owned()).map_err(xml_write)?;
         }
-        if is_start {
-            depth += 1;
-        } else if is_end {
+        if is_end {
             depth = depth.saturating_sub(1);
         }
         if is_eof {
@@ -426,6 +493,70 @@ pub(super) fn rewrite_document(
         )));
     }
     Ok(writer.into_inner())
+}
+
+fn validate_document_size(bytes: &[u8]) -> Result<(), RuntimeError> {
+    if bytes.len() > MAX_DOCUMENT_BYTES {
+        return Err(RuntimeError::InvalidInput(
+            "EPUB XHTML exceeds size limit".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_resource_references(
+    element: &quick_xml::events::BytesStart<'_>,
+    name: &str,
+) -> Result<(), RuntimeError> {
+    for attribute in element.attributes().flatten() {
+        let key = local_name(attribute.key.as_ref());
+        let is_resource = matches!(
+            (name, key),
+            ("link", "href")
+                | ("img", "src")
+                | ("img", "srcset")
+                | ("object", "data")
+                | ("iframe", "src")
+                | ("script", "src")
+                | ("audio", "src")
+                | ("video", "src" | "poster")
+                | ("source", "src")
+                | ("source", "srcset")
+                | ("track", "src")
+                | ("embed", "src")
+                | ("input", "src")
+                | ("image", "href")
+        );
+        if !is_resource {
+            continue;
+        }
+        let value = attribute
+            .normalized_value(XmlVersion::Implicit1_0)
+            .map_err(|error| {
+                RuntimeError::InvalidInput(format!("invalid EPUB resource URL: {error}"))
+            })?;
+        if value.split(',').any(|candidate| {
+            is_external_reference(candidate.split_whitespace().next().unwrap_or_default())
+        }) {
+            return Err(RuntimeError::InvalidInput(format!(
+                "external EPUB XHTML resource: {value}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn is_external_reference(value: &str) -> bool {
+    let value = value.trim();
+    if value.is_empty() || value.starts_with('#') || value.starts_with('/') {
+        return value.starts_with("//") || value.starts_with('/');
+    }
+    value.find(':').is_some_and(|colon| {
+        value[..colon].bytes().enumerate().all(|(index, byte)| {
+            byte.is_ascii_alphabetic()
+                || (index > 0 && (byte == b'+' || byte == b'-' || byte == b'.'))
+        })
+    })
 }
 
 fn rewrite_element(
@@ -454,7 +585,7 @@ fn rewrite_element(
             block_index
         )));
     };
-    if block.id != format!("{path}#{}", *block_index) {
+    if !block.id.starts_with(&format!("{path}#")) {
         return Err(RuntimeError::InvalidInput(format!(
             "unexpected translated EPUB block id: {}",
             block.id

@@ -28,8 +28,13 @@ pub fn analyze(bytes: &[u8]) -> Result<Analysis, RuntimeError> {
     let mut diagnostics = package.diagnostics.clone();
     for spine_entry in &package.spine {
         let document = package.entry(&spine_entry.path)?;
-        let parsed = xml::parse_document(document, &spine_entry.path)?;
-        blocks.extend(parsed.blocks);
+        let mut parsed = xml::parse_document(document, &spine_entry.path)?;
+        for block in &mut parsed.blocks {
+            let ordinal = blocks.len();
+            block.ordinal = ordinal as i64;
+            block.id = format!("{}#{ordinal}", spine_entry.path);
+            blocks.push(block.clone());
+        }
         diagnostics.extend(parsed.diagnostics);
     }
     Ok(Analysis {
@@ -153,8 +158,16 @@ mod tests {
         assert_eq!(analysis.blocks[2].source_text, "First list item");
         assert_eq!(analysis.blocks[4].source_text, "First cell");
         assert_eq!(
+            analysis
+                .blocks
+                .iter()
+                .map(|block| block.ordinal)
+                .collect::<Vec<_>>(),
+            vec![0, 1, 2, 3, 4, 5, 6]
+        );
+        assert_eq!(
             analysis.blocks.last().unwrap().id,
-            "OPS/chapter-two.xhtml#1"
+            "OPS/chapter-two.xhtml#6"
         );
         assert!(analysis
             .diagnostics
@@ -204,7 +217,7 @@ mod tests {
             .unwrap()
             .read_to_string(&mut chapter_two)
             .unwrap();
-        assert!(chapter_two.contains("&lt;translated 0&gt;"));
+        assert!(chapter_two.contains("&lt;translated 5&gt;"));
     }
 
     #[test]
@@ -272,12 +285,12 @@ mod tests {
         }
 
         let exported = export(&source, &blocks).unwrap();
-        let chapter = zip::ZipArchive::new(std::io::Cursor::new(exported))
+        let mut chapter = Vec::new();
+        zip::ZipArchive::new(std::io::Cursor::new(exported))
             .unwrap()
             .by_name("OPS/chapter-one.xhtml")
             .unwrap()
-            .bytes()
-            .collect::<Result<Vec<_>, _>>()
+            .read_to_end(&mut chapter)
             .unwrap();
         let parsed = super::xml::parse_document(&chapter, "OPS/chapter-one.xhtml").unwrap();
         assert_eq!(

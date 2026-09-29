@@ -27,3 +27,12 @@ Not run. Exact blocker: `Get-Command epubcheck, ebook-convert, calibre, pandoc` 
 ## Next Action
 
 Run EPUBCheck or open a deterministic translated fixture in an EPUB reader, recording package validity, navigation, images, and notes. Then scope FB2 separately. Word/LibreOffice DOCX validation remains a separate open release gate.
+
+## Final Review Fixes
+
+- Fixed EPUB block ordinals and IDs to be globally monotonic across the spine, with a multi-spine regression assertion and export coverage updated for global IDs.
+- Rejected external XHTML resource URLs during both analysis and rewrite validation for resource-bearing attributes, while retaining package-relative and fragment-only references.
+- Added an 8 MiB XHTML document bound and 128-level nesting bound to both EPUB analysis and rewrite, with oversized/deep input tests.
+- Allowed the Documents panel to clear `completed_with_warnings` jobs and added frontend coverage.
+
+Validation: the focused EPUB suite passed (22 tests), the full native suite passed (121 tests), the focused frontend suite passed (15 tests), the full desktop frontend suite passed (24 tests), and desktop TypeScript typecheck passed. The required external EPUB validator/reader remains unavailable on this host.
