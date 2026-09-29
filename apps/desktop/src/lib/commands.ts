@@ -190,3 +190,104 @@ export const readDictionaryMedia = (directory: string, resource: string) =>
 
 export const translateWord = (request: TranslationRequest) =>
   invokeNative<TranslationResult>('translate_word', { request });
+
+export interface DocumentBlock {
+  id: string;
+  ordinal: number;
+  block_type: string;
+  source_text: string;
+  translated_text?: string | null;
+}
+
+export interface DocumentJob {
+  id: string;
+  source_path: string;
+  source_hash: string;
+  format: string;
+  parser_version: string;
+  source_language: string;
+  target_language: string;
+  runtime_snapshot: string;
+  configuration_version: string;
+  state: string;
+  error?: string | null;
+}
+
+export interface DocumentJobView {
+  job: DocumentJob;
+  blocks: DocumentBlock[];
+  diagnostics: string[];
+  translated_blocks: number;
+  total_blocks: number;
+  paused: boolean;
+  cancelled: boolean;
+}
+
+export interface DocumentExport {
+  output_path: string;
+  job: DocumentJobView;
+}
+
+export const analyzeTxt = (
+  sourcePath: string,
+  sourceLanguage: string,
+  targetLanguage: string,
+) =>
+  invokeNative<DocumentJobView>('analyze_txt', {
+    sourcePath,
+    sourceLanguage,
+    targetLanguage,
+  });
+export const analyzeDocx = (
+  sourcePath: string,
+  sourceLanguage: string,
+  targetLanguage: string,
+) =>
+  invokeNative<DocumentJobView>('analyze_docx', {
+    sourcePath,
+    sourceLanguage,
+    targetLanguage,
+  });
+export const analyzeEpub = (
+  sourcePath: string,
+  sourceLanguage: string,
+  targetLanguage: string,
+) =>
+  invokeNative<DocumentJobView>('analyze_epub', {
+    sourcePath,
+    sourceLanguage,
+    targetLanguage,
+  });
+export const startTxtJob = (jobId: string) =>
+  invokeNative<DocumentJobView>('start_txt_job', { jobId });
+export const startDocxJob = (jobId: string) =>
+  invokeNative<DocumentJobView>('start_docx_job', { jobId });
+export const startEpubJob = (jobId: string) =>
+  invokeNative<DocumentJobView>('start_epub_job', { jobId });
+export const resumeTxtJob = (jobId: string) =>
+  invokeNative<DocumentJobView>('resume_txt_job', { jobId });
+export const resumeDocxJob = (jobId: string) =>
+  invokeNative<DocumentJobView>('resume_docx_job', { jobId });
+export const resumeEpubJob = (jobId: string) =>
+  invokeNative<DocumentJobView>('resume_epub_job', { jobId });
+export const getDocumentJob = (jobId: string) =>
+  invokeNative<DocumentJobView>('get_document_job', { jobId });
+export const pauseDocumentJob = (jobId: string) =>
+  invokeNative<DocumentJobView>('pause_document_job', { jobId });
+export const cancelDocumentJob = (jobId: string) =>
+  invokeNative<DocumentJobView>('cancel_document_job', { jobId });
+export const exportTxtJob = (jobId: string, outputPath?: string) =>
+  invokeNative<DocumentExport>('export_txt_job', {
+    jobId,
+    outputPath: outputPath ?? null,
+  });
+export const exportDocxJob = (jobId: string, outputPath?: string) =>
+  invokeNative<DocumentExport>('export_docx_job', {
+    jobId,
+    outputPath: outputPath ?? null,
+  });
+export const exportEpubJob = (jobId: string, outputPath?: string) =>
+  invokeNative<DocumentExport>('export_epub_job', {
+    jobId,
+    outputPath: outputPath ?? null,
+  });

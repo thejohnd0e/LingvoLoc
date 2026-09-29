@@ -1,7 +1,21 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import DocumentsPanel from './DocumentsPanel';
 import { highlightMatches } from './highlight';
+
+const dialogMocks = vi.hoisted(() => ({
+  open: vi.fn(),
+  save: vi.fn(),
+}));
+
+vi.mock('@tauri-apps/plugin-dialog', () => dialogMocks);
 
 vi.mock('../lib/commands', () => ({
   getRuntimeStatus: vi.fn().mockRejectedValue(new Error('offline')),
@@ -19,10 +33,52 @@ vi.mock('../lib/commands', () => ({
   exportHistory: vi.fn().mockResolvedValue('history.csv'),
   updateSettings: vi.fn().mockResolvedValue(undefined),
   translate: vi.fn(),
+  analyzeTxt: vi.fn(),
+  analyzeDocx: vi.fn(),
+  analyzeEpub: vi.fn(),
+  startTxtJob: vi.fn(),
+  startDocxJob: vi.fn(),
+  startEpubJob: vi.fn(),
+  resumeTxtJob: vi.fn(),
+  resumeDocxJob: vi.fn(),
+  resumeEpubJob: vi.fn(),
+  getDocumentJob: vi.fn().mockRejectedValue(new Error('no document job')),
+  pauseDocumentJob: vi.fn(),
+  cancelDocumentJob: vi.fn(),
+  exportTxtJob: vi.fn(),
+  exportDocxJob: vi.fn(),
+  exportEpubJob: vi.fn(),
 }));
 
+import * as commands from '../lib/commands';
+
+const epubView = (state = 'ready', translatedBlocks = 0) => ({
+  job: {
+    id: 'epub-job',
+    source_path: 'C:\\books\\story.epub',
+    source_hash: 'hash',
+    format: 'epub',
+    parser_version: 'epub-v1',
+    source_language: 'ru',
+    target_language: 'en',
+    runtime_snapshot: 'runtime',
+    configuration_version: 'epub-v1',
+    state,
+  },
+  blocks: [],
+  diagnostics: [],
+  translated_blocks: translatedBlocks,
+  total_blocks: 1,
+  paused: state === 'paused',
+  cancelled: false,
+});
+
 describe('translation workspace', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+    vi.clearAllMocks();
+  });
 
   it('highlights literal search text without treating it as a pattern', () => {
     render(<div>{highlightMatches('Список (последний)', 'список')}</div>);
@@ -97,5 +153,118 @@ describe('translation workspace', () => {
 
     expect(targetSelect).toHaveValue('auto');
     expect(targetSelect).toBeDisabled();
+  });
+
+  it('accepts EPUB files and dispatches EPUB analysis', async () => {
+    dialogMocks.open.mockResolvedValue('C:\\books\\story.epub');
+    vi.mocked(commands.analyzeEpub).mockResolvedValue(epubView());
+
+    render(
+      <DocumentsPanel
+        sourceLanguage="ru"
+        targetLanguage="en"
+        modelId="model"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /choose/i }));
+
+    await waitFor(() =>
+      expect(commands.analyzeEpub).toHaveBeenCalledWith(
+        'C:\\books\\story.epub',
+        'ru',
+        'en',
+      ),
+    );
+    expect(dialogMocks.open).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filters: [
+          expect.objectContaining({
+            extensions: ['txt', 'docx', 'epub'],
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('dispatches EPUB start and resume commands by job format', async () => {
+    vi.mocked(commands.getDocumentJob).mockRejectedValue(new Error('no job'));
+    vi.mocked(commands.startEpubJob).mockResolvedValue(
+      epubView('translating', 1),
+    );
+    vi.mocked(commands.resumeEpubJob).mockResolvedValue(
+      epubView('translating', 1),
+    );
+
+    render(
+      <DocumentsPanel
+        sourceLanguage="ru"
+        targetLanguage="en"
+        modelId="model"
+      />,
+    );
+    dialogMocks.open.mockResolvedValueOnce('C:\\books\\story.epub');
+    vi.mocked(commands.analyzeEpub).mockResolvedValue(epubView());
+    fireEvent.click(screen.getByRole('button', { name: /choose/i }));
+    await screen.findByRole('button', { name: 'Start translation' });
+    fireEvent.click(screen.getByRole('button', { name: 'Start translation' }));
+    await waitFor(() =>
+      expect(commands.startEpubJob).toHaveBeenCalledWith('epub-job'),
+    );
+
+    vi.mocked(commands.getDocumentJob).mockResolvedValue(
+      epubView('interrupted'),
+    );
+    cleanup();
+    localStorage.setItem('lingvoloc.document-job-id', 'epub-job');
+    render(
+      <DocumentsPanel
+        sourceLanguage="ru"
+        targetLanguage="en"
+        modelId="model"
+      />,
+    );
+    await screen.findByRole('button', { name: 'Resume' });
+    fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+    await waitFor(() =>
+      expect(commands.resumeEpubJob).toHaveBeenCalledWith('epub-job'),
+    );
+  });
+
+  it('selects an EPUB output and dispatches EPUB export', async () => {
+    vi.mocked(commands.getDocumentJob).mockResolvedValue(
+      epubView('translating', 1),
+    );
+    localStorage.setItem('lingvoloc.document-job-id', 'epub-job');
+    dialogMocks.save.mockResolvedValue('C:\\books\\story.translated.en.epub');
+    vi.mocked(commands.exportEpubJob).mockResolvedValue({
+      output_path: 'C:\\books\\story.translated.en.epub',
+      job: epubView('completed', 1),
+    });
+
+    render(
+      <DocumentsPanel
+        sourceLanguage="ru"
+        targetLanguage="en"
+        modelId="model"
+      />,
+    );
+    await screen.findByRole('button', { name: 'Export translated EPUB' });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Export translated EPUB' }),
+    );
+
+    await waitFor(() =>
+      expect(commands.exportEpubJob).toHaveBeenCalledWith(
+        'epub-job',
+        'C:\\books\\story.translated.en.epub',
+      ),
+    );
+    expect(dialogMocks.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        defaultPath: 'C:\\books\\story.translated.en.epub',
+        filters: [expect.objectContaining({ extensions: ['epub'] })],
+      }),
+    );
   });
 });
