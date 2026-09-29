@@ -24,6 +24,7 @@
 - LM Studio model discovery uses loaded instances from `/api/v1/models`, with a cache-busted `/v1/models` fallback for older versions. Startup restores and validates the persisted model for desktop and extension requests.
 - History supports paging, search highlighting, favorites, CSV export, clear, schema migration, and retention of 1,000 non-favorite rows.
 - The desktop executable runs without a console window. Closing hides it to the tray; relaunching a pinned shortcut focuses the existing process.
+- Tray menu: Open LingvoLoc (Ctrl+Shift+L), Translate clipboard (Ctrl+Shift+T), Settings… (opens the settings window), Start with Windows (checkbox; per-user `HKCU\...\Run` value launching the app with `--tray` so the main window stays hidden), Quit. Left-click toggles the main window. The autostart toggle has not been exercised end to end.
 - Extension API tests and desktop TypeScript/Rust tests are part of `npm run check`.
 
 ## In Progress

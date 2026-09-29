@@ -580,6 +580,22 @@ export default function App() {
   }
 
   useEffect(() => {
+    // The tray menu asks the main window to open its settings.
+    let active = true;
+    let stop: (() => void) | undefined;
+    void listen('open-settings', () => setSettingsOpen(true))
+      .then((unlisten) => {
+        if (active) stop = unlisten;
+        else unlisten();
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      stop?.();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!settingsOpen || gpuInfo) return;
     void getGpuInfo()
       .then(setGpuInfo)

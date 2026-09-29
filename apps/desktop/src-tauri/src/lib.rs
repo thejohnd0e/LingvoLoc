@@ -15,7 +15,7 @@ use services::{
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder},
+    menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, WindowEvent,
 };
@@ -371,14 +371,28 @@ pub fn run() {
             app.global_shortcut().register(show_shortcut)?;
             app.global_shortcut().register(translate_shortcut)?;
 
-            let show = MenuItemBuilder::with_id("show", "Show LingvoLoc").build(app)?;
-            let hide = MenuItemBuilder::with_id("hide", "Hide LingvoLoc").build(app)?;
+            if std::env::args().any(|arg| arg == services::autostart::TRAY_ARG) {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
+
+            let open = MenuItemBuilder::with_id("open", "Open LingvoLoc")
+                .accelerator("Ctrl+Shift+L")
+                .build(app)?;
             let translate_clip =
                 MenuItemBuilder::with_id("translate_clipboard", "Translate clipboard")
+                    .accelerator("Ctrl+Shift+T")
                     .build(app)?;
+            let settings_item = MenuItemBuilder::with_id("settings", "Settings…").build(app)?;
+            let autostart_item = CheckMenuItemBuilder::with_id("autostart", "Start with Windows")
+                .checked(services::autostart::is_enabled())
+                .build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
             let menu = MenuBuilder::new(app)
-                .items(&[&show, &hide, &translate_clip])
+                .items(&[&open, &translate_clip, &settings_item])
+                .separator()
+                .item(&autostart_item)
                 .separator()
                 .item(&quit)
                 .build()?;
@@ -405,21 +419,27 @@ pub fn run() {
                         }
                     }
                 })
-                .on_menu_event(|app, event| {
+                .on_menu_event(move |app, event| {
                     if event.id().as_ref() == "translate_clipboard" {
                         translate_clipboard(app);
                         return;
                     }
-                    let Some(window) = app.get_webview_window("main") else {
-                        return;
-                    };
                     match event.id().as_ref() {
-                        "show" => {
+                        "open" | "settings" => {
+                            let Some(window) = app.get_webview_window("main") else {
+                                return;
+                            };
                             let _ = window.show();
                             let _ = window.set_focus();
+                            if event.id().as_ref() == "settings" {
+                                let _ = app.emit("open-settings", ());
+                            }
                         }
-                        "hide" => {
-                            let _ = window.hide();
+                        "autostart" => {
+                            let enabled = autostart_item.is_checked().unwrap_or(false);
+                            if services::autostart::set_enabled(enabled).is_err() {
+                                let _ = autostart_item.set_checked(!enabled);
+                            }
                         }
                         "quit" => app.exit(0),
                         _ => {}

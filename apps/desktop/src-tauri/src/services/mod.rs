@@ -1,3 +1,4 @@
+pub mod autostart;
 pub mod detection;
 pub mod history;
 pub mod lexical;
