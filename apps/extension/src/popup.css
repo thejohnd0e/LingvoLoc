@@ -254,3 +254,46 @@ output {
   color: #718095;
   font-size: 11px;
 }
+
+/* Inside the resizable page overlay the layout fills the frame and the fields grow. */
+html:has(body.embedded),
+body.embedded {
+  height: 100%;
+}
+body.embedded {
+  width: 100%;
+  overflow: hidden;
+}
+body.embedded #app {
+  height: 100%;
+}
+body.embedded .shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+body.embedded .shell > * {
+  flex-shrink: 0;
+}
+body.embedded .shell::after {
+  flex-shrink: 0;
+}
+body.embedded .grow {
+  display: flex;
+  flex: 1 1 96px;
+  flex-direction: column;
+  min-height: 96px;
+}
+body.embedded .grow textarea {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+}
+body.embedded .result-wrap.grow output {
+  flex: 1;
+  overflow: auto;
+}
+body.embedded .grow.field > span {
+  margin-bottom: 5px;
+}

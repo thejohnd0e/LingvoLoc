@@ -42,9 +42,9 @@ app.innerHTML = `
       <span class="direction" aria-hidden="true">→</span>
       <label class="field compact"><span>To</span><select id="target"><option value="ru">Russian</option><option value="en">English</option><option value="de">German</option><option value="es">Spanish</option><option value="fr">French</option><option value="it">Italian</option><option value="pt">Portuguese</option><option value="pl">Polish</option><option value="uk">Ukrainian</option><option value="zh">Chinese</option><option value="ko">Korean</option><option value="th">Thai</option></select></label>
     </div>
-    <label class="field"><span>Selected text</span><textarea id="text" rows="5" placeholder="Select text on a page, or paste it here"></textarea></label>
+    <label class="field grow"><span>Selected text</span><textarea id="text" rows="5" placeholder="Select text on a page, or paste it here"></textarea></label>
     <button id="translate" type="button"><span>Translate locally</span><b>Ctrl ↵</b></button>
-    <div class="result-wrap"><div class="result-heading"><span class="result-label">TRANSLATION</span><button id="copy" class="copy-button" type="button">Copy</button></div><output id="result" aria-live="polite"></output></div>
+    <div class="result-wrap grow"><div class="result-heading"><span class="result-label">TRANSLATION</span><button id="copy" class="copy-button" type="button">Copy</button></div><output id="result" aria-live="polite"></output></div>
     <p class="hint">The extension sends text only to LingvoLoc on this computer.</p>
   </section>
 `;
