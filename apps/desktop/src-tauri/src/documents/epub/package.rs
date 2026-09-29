@@ -107,10 +107,12 @@ pub(super) fn read_package(bytes: &[u8]) -> Result<Package, RuntimeError> {
 }
 
 fn validate_name(name: &str) -> Result<(), RuntimeError> {
+    let path = name.strip_suffix('/').unwrap_or(name);
     if name.is_empty()
         || name.contains('\\')
         || name.starts_with('/')
-        || name
+        || path.is_empty()
+        || path
             .split('/')
             .any(|part| part.is_empty() || part == "." || part == "..")
     {
@@ -131,7 +133,9 @@ fn validate_limits(entry: u64, total: u64) -> Result<(), RuntimeError> {
 }
 
 fn resolve_path(rootfile: &str, href: &str) -> Result<String, RuntimeError> {
-    if href.is_empty() || href.contains('#') || href.contains('\\') || href.starts_with('/') {
+    let path = href.split_once('#').map_or(href, |(path, _)| path);
+    let path = percent_decode(path)?;
+    if path.is_empty() || path.contains('\\') || path.starts_with('/') {
         return Err(RuntimeError::InvalidInput(format!(
             "unsafe EPUB resource path: {href}"
         )));
@@ -141,9 +145,9 @@ fn resolve_path(rootfile: &str, href: &str) -> Result<String, RuntimeError> {
         .map(|(base, _)| base)
         .unwrap_or("");
     let path = if base.is_empty() {
-        href.to_string()
+        path.to_string()
     } else {
-        format!("{base}/{href}")
+        format!("{base}/{path}")
     };
     let mut parts = Vec::new();
     for part in path.split('/') {
@@ -165,6 +169,43 @@ fn resolve_path(rootfile: &str, href: &str) -> Result<String, RuntimeError> {
         }
     }
     Ok(parts.join("/"))
+}
+
+fn percent_decode(value: &str) -> Result<String, RuntimeError> {
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            if index + 2 >= bytes.len() {
+                return Err(RuntimeError::InvalidInput(format!(
+                    "invalid percent-encoded EPUB path: {value}"
+                )));
+            }
+            let high = hex_digit(bytes[index + 1]).ok_or_else(|| {
+                RuntimeError::InvalidInput(format!("invalid percent-encoded EPUB path: {value}"))
+            })?;
+            let low = hex_digit(bytes[index + 2]).ok_or_else(|| {
+                RuntimeError::InvalidInput(format!("invalid percent-encoded EPUB path: {value}"))
+            })?;
+            decoded.push(high << 4 | low);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8(decoded)
+        .map_err(|_| RuntimeError::InvalidInput(format!("EPUB path is not valid UTF-8: {value}")))
+}
+
+fn hex_digit(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        b'A'..=b'F' => Some(value - b'A' + 10),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -264,6 +305,51 @@ mod tests {
             ("OPS/content.opf", opf),
         ]);
         assert!(read_package(&archive).is_err());
+    }
+
+    #[test]
+    fn accepts_directory_entries_and_decodes_entity_and_uri_encoded_paths() {
+        let container = br#"<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OPS&#x2F;content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"#;
+        let opf = br#"<package xmlns="http://www.idpf.org/2007/opf"><manifest><item id="c" href="chapter%20one.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>"#;
+        let archive = fixture_archive(&[
+            ("OPS/", b""),
+            ("mimetype", b"application/epub+zip"),
+            ("META-INF/container.xml", container),
+            ("OPS/content.opf", opf),
+            ("OPS/chapter one.xhtml", b"<html/>"),
+        ]);
+
+        let package = read_package(&archive).unwrap();
+        assert_eq!(package.spine[0].path, "OPS/chapter one.xhtml");
+    }
+
+    #[test]
+    fn removes_spine_href_fragments_before_resolving_package_paths() {
+        let opf = br#"<package xmlns="http://www.idpf.org/2007/opf"><manifest><item id="c" href="chapter.xhtml#section-1" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>"#;
+        let archive = fixture_archive(&[
+            ("mimetype", b"application/epub+zip"),
+            ("META-INF/container.xml", CONTAINER),
+            ("OPS/content.opf", opf),
+            ("OPS/chapter.xhtml", b"<html/>"),
+        ]);
+
+        let package = read_package(&archive).unwrap();
+        assert_eq!(package.spine[0].path, "OPS/chapter.xhtml");
+    }
+
+    #[test]
+    fn resolves_uri_encoded_paths_at_the_package_root() {
+        let container = br#"<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"#;
+        let opf = br#"<package xmlns="http://www.idpf.org/2007/opf"><manifest><item id="c" href="chapter%20one.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>"#;
+        let archive = fixture_archive(&[
+            ("mimetype", b"application/epub+zip"),
+            ("META-INF/container.xml", container),
+            ("content.opf", opf),
+            ("chapter one.xhtml", b"<html/>"),
+        ]);
+
+        let package = read_package(&archive).unwrap();
+        assert_eq!(package.spine[0].path, "chapter one.xhtml");
     }
 
     const CONTAINER: &[u8] = br#"<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"#;

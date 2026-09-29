@@ -216,17 +216,20 @@ fn attribute(
     element: &quick_xml::events::BytesStart<'_>,
     key: &[u8],
 ) -> Result<String, RuntimeError> {
-    element
+    let attribute = element
         .attributes()
         .flatten()
         .find(|attribute| local_name(attribute.key.as_ref()).as_bytes() == key)
-        .map(|attribute| attribute.value.to_string())
         .ok_or_else(|| {
             RuntimeError::InvalidInput(format!(
                 "EPUB XML is missing attribute: {}",
                 String::from_utf8_lossy(key)
             ))
-        })
+        })?;
+    attribute
+        .normalized_value(XmlVersion::Implicit1_0)
+        .map(|value| value.into_owned())
+        .map_err(|error| RuntimeError::InvalidInput(format!("invalid EPUB XML attribute: {error}")))
 }
 
 fn validate_package_path(path: &str) -> Result<String, RuntimeError> {
