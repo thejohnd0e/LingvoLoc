@@ -36,3 +36,10 @@ Run EPUBCheck or open a deterministic translated fixture in an EPUB reader, reco
 - Allowed the Documents panel to clear `completed_with_warnings` jobs and added frontend coverage.
 
 Validation: the focused EPUB suite passed (22 tests), the full native suite passed (121 tests), the focused frontend suite passed (15 tests), the full desktop frontend suite passed (24 tests), and desktop TypeScript typecheck passed. The required external EPUB validator/reader remains unavailable on this host.
+
+## Final EPUB Review Security Follow-Up
+
+- Added regression coverage for external references in XHTML `<base href>`, inline `style` CSS, and `<style>` CSS during both analysis and rewrite, plus unsafe rewrite paths.
+- Extended the existing resource-reference validator to inspect those contexts while continuing to allow package-relative paths, fragment-only anchors, and ordinary prose URLs.
+- Focused validation: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml documents::epub` passed (26 tests).
+- Full native validation and the required `git diff --check` were rerun for this follow-up; no independent EPUB validator/reader is installed on this host.

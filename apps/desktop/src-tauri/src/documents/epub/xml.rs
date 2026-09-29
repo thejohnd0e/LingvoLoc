@@ -148,6 +148,72 @@ mod tests {
     }
 
     #[test]
+    fn rejects_external_base_and_css_references_during_analysis() {
+        for resource in [
+            r#"<base href="https://example.test/"/>"#,
+            r#"<p style="background: url(https://example.test/image.png)">Text</p>"#,
+            r#"<p style="@import url('//example.test/style.css')">Text</p>"#,
+            r#"<style>body { background: url(data:image/png;base64,abc); }</style>"#,
+            r#"<style>@import "https://example.test/style.css";</style>"#,
+            r#"<style><![CDATA[body { background: url(https://example.test/image.png); }]]></style>"#,
+        ] {
+            let xml = format!(
+                r#"<html xmlns="http://www.w3.org/1999/xhtml"><head>{resource}</head><body><p>Text</p></body></html>"#
+            );
+            assert!(super::parse_document(xml.as_bytes(), "OPS/chapter.xhtml").is_err());
+        }
+    }
+
+    #[test]
+    fn rejects_external_base_and_css_references_during_rewrite() {
+        for resource in [
+            r#"<base href="https://example.test/"/>"#,
+            r#"<p style="background: url(https://example.test/image.png)">Text</p>"#,
+            r#"<style>body { background: url(data:image/png;base64,abc); }</style>"#,
+            r#"<style><![CDATA[body { background: url(https://example.test/image.png); }]]></style>"#,
+        ] {
+            let xml = format!(
+                r#"<html xmlns="http://www.w3.org/1999/xhtml"><head>{resource}</head><body><p>Text</p></body></html>"#
+            );
+            let blocks = [super::super::super::DocumentBlock {
+                id: "OPS/chapter.xhtml#0".into(),
+                ordinal: 0,
+                block_type: BlockType::Paragraph,
+                source_text: "Text".into(),
+                translated_text: Some("Translated".into()),
+            }];
+            assert!(super::rewrite_document(xml.as_bytes(), "OPS/chapter.xhtml", &blocks).is_err());
+        }
+    }
+
+    #[test]
+    fn allows_package_relative_fragment_and_prose_url_references_during_rewrite() {
+        let xml = br#"<html xmlns="http://www.w3.org/1999/xhtml"><head><base href="chapter.xhtml"/><style>@import "styles.css"; body { background: url('../images/paper.png#cover'); }</style></head><body><p style="background: url(#local)">See https://example.test in prose.</p></body></html>"#;
+        let blocks = [super::super::super::DocumentBlock {
+            id: "OPS/chapter.xhtml#0".into(),
+            ordinal: 0,
+            block_type: BlockType::Paragraph,
+            source_text: "See https://example.test in prose.".into(),
+            translated_text: Some("Translated".into()),
+        }];
+        assert!(super::rewrite_document(xml, "OPS/chapter.xhtml", &blocks).is_ok());
+    }
+
+    #[test]
+    fn rejects_unsafe_document_paths_during_analysis_and_rewrite() {
+        let xml = br#"<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Text</p></body></html>"#;
+        let blocks = [super::super::super::DocumentBlock {
+            id: "../chapter.xhtml#0".into(),
+            ordinal: 0,
+            block_type: BlockType::Paragraph,
+            source_text: "Text".into(),
+            translated_text: Some("Translated".into()),
+        }];
+        assert!(super::parse_document(xml, "../chapter.xhtml").is_err());
+        assert!(super::rewrite_document(xml, "../chapter.xhtml", &blocks).is_err());
+    }
+
+    #[test]
     fn rejects_oversized_and_deep_xhtml_during_analysis_and_rewrite() {
         let oversized = vec![b'x'; super::MAX_DOCUMENT_BYTES + 1];
         assert!(super::parse_document(&oversized, "OPS/chapter.xhtml").is_err());
@@ -293,9 +359,11 @@ pub(super) fn parse_opf(
 
 pub(super) fn parse_document(bytes: &[u8], path: &str) -> Result<ParsedDocument, RuntimeError> {
     validate_document_size(bytes)?;
+    validate_package_path(path)?;
     let mut reader = NsReader::from_reader(bytes);
     let mut buffer = Vec::new();
     let mut depth = 0_usize;
+    let mut style_depth = None;
     let mut current: Option<Candidate> = None;
     let mut skipped: Option<Skipped> = None;
     let mut ordinal = 0_usize;
@@ -315,6 +383,9 @@ pub(super) fn parse_document(bytes: &[u8], path: &str) -> Result<ParsedDocument,
                 }
                 let name = local_name(element.name().as_ref()).to_string();
                 validate_resource_references(&element, &name)?;
+                if name == "style" {
+                    style_depth = Some(depth);
+                }
                 if let Some(skip) = &mut skipped {
                     let _ = skip;
                 } else if !is_xhtml(&namespace) || unsupported(&name) {
@@ -350,6 +421,9 @@ pub(super) fn parse_document(bytes: &[u8], path: &str) -> Result<ParsedDocument,
                 }
             }
             Event::Text(text) => {
+                if style_depth.is_some() {
+                    validate_css_references(&text.xml_content(XmlVersion::Implicit1_0))?;
+                }
                 if let Some(skip) = &mut skipped {
                     skip.has_text = true;
                 } else if let Some(candidate) = &mut current {
@@ -357,6 +431,11 @@ pub(super) fn parse_document(bytes: &[u8], path: &str) -> Result<ParsedDocument,
                     candidate
                         .text
                         .push_str(&text.xml_content(XmlVersion::Implicit1_0));
+                }
+            }
+            Event::CData(text) => {
+                if style_depth.is_some() {
+                    validate_css_references(text.as_ref())?;
                 }
             }
             Event::End(_element) => {
@@ -385,6 +464,9 @@ pub(super) fn parse_document(bytes: &[u8], path: &str) -> Result<ParsedDocument,
                         }
                         ordinal += 1;
                     }
+                }
+                if style_depth == Some(depth) {
+                    style_depth = None;
                 }
                 depth = depth.saturating_sub(1);
             }
@@ -421,10 +503,12 @@ pub(super) fn rewrite_document(
     blocks: &[DocumentBlock],
 ) -> Result<Vec<u8>, RuntimeError> {
     validate_document_size(source)?;
+    validate_package_path(path)?;
     let mut reader = NsReader::from_reader(source);
     let mut writer = Writer::new(Vec::new());
     let mut buffer = Vec::new();
     let mut depth = 0_usize;
+    let mut style_depth = None;
     let mut element = Vec::new();
     let mut element_depth = 0_usize;
     let mut element_has_foreign = false;
@@ -448,7 +532,22 @@ pub(super) fn rewrite_document(
             depth += 1;
         }
         if let Event::Start(element) | Event::Empty(element) = &event {
-            validate_resource_references(element, local_name(element.name().as_ref()))?;
+            let name = local_name(element.name().as_ref()).to_string();
+            validate_resource_references(element, &name)?;
+            if is_start && name == "style" {
+                style_depth = Some(depth);
+            }
+        }
+        if style_depth.is_some() {
+            match &event {
+                Event::Text(text) => {
+                    validate_css_references(&text.xml_content(XmlVersion::Implicit1_0))?;
+                }
+                Event::CData(text) => {
+                    validate_css_references(text.as_ref())?;
+                }
+                _ => {}
+            }
         }
         if !element.is_empty() {
             let closes_element = is_end && depth == element_depth;
@@ -474,6 +573,9 @@ pub(super) fn rewrite_document(
             writer.write_event(event.into_owned()).map_err(xml_write)?;
         }
         if is_end {
+            if style_depth == Some(depth) {
+                style_depth = None;
+            }
             depth = depth.saturating_sub(1);
         }
         if is_eof {
@@ -512,7 +614,8 @@ fn validate_resource_references(
         let key = local_name(attribute.key.as_ref());
         let is_resource = matches!(
             (name, key),
-            ("link", "href")
+            ("base", "href")
+                | ("link", "href")
                 | ("img", "src")
                 | ("img", "srcset")
                 | ("object", "data")
@@ -527,7 +630,8 @@ fn validate_resource_references(
                 | ("input", "src")
                 | ("image", "href")
         );
-        if !is_resource {
+        let is_style = key == "style";
+        if !is_resource && !is_style {
             continue;
         }
         let value = attribute
@@ -535,15 +639,87 @@ fn validate_resource_references(
             .map_err(|error| {
                 RuntimeError::InvalidInput(format!("invalid EPUB resource URL: {error}"))
             })?;
-        if value.split(',').any(|candidate| {
-            is_external_reference(candidate.split_whitespace().next().unwrap_or_default())
-        }) {
+        if (is_resource
+            && value.split(',').any(|candidate| {
+                is_external_reference(candidate.split_whitespace().next().unwrap_or_default())
+            }))
+            || (is_style && css_has_external_reference(&value))
+        {
             return Err(RuntimeError::InvalidInput(format!(
                 "external EPUB XHTML resource: {value}"
             )));
         }
     }
     Ok(())
+}
+
+fn validate_css_references(value: &str) -> Result<(), RuntimeError> {
+    if css_has_external_reference(value) {
+        return Err(RuntimeError::InvalidInput(format!(
+            "external EPUB XHTML resource: {value}"
+        )));
+    }
+    Ok(())
+}
+
+fn css_has_external_reference(value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index..].starts_with(b"url")
+            && (index == 0 || !bytes[index - 1].is_ascii_alphanumeric())
+        {
+            let mut open = index + 3;
+            while bytes.get(open).is_some_and(u8::is_ascii_whitespace) {
+                open += 1;
+            }
+            if bytes.get(open) == Some(&b'(') {
+                if let Some(close) = bytes[open + 1..].iter().position(|byte| *byte == b')') {
+                    let reference = value[open + 1..open + 1 + close].trim();
+                    let reference = reference
+                        .strip_prefix(['"', '\''])
+                        .and_then(|value| value.strip_suffix(['"', '\'']))
+                        .unwrap_or(reference);
+                    if is_external_reference(reference) {
+                        return true;
+                    }
+                    index = open + 1 + close + 1;
+                    continue;
+                }
+            }
+        }
+        if bytes[index..].starts_with(b"@import") {
+            let mut reference = index + "@import".len();
+            while bytes.get(reference).is_some_and(u8::is_ascii_whitespace) {
+                reference += 1;
+            }
+            if bytes.get(reference) != Some(&b'u') {
+                let start = reference;
+                if bytes.get(reference) == Some(&b'"') || bytes.get(reference) == Some(&b'\'') {
+                    let quote = bytes[reference];
+                    reference += 1;
+                    if let Some(end) = bytes[reference..].iter().position(|byte| *byte == quote) {
+                        if is_external_reference(value[reference..reference + end].trim()) {
+                            return true;
+                        }
+                    }
+                } else {
+                    while bytes
+                        .get(reference)
+                        .is_some_and(|byte| !byte.is_ascii_whitespace() && *byte != b';')
+                    {
+                        reference += 1;
+                    }
+                    if is_external_reference(value[start..reference].trim()) {
+                        return true;
+                    }
+                }
+            }
+        }
+        index += 1;
+    }
+    false
 }
 
 fn is_external_reference(value: &str) -> bool {
