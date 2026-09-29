@@ -803,6 +803,11 @@ textarea:focus {
   color: #c4d2d1;
   font-size: 0.85rem;
 }
+.settings-section + .settings-section {
+  margin-top: 26px;
+  padding-top: 24px;
+  border-top: 1px solid #29434c;
+}
 .runtime-mode {
   display: flex;
   align-items: center;

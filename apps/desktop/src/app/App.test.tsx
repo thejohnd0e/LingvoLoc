@@ -64,10 +64,14 @@ describe('translation workspace', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('opens the dictionary settings from the header icon', () => {
+  it('keeps dictionary and extension settings inside the settings window', () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Dictionaries' }));
-    expect(screen.getByRole('dialog', { name: 'Dictionaries' })).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Dictionaries' }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(screen.getByLabelText('Dictionaries')).toBeVisible();
+    expect(screen.getByLabelText('Browser extension')).toBeVisible();
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });

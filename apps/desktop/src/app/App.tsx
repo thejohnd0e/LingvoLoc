@@ -175,7 +175,6 @@ export default function App() {
   const [llamaDownload, setLlamaDownload] =
     useState<LlamaDownloadProgress | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [dictionariesOpen, setDictionariesOpen] = useState(false);
   const [additionalOpen, setAdditionalOpen] = useState(false);
   const [lexicalBusy, setLexicalBusy] = useState(false);
   const [dictionariesBusy, setDictionariesBusy] = useState(false);
@@ -841,49 +840,6 @@ export default function App() {
             <button
               className="icon-button"
               type="button"
-              aria-label="Copy extension pairing token"
-              title="Copy the token used to pair the Chrome extension"
-              onClick={() => void copyExtensionToken()}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                width="18"
-                height="18"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4" />
-              </svg>
-            </button>
-            <button
-              className="icon-button"
-              type="button"
-              aria-label="Dictionaries"
-              title="Dictionaries"
-              onClick={() => setDictionariesOpen(true)}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                width="18"
-                height="18"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-              </svg>
-            </button>
-            <button
-              className="icon-button"
-              type="button"
               aria-label="Settings"
               title="Settings"
               onClick={() => setSettingsOpen(true)}
@@ -1145,7 +1101,10 @@ export default function App() {
       </div>
       {settingsOpen && (
         <Modal title="Settings" onClose={() => setSettingsOpen(false)}>
-          <section className="runtime-panel" aria-label="Model runtime">
+          <section
+            className="runtime-panel settings-section"
+            aria-label="Model runtime"
+          >
             <span className="panel-label">MODEL RUNTIME</span>
             <label className="runtime-mode">
               <b>Mode</b>
@@ -1298,12 +1257,11 @@ export default function App() {
               </p>
             )}
           </section>
-        </Modal>
-      )}
-      {dictionariesOpen && (
-        <Modal title="Dictionaries" onClose={() => setDictionariesOpen(false)}>
-          <section className="runtime-panel" aria-label="Dictionary folder">
-            <span className="panel-label">STARDICT DICTIONARIES</span>
+          <section
+            className="runtime-panel settings-section"
+            aria-label="Dictionaries"
+          >
+            <span className="panel-label">DICTIONARIES</span>
             <div className="runtime-row">
               <button
                 className="translate"
@@ -1358,6 +1316,28 @@ export default function App() {
               ) : (
                 <span>No dictionaries detected.</span>
               )}
+            </div>
+          </section>
+          <section
+            className="runtime-panel settings-section"
+            aria-label="Browser extension"
+          >
+            <span className="panel-label">BROWSER EXTENSION</span>
+            <div className="runtime-row">
+              <button
+                className="translate"
+                type="button"
+                onClick={() => void copyExtensionToken()}
+              >
+                Copy token
+              </button>
+              <div>
+                <b>Pairing token</b>
+                <p className="runtime-note">
+                  Copy the token and paste it into the LingvoLoc Chrome
+                  extension to connect it to this app.
+                </p>
+              </div>
             </div>
           </section>
         </Modal>
