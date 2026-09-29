@@ -8,8 +8,10 @@ use super::{
 };
 use crate::domain::RuntimeError;
 use crate::services::inference_coordinator::snapshot;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
@@ -53,6 +55,63 @@ fn new_job_id() -> String {
         .unwrap_or_default()
         .as_millis();
     format!("txt-{}-{timestamp}", std::process::id())
+}
+
+static TEMP_NONCE: AtomicU64 = AtomicU64::new(0);
+
+fn create_temporary_output(parent: &Path) -> Result<(PathBuf, fs::File), RuntimeError> {
+    for _ in 0..32 {
+        let nonce = TEMP_NONCE.fetch_add(1, Ordering::Relaxed);
+        let path = parent.join(format!(
+            ".lingvoloc-{}-{}-{}.tmp",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos(),
+            nonce
+        ));
+        match OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(file) => return Ok((path, file)),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(RuntimeError::Connection(format!(
+                    "create temporary output: {error}"
+                )))
+            }
+        }
+    }
+    Err(RuntimeError::Connection(
+        "could not create a unique temporary output".into(),
+    ))
+}
+
+fn sanitize_filename_component(value: &str) -> String {
+    let sanitized = value
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    let sanitized = sanitized.trim_matches('_');
+    if sanitized.is_empty() {
+        "target".into()
+    } else {
+        sanitized.to_string()
+    }
+}
+
+fn default_output_path(source: &Path, target_language: &str, extension: &str) -> PathBuf {
+    let stem = source
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("translated");
+    let language = sanitize_filename_component(target_language);
+    source.with_file_name(format!("{stem}.translated.{language}.{extension}"))
 }
 
 fn view(store: &DocumentJobStore, job_id: &str) -> Result<DocumentJobView, RuntimeError> {
@@ -200,7 +259,9 @@ fn run_job(
             .flatten()
             .is_some_and(|job| job.state == JobState::Translating)
     {
-        mark_preflight_failure(store, job_id, "document job preflight failed");
+        if let Err(error) = &result {
+            mark_preflight_failure(store, job_id, error);
+        }
     }
     result
 }
@@ -290,14 +351,14 @@ fn epub_export_state(diagnostics: &[String]) -> JobState {
     }
 }
 
-fn mark_preflight_failure(store: &mut DocumentJobStore, job_id: &str, message: &str) {
+fn mark_preflight_failure(store: &mut DocumentJobStore, job_id: &str, error: &RuntimeError) {
     if store
         .get(job_id)
         .ok()
         .flatten()
         .is_some_and(|job| job.state == JobState::Translating)
     {
-        let _ = store.transition(job_id, JobState::Failed, Some(message));
+        let _ = store.transition(job_id, JobState::Failed, Some(&error.to_string()));
     }
 }
 
@@ -600,13 +661,7 @@ pub fn export_txt_job(
     let target = output_path
         .filter(|path| !path.trim().is_empty())
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            let stem = source
-                .file_stem()
-                .and_then(|value| value.to_str())
-                .unwrap_or("translated");
-            source.with_file_name(format!("{stem}.translated.{}.txt", job.target_language))
-        });
+        .unwrap_or_else(|| default_output_path(source, &job.target_language, "txt"));
     if same_path(source, &target) {
         return Err(RuntimeError::InvalidInput(
             "output must be different from the source".into(),
@@ -621,15 +676,19 @@ pub fn export_txt_job(
     fs::create_dir_all(parent)
         .map_err(|error| RuntimeError::Connection(format!("create output folder: {error}")))?;
     store.transition(&job_id, JobState::Exporting, None)?;
-    let temporary = parent.join(format!(".{}.lingvoloc-tmp", new_job_id()));
+    let mut temporary = None;
     let result = (|| {
-        fs::write(&temporary, output.as_bytes())
+        let (path, mut file) = create_temporary_output(parent)?;
+        temporary = Some(path.clone());
+        file.write_all(output.as_bytes())
             .map_err(|error| RuntimeError::Connection(format!("write TXT output: {error}")))?;
-        fs::rename(&temporary, &target)
+        fs::rename(&path, &target)
             .map_err(|error| RuntimeError::Connection(format!("finish TXT output: {error}")))
     })();
     if let Err(error) = result {
-        let _ = fs::remove_file(&temporary);
+        if let Some(path) = temporary {
+            let _ = fs::remove_file(path);
+        }
         let _ = store.transition(&job_id, JobState::Failed, Some(&error.to_string()));
         return Err(error);
     }
@@ -678,13 +737,7 @@ pub fn export_docx_job(
     let target = output_path
         .filter(|path| !path.trim().is_empty())
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            let stem = source_path
-                .file_stem()
-                .and_then(|value| value.to_str())
-                .unwrap_or("translated");
-            source_path.with_file_name(format!("{stem}.translated.{}.docx", job.target_language))
-        });
+        .unwrap_or_else(|| default_output_path(source_path, &job.target_language, "docx"));
     if same_path(source_path, &target) {
         return Err(RuntimeError::InvalidInput(
             "output must be different from the source".into(),
@@ -699,15 +752,19 @@ pub fn export_docx_job(
     fs::create_dir_all(parent)
         .map_err(|error| RuntimeError::Connection(format!("create output folder: {error}")))?;
     store.transition(&job_id, JobState::Exporting, None)?;
-    let temporary = parent.join(format!(".{}.lingvoloc-tmp", new_job_id()));
+    let mut temporary = None;
     let result = (|| {
-        fs::write(&temporary, output)
+        let (path, mut file) = create_temporary_output(parent)?;
+        temporary = Some(path.clone());
+        file.write_all(&output)
             .map_err(|error| RuntimeError::Connection(format!("write DOCX output: {error}")))?;
-        fs::rename(&temporary, &target)
+        fs::rename(&path, &target)
             .map_err(|error| RuntimeError::Connection(format!("finish DOCX output: {error}")))
     })();
     if let Err(error) = result {
-        let _ = fs::remove_file(&temporary);
+        if let Some(path) = temporary {
+            let _ = fs::remove_file(path);
+        }
         let _ = store.transition(&job_id, JobState::Failed, Some(&error.to_string()));
         return Err(error);
     }
@@ -740,28 +797,26 @@ pub fn export_epub_job(
     let target = output_path
         .filter(|path| !path.trim().is_empty())
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            let stem = source_path
-                .file_stem()
-                .and_then(|value| value.to_str())
-                .unwrap_or("translated");
-            source_path.with_file_name(format!("{stem}.translated.{}.epub", job.target_language))
-        });
+        .unwrap_or_else(|| default_output_path(source_path, &job.target_language, "epub"));
     validate_epub_export(&job, &source, &blocks, Some(&target))?;
     let output = epub::export(&source, &blocks)?;
     let parent = target.parent().unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(parent)
         .map_err(|error| RuntimeError::Connection(format!("create output folder: {error}")))?;
     store.transition(&job_id, JobState::Exporting, None)?;
-    let temporary = parent.join(format!(".{}.lingvoloc-tmp", new_job_id()));
+    let mut temporary = None;
     let result = (|| {
-        fs::write(&temporary, output)
+        let (path, mut file) = create_temporary_output(parent)?;
+        temporary = Some(path.clone());
+        file.write_all(&output)
             .map_err(|error| RuntimeError::Connection(format!("write EPUB output: {error}")))?;
-        fs::rename(&temporary, &target)
+        fs::rename(&path, &target)
             .map_err(|error| RuntimeError::Connection(format!("finish EPUB output: {error}")))
     })();
     if let Err(error) = result {
-        let _ = fs::remove_file(&temporary);
+        if let Some(path) = temporary {
+            let _ = fs::remove_file(path);
+        }
         let _ = store.transition(&job_id, JobState::Failed, Some(&error.to_string()));
         return Err(error);
     }
@@ -885,14 +940,46 @@ mod tests {
     }
 
     #[test]
+    fn default_output_names_keep_target_language_inside_source_directory() {
+        let source = Path::new("books/source.epub");
+        let target = default_output_path(source, "../../outside:ru", "epub");
+        assert_eq!(target.parent(), source.parent());
+        assert_eq!(
+            target.extension().and_then(|value| value.to_str()),
+            Some("epub")
+        );
+        assert!(!target.to_string_lossy().contains("..\\"));
+        assert!(!target.to_string_lossy().contains("../"));
+        assert!(!target.to_string_lossy().contains(':'));
+    }
+
+    #[test]
+    fn temporary_outputs_are_unique_and_exclusively_created() {
+        let directory = std::env::temp_dir().join(format!("lingvoloc-epub-temp-{}", new_job_id()));
+        fs::create_dir_all(&directory).unwrap();
+        let (first_path, mut first) = create_temporary_output(&directory).unwrap();
+        let (second_path, mut second) = create_temporary_output(&directory).unwrap();
+        first.write_all(b"first").unwrap();
+        second.write_all(b"second").unwrap();
+        assert_ne!(first_path, second_path);
+        assert_eq!(fs::read(&first_path).unwrap(), b"first");
+        assert_eq!(fs::read(&second_path).unwrap(), b"second");
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
     fn epub_preflight_failure_transitions_translating_job_to_failed() {
         let mut store = DocumentJobStore::in_memory().unwrap();
         let job = epub_job(JobState::Translating);
         store.create(&job).unwrap();
-        mark_preflight_failure(&mut store, &job.id, "source changed");
+        let error = RuntimeError::InvalidInput("source changed; analyze it again".into());
+        mark_preflight_failure(&mut store, &job.id, &error);
         let failed = store.get(&job.id).unwrap().unwrap();
         assert_eq!(failed.state, JobState::Failed);
-        assert_eq!(failed.error.as_deref(), Some("source changed"));
+        assert_eq!(
+            failed.error.as_deref(),
+            Some("invalid input: source changed; analyze it again")
+        );
     }
 
     fn epub_job(state: JobState) -> DocumentJob {

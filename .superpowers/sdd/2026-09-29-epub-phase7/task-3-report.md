@@ -32,3 +32,24 @@
 ## Commit SHA
 
 - Task 3 implementation commit: `8f1590f`
+
+## Review Fixes
+
+- Added exclusive temporary output creation with `OpenOptions::create_new(true)` and an atomic nonce, preventing concurrent exports from overwriting another temporary file.
+- Sanitized generated target-language filename components for TXT, DOCX, and EPUB defaults; explicit output paths remain unchanged and retain source/existing-target checks.
+- Persisted the specific `RuntimeError` detail when a translating job fails during preflight.
+- Added pure boundary tests for sanitized default paths, exclusive temp uniqueness, exact preflight failure persistence, and existing source/state/block export guards.
+
+### Fix Verification
+
+- Expected red command test run: failed because `default_output_path` and `create_temporary_output` were absent.
+- `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml documents::commands::tests`: 11 passed.
+- `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml documents::epub`: 19 passed.
+- `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml documents::txt`: 5 passed.
+- `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml documents::docx`: 13 passed.
+- `cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check`: passed after formatting.
+- `git diff --check`: passed.
+
+### Fix Commit
+
+- Review-fix commit: pending
