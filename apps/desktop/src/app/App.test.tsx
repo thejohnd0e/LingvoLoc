@@ -6,6 +6,9 @@ import { highlightMatches } from './highlight';
 vi.mock('../lib/commands', () => ({
   getRuntimeStatus: vi.fn().mockRejectedValue(new Error('offline')),
   getGpuInfo: vi.fn().mockResolvedValue({ names: [], backend: 'CPU' }),
+  getLlamaDevices: vi.fn().mockResolvedValue({ devices: [], active: null }),
+  llamaPathStatus: vi.fn().mockResolvedValue('absent'),
+  addLlamaToPath: vi.fn().mockResolvedValue('added'),
   getUserDictionaryDirectory: vi.fn().mockResolvedValue('user-dictionaries'),
   listUserDictionaries: vi.fn().mockResolvedValue([]),
   lookupLexicon: vi.fn().mockResolvedValue([]),

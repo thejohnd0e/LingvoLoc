@@ -140,6 +140,21 @@ fn locate_llama_server(directory: String) -> Result<String, RuntimeError> {
 }
 
 #[tauri::command(async)]
+fn get_llama_devices(path: String) -> Result<runtimes::llama_server::LlamaDevices, RuntimeError> {
+    runtimes::llama_server::describe_devices(&path)
+}
+
+#[tauri::command(async)]
+fn llama_path_status(path: String) -> Result<String, RuntimeError> {
+    runtimes::llama_server::user_path(&path, false)
+}
+
+#[tauri::command(async)]
+fn add_llama_to_path(path: String) -> Result<String, RuntimeError> {
+    runtimes::llama_server::user_path(&path, true)
+}
+
+#[tauri::command(async)]
 fn get_gpu_info() -> runtimes::llama_download::GpuInfo {
     runtimes::llama_download::detect_gpu_info().1
 }
@@ -434,6 +449,9 @@ pub fn run() {
             check_llama_server,
             download_llama_cpp,
             get_gpu_info,
+            get_llama_devices,
+            llama_path_status,
+            add_llama_to_path,
             find_llama_server,
             locate_llama_server,
             list_history,

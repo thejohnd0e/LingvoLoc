@@ -9,7 +9,11 @@ import {
   checkLlamaServer,
   downloadLlamaCpp,
   getGpuInfo,
+  getLlamaDevices,
+  llamaPathStatus,
+  addLlamaToPath,
   type GpuInfo,
+  type LlamaDevices,
   findLlamaServer,
   type LlamaDownloadProgress,
   locateLlamaServer,
@@ -183,6 +187,9 @@ export default function App() {
   const [translationHighlight, setTranslationHighlight] = useState('');
   const [serverCheck, setServerCheck] = useState('');
   const [gpuInfo, setGpuInfo] = useState<GpuInfo | null>(null);
+  const [llamaDevices, setLlamaDevices] = useState<LlamaDevices | null>(null);
+  const [inPath, setInPath] = useState<boolean | null>(null);
+  const [pathBusy, setPathBusy] = useState(false);
   const [llamaDownload, setLlamaDownload] =
     useState<LlamaDownloadProgress | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -597,6 +604,42 @@ export default function App() {
       .catch(() => setGpuInfo({ names: [], backend: 'CPU' }));
   }, [settingsOpen, gpuInfo]);
 
+  useEffect(() => {
+    const path = settings.llamaServerPath;
+    if (!settingsOpen || !path) {
+      setLlamaDevices(null);
+      setInPath(null);
+      return;
+    }
+    let current = true;
+    void getLlamaDevices(path)
+      .then((devices) => current && setLlamaDevices(devices))
+      .catch(() => current && setLlamaDevices(null));
+    void llamaPathStatus(path)
+      .then((status) => current && setInPath(status === 'present'))
+      .catch(() => current && setInPath(null));
+    return () => {
+      current = false;
+    };
+  }, [settingsOpen, settings.llamaServerPath]);
+
+  async function addToPath() {
+    setPathBusy(true);
+    try {
+      const result = await addLlamaToPath(settings.llamaServerPath);
+      setInPath(true);
+      setServerCheck(
+        result === 'added'
+          ? 'Added to your user PATH. Programs started from now on will see it.'
+          : 'Already in your PATH.',
+      );
+    } catch (reason) {
+      setServerCheck(`Cannot edit PATH · ${errorDetail(reason)}`);
+    } finally {
+      setPathBusy(false);
+    }
+  }
+
   async function installLlamaCpp() {
     setServerCheck('');
     setLlamaDownload({ percent: 0, stage: 'Starting…' });
@@ -607,7 +650,13 @@ export default function App() {
     try {
       const installed = await downloadLlamaCpp();
       updateSettings({ llamaServerPath: installed.path });
-      await verifyLlamaServer(installed.path);
+      if (installed.upToDate) {
+        setServerCheck(
+          `The latest version is already installed · ${installed.version} (${installed.variant})`,
+        );
+      } else {
+        await verifyLlamaServer(installed.path);
+      }
     } catch (reason) {
       setServerCheck(`Download failed · ${errorDetail(reason)}`);
     } finally {
@@ -1133,6 +1182,15 @@ export default function App() {
                           : `The ${gpuInfo.backend} build will be used.`}
                       </span>
                     )}
+                    {settings.llamaServerPath && (
+                      <span className="runtime-note">
+                        {llamaDevices === null
+                          ? ''
+                          : llamaDevices.active
+                            ? `In use: ${llamaDevices.active.name} (${llamaDevices.active.id})`
+                            : 'In use: CPU'}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="runtime-row">
@@ -1154,6 +1212,18 @@ export default function App() {
                         : settings.llamaServerPath ||
                           'Not installed. Press Download to install it automatically.'}
                     </code>
+                    {settings.llamaServerPath && !llamaDownload && (
+                      <div className="runtime-buttons">
+                        <button
+                          className="quiet"
+                          type="button"
+                          disabled={pathBusy || inPath === true}
+                          onClick={() => void addToPath()}
+                        >
+                          {inPath === true ? 'In PATH' : 'Add to PATH'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
                 {serverCheck && (

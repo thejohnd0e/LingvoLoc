@@ -83,6 +83,7 @@ export interface DownloadedLlama {
   path: string;
   version: string;
   variant: string;
+  upToDate: boolean;
 }
 export interface LlamaDownloadProgress {
   percent: number;
@@ -92,6 +93,21 @@ export interface GpuInfo {
   names: string[];
   backend: 'CUDA' | 'Vulkan' | 'CPU';
 }
+export interface LlamaDevice {
+  id: string;
+  name: string;
+  memory_mib: number;
+}
+export interface LlamaDevices {
+  devices: LlamaDevice[];
+  active: LlamaDevice | null;
+}
+export const getLlamaDevices = (path: string) =>
+  invokeNative<LlamaDevices>('get_llama_devices', { path });
+export const llamaPathStatus = (path: string) =>
+  invokeNative<'present' | 'absent'>('llama_path_status', { path });
+export const addLlamaToPath = (path: string) =>
+  invokeNative<'present' | 'added'>('add_llama_to_path', { path });
 export const getGpuInfo = () => invokeNative<GpuInfo>('get_gpu_info');
 export const downloadLlamaCpp = () =>
   invokeNative<DownloadedLlama>('download_llama_cpp');

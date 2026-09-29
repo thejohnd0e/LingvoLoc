@@ -3,6 +3,7 @@ use crate::domain::{
 };
 use crate::runtimes::lm_studio::LmStudioRuntime;
 use reqwest::blocking::Client;
+use serde::Serialize;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -136,6 +137,146 @@ pub fn check_server(path: &str) -> Result<String, RuntimeError> {
     }
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct LlamaDevice {
+    pub id: String,
+    pub name: String,
+    pub memory_mib: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LlamaDevices {
+    pub devices: Vec<LlamaDevice>,
+    pub active: Option<LlamaDevice>,
+}
+
+/// Parses `llama-server --list-devices` lines such as
+/// `  CUDA0: NVIDIA GeForce RTX 3060 (12287 MiB, 11255 MiB free)`.
+fn parse_devices(text: &str) -> Vec<LlamaDevice> {
+    text.lines()
+        .filter_map(|line| {
+            let (id, rest) = line.trim().split_once(": ")?;
+            if id.contains(char::is_whitespace) || !id.ends_with(|c: char| c.is_ascii_digit()) {
+                return None;
+            }
+            let (name, memory) = rest.rsplit_once(" (")?;
+            let memory_mib = memory.split_whitespace().next()?.parse().ok()?;
+            Some(LlamaDevice {
+                id: id.to_string(),
+                name: name.trim().to_string(),
+                memory_mib,
+            })
+        })
+        .collect()
+}
+
+fn is_integrated(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    [
+        "uhd graphics",
+        "hd graphics",
+        "iris",
+        "intel(r) graphics",
+        "radeon(tm) graphics",
+        "radeon graphics",
+        "vega",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker))
+}
+
+/// Picks the strongest device: CUDA/ROCm cards first, then discrete Vulkan cards, then
+/// integrated ones; the larger memory wins ties. Integrated GPUs report shared system
+/// memory, so memory alone would wrongly favor them.
+pub fn best_device(devices: &[LlamaDevice]) -> Option<&LlamaDevice> {
+    let score = |device: &LlamaDevice| {
+        let id = device.id.to_ascii_lowercase();
+        if id.starts_with("cuda") || id.starts_with("rocm") || id.starts_with("hip") {
+            3
+        } else if is_integrated(&device.name) {
+            1
+        } else {
+            2
+        }
+    };
+    devices
+        .iter()
+        .max_by_key(|device| (score(device), device.memory_mib))
+}
+
+pub fn list_devices(exe: &Path) -> Vec<LlamaDevice> {
+    let mut command = Command::new(exe);
+    command.arg("--list-devices");
+    hide_window(&mut command);
+    command
+        .output()
+        .map(|output| {
+            parse_devices(&format!(
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            ))
+        })
+        .unwrap_or_default()
+}
+
+pub fn describe_devices(path: &str) -> Result<LlamaDevices, RuntimeError> {
+    let exe = effective_server_path(path)?;
+    let devices = list_devices(&exe);
+    let active = best_device(&devices).cloned();
+    Ok(LlamaDevices { devices, active })
+}
+
+#[cfg(windows)]
+const PATH_SCRIPT: &str = r#"
+$dir = $env:LINGVOLOC_DIR.TrimEnd('\')
+$key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+$raw = $key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+$parts = @($raw.Split(';') | Where-Object { $_ })
+$present = ($parts | ForEach-Object { $_.TrimEnd('\') }) -contains $dir
+if ($env:LINGVOLOC_MODE -eq 'add' -and -not $present) {
+  $key.SetValue('Path', (($parts + $dir) -join ';'), [Microsoft.Win32.RegistryValueKind]::ExpandString)
+  Add-Type -Namespace LingvoLoc -Name Native -MemberDefinition '[DllImport("user32.dll", CharSet=CharSet.Auto)] public static extern IntPtr SendMessageTimeout(IntPtr h, uint m, UIntPtr w, string l, uint f, uint t, out UIntPtr r);'
+  $result = [UIntPtr]::Zero
+  [LingvoLoc.Native]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result) | Out-Null
+  'added'
+} elseif ($present) { 'present' } else { 'absent' }
+"#;
+
+/// Checks or adds the folder of `llama-server.exe` in the user's PATH (no admin rights).
+/// Returns `present`, `absent` or `added`.
+pub fn user_path(path: &str, add: bool) -> Result<String, RuntimeError> {
+    let exe = effective_server_path(path)?;
+    let dir = exe
+        .parent()
+        .ok_or_else(|| RuntimeError::InvalidInput("llama-server has no folder".into()))?;
+    #[cfg(windows)]
+    {
+        let mut command = Command::new("powershell.exe");
+        command
+            .args(["-NoProfile", "-NonInteractive", "-Command", PATH_SCRIPT])
+            .env("LINGVOLOC_DIR", dir)
+            .env("LINGVOLOC_MODE", if add { "add" } else { "check" });
+        hide_window(&mut command);
+        let output = command
+            .output()
+            .map_err(|error| RuntimeError::Connection(format!("cannot run PowerShell: {error}")))?;
+        if !output.status.success() {
+            return Err(RuntimeError::Connection(
+                String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            ));
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (dir, add);
+        Err(RuntimeError::InvalidInput(
+            "PATH editing is only supported on Windows".into(),
+        ))
+    }
+}
+
 pub fn find_on_path() -> Option<PathBuf> {
     let name = if cfg!(windows) {
         "llama-server.exe"
@@ -257,6 +398,13 @@ fn ensure_server(exe: &Path, model: &Path) -> Result<String, RuntimeError> {
     }
 
     let port = free_port()?;
+    // With several GPUs (e.g. discrete + integrated) pin the strongest one explicitly.
+    let devices = list_devices(exe);
+    let device = if devices.len() > 1 {
+        best_device(&devices).map(|device| device.id.clone())
+    } else {
+        None
+    };
     let log = File::create(log_path())
         .map(Stdio::from)
         .unwrap_or_else(|_| Stdio::null());
@@ -270,7 +418,11 @@ fn ensure_server(exe: &Path, model: &Path) -> Result<String, RuntimeError> {
         // --chat-template gemma: some conversions are not recognised by the legacy matcher
         // and fall back to ChatML, which leaks `<|im_start|>` tokens into the translation.
         .args(["-c", CONTEXT_SIZE, "-np", "1", "-ngl", "99", "--no-jinja"])
-        .args(["--chat-template", "gemma"])
+        .args(["--chat-template", "gemma"]);
+    if let Some(device) = &device {
+        command.args(["--device", device]);
+    }
+    command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(log);
@@ -515,6 +667,18 @@ mod tests {
         std::fs::write(nested.join(name), b"x").unwrap();
         assert_eq!(find_in_directory(&dir), Some(nested.join(name)));
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn parses_and_ranks_devices() {
+        let text = "Available devices:\n  Vulkan0: Intel(R) UHD Graphics 750 (16000 MiB, 15000 MiB free)\n  Vulkan1: NVIDIA GeForce RTX 3060 (12288 MiB, 11000 MiB free)\n";
+        let devices = parse_devices(text);
+        assert_eq!(devices.len(), 2);
+        assert_eq!(devices[1].name, "NVIDIA GeForce RTX 3060");
+        assert_eq!(best_device(&devices).unwrap().id, "Vulkan1");
+        let cuda = parse_devices("  CUDA0: NVIDIA GeForce RTX 3060 (12287 MiB, 11255 MiB free)");
+        assert_eq!(best_device(&cuda).unwrap().id, "CUDA0");
+        assert!(parse_devices("Available devices:\nrandom text").is_empty());
     }
 
     #[test]

@@ -38,6 +38,7 @@ pub struct DownloadedLlama {
     pub path: String,
     pub version: String,
     pub variant: String,
+    pub up_to_date: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -309,6 +310,7 @@ pub fn download_latest(
                 path: exe.display().to_string(),
                 version: release.tag_name,
                 variant,
+                up_to_date: true,
             });
         }
     }
@@ -364,6 +366,7 @@ pub fn download_latest(
         path: exe.display().to_string(),
         version: release.tag_name,
         variant,
+        up_to_date: false,
     })
 }
 
