@@ -332,10 +332,10 @@ export default function App() {
         .catch(() => undefined);
       try {
         await writeClipboard(result.text);
-        setNotice('Translation copied to clipboard.');
+        setNotice(`Translation copied to clipboard · ${formatTiming(result)}`);
       } catch {
         setNotice(
-          'Translation completed, but clipboard access is unavailable.',
+          `Translation completed, but clipboard access is unavailable · ${formatTiming(result)}`,
         );
       }
       try {
