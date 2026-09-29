@@ -1,4 +1,9 @@
+export type RuntimeMode = 'lmStudio' | 'standalone';
+
 export interface Settings {
+  runtimeMode: RuntimeMode;
+  modelsDirectory: string;
+  llamaServerPath: string;
   endpoint: string;
   modelId: string;
   adapterId: string;

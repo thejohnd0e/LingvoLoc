@@ -17,7 +17,7 @@ For a distributable artifact, run:
 npm run extension:package
 ```
 
-This creates `apps/extension/LingvoLoc-extension-1.45.2.zip`.
+This creates `apps/extension/LingvoLoc-extension-2.0.0.zip`.
 
 ## Pairing
 

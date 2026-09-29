@@ -8,6 +8,9 @@ import {
 } from './settings';
 
 const fallback: Settings = {
+  runtimeMode: 'lmStudio',
+  modelsDirectory: '',
+  llamaServerPath: '',
   endpoint: 'http://localhost',
   modelId: '',
   adapterId: 'translategemma',

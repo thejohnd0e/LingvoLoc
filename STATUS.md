@@ -2,9 +2,9 @@
 
 ## Current Release
 
-- Version `1.45.2` is the current release across the root, desktop, extension, Tauri, Cargo, and extension packaging metadata.
+- Version `2.0.0` is the current release across the root, desktop, extension, Tauri, Cargo, and extension packaging metadata.
 - The last recorded release gate passed: `npm run check`, `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`, and `npm run desktop:build`.
-- Release artifacts are `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_1.45.2_x64-setup.exe` and `apps/extension/LingvoLoc-extension-1.45.2.zip`.
+- Release artifacts are `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_2.0.0_x64-setup.exe` and `apps/extension/LingvoLoc-extension-2.0.0.zip`.
 
 ## Completed
 
@@ -16,6 +16,9 @@
 - Agent handoff guidance in `AGENTS.md` now records the repository shape, authoritative commands, runtime constraints, and version-update requirements.
 
 ## Currently Works
+
+- Standalone mode (Settings window): choose a models folder and a llama.cpp folder (LingvoLoc locates `llama-server.exe`), pick a `.gguf`, and translate without LM Studio. `llama-server` is started with `--no-jinja --chat-template gemma` because TranslateGemma's embedded Jinja template rejects plain-text messages and some conversions fall back to ChatML. Verified manually on Windows with llama.cpp build b11243 (CUDA 13.4, RTX 3060) using TranslateGemma 4B Q8_0 and 12B Q4_K_S.
+- Blocking native commands run off the UI thread and parsed StarDict folders are cached, so lookups no longer freeze the window; waits show a spinner. Dictionary and runtime settings open from header icons.
 
 - `npm run dev`, `npm run desktop:dev`, desktop frontend builds, native Tauri/NSIS builds, and extension build/package commands are established in the root `package.json`.
 - LM Studio model discovery uses loaded instances from `/api/v1/models`, with a cache-busted `/v1/models` fallback for older versions. Startup restores and validates the persisted model for desktop and extension requests.
@@ -30,7 +33,7 @@
 
 ## Known Issues And Blockers
 
-- LM Studio must be running at `http://127.0.0.1:1234/v1` with a compatible model loaded; translation and extension requests otherwise fail.
+- In LM Studio mode, LM Studio must be running at `http://127.0.0.1:1234/v1` with a compatible model loaded; in Standalone mode a valid llama.cpp folder and models folder are required. Translation and extension requests otherwise fail.
 - Native builds require Rust, WebView2, and Windows C++ build tools/Windows SDK. Visual Studio provides the compiler tools on this machine, but they may not be on the general `PATH`.
 - Dictionary coverage and quality depend entirely on dictionaries selected by the user. Missing records are intentionally not replaced with model-generated dictionary facts.
 - StarDict language metadata is not mapped, and complex dictionary markup/senses are only cleaned and displayed rather than semantically parsed. This is the main unfinished product work.

@@ -2,7 +2,12 @@
 
 ## Overview
 
-LingvoLoc is a Windows-first desktop application for private, local translation. The first implementation will translate through a selectable TranslateGemma model served by LM Studio while keeping model and runtime concerns behind explicit abstractions.
+LingvoLoc is a Windows-first desktop application for private, local translation with a selectable TranslateGemma model. It works in two modes and keeps model and runtime concerns behind explicit abstractions:
+
+- **LM Studio** (default): translates through the model loaded in LM Studio.
+- **Standalone**: no LM Studio needed. Choose a folder with `.gguf` models and a folder with a llama.cpp build, and LingvoLoc runs the model itself.
+
+![LingvoLoc main window](docs/screenshot.png)
 
 ## Setup
 
@@ -12,7 +17,17 @@ Install Node.js 22+, Rust, WebView2, and the Windows C++ build tools. Then run:
 npm install
 ```
 
-LM Studio should expose its OpenAI-compatible API at `http://127.0.0.1:1234/v1`.
+In LM Studio mode, LM Studio should expose its OpenAI-compatible API at `http://127.0.0.1:1234/v1`.
+
+### Standalone mode
+
+Open **Settings** (gear icon, top right), set **Mode** to `Standalone (llama.cpp)`, and:
+
+1. Download a Windows build of llama.cpp from <https://github.com/ggml-org/llama.cpp/releases>. Open the newest `bNNNNN` release and take `llama-bNNNNN-bin-win-vulkan-x64.zip` (any GPU), `...-cpu-x64.zip` (no GPU), or `...-cuda-...-x64.zip` plus the matching `cudart-...` zip (NVIDIA; unzip both into the same folder).
+2. Unzip it and choose that folder as the **llama.cpp folder**; LingvoLoc finds `llama-server.exe` inside. `Check` shows the detected version.
+3. Choose the **Models folder** containing your `.gguf` files and pick a model in the main window.
+
+LingvoLoc starts `llama-server` on a free local port when the first translation runs (the first translation is slower while the model loads), restarts it when you switch models, and stops it on exit.
 
 ## Usage
 
@@ -29,7 +44,7 @@ Run `npm test` for Vitest and `cargo test --manifest-path apps/desktop/src-tauri
 
 To build the compact lexical index from downloaded source files, run `npm run lexical:index -- --stardict-dir <directory> --stardict-dir <directory> --output <index.json>`. The converter accepts FreeDict StarDict directories, Kaikki JSONL (`--kaikki-language <code>`), and a tab-separated morphology file with `lemma<TAB>form` rows (`--morphology-language <code>`). It keeps language and lemma as separate identity fields, so additional legally compatible language pairs can be added without collisions. It preserves definitions, examples, forms, translations, and provider labels; retain the upstream license and attribution notices alongside the generated index.
 
-Use `Choose folder` in the Dictionary lookup `Dictionary setup` section to select the directory containing your StarDict dictionary folders. Extract each archive into its own subdirectory, preserving `.ifo`, `.idx` or `.idx.gz`, and `.dict` or `.dict.dz`; keep referenced media files such as `.wav`, `.mp3`, `.ogg`, `.flac`, `.m4a`, `.aac`, `.jpg`, `.jpeg`, `.png`, `.gif`, or `.webp` beside the dictionary data, or keep them in the dictionary's `res.zip`. Then press `Refresh dictionaries` and enable the dictionaries with checkboxes. The lookup scans only enabled dictionaries selected by the user. Audio controls and images are loaded on demand when a dictionary entry references available media. LingvoLoc no longer creates or uses an app-data dictionary directory.
+Use `Choose folder` in the **Dictionaries** window (book icon, top right) to select the directory containing your StarDict dictionary folders. Extract each archive into its own subdirectory, preserving `.ifo`, `.idx` or `.idx.gz`, and `.dict` or `.dict.dz`; keep referenced media files such as `.wav`, `.mp3`, `.ogg`, `.flac`, `.m4a`, `.aac`, `.jpg`, `.jpeg`, `.png`, `.gif`, or `.webp` beside the dictionary data, or keep them in the dictionary's `res.zip`. Then press `Refresh dictionaries` and enable the dictionaries with checkboxes. The lookup scans only enabled dictionaries selected by the user; parsed dictionaries are cached in memory and reloaded when their files change. The `Additional` section with the dictionary lookup opens automatically when a lookup starts. Audio controls and images are loaded on demand when a dictionary entry references available media. LingvoLoc no longer creates or uses an app-data dictionary directory.
 
 The native executable and NSIS installer build successfully on this machine with the branded LingvoLoc icon. The Chromium extension is packaged with `npm run extension:package` and uses the local loopback API after pairing. Its source and target languages are independent from desktop settings; the context-menu popup is in-page, movable, resizable, and supports copying the result.
 

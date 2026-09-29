@@ -17,6 +17,9 @@ import { targetForDetectedLanguage } from '../lib/languagePair';
 import TextSizeControls from './TextSizeControls';
 
 const defaultSettings: Settings = {
+  runtimeMode: 'lmStudio',
+  modelsDirectory: '',
+  llamaServerPath: '',
   endpoint: 'http://127.0.0.1:1234/v1',
   modelId: '',
   adapterId: 'translategemma',

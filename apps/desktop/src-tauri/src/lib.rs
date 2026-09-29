@@ -5,8 +5,8 @@ mod runtimes;
 mod services;
 
 use domain::{
-    DetectedLanguage, LocalModel, RuntimeError, RuntimeStatus, Settings, TranslationRequest,
-    TranslationResult,
+    DetectedLanguage, LocalModel, RuntimeError, RuntimeMode, RuntimeStatus, Settings,
+    TranslationRequest, TranslationResult,
 };
 use services::{
     history::{HistoryEntry, HistoryStore},
@@ -31,6 +31,9 @@ impl AppState {
     fn new(history: HistoryStore) -> Self {
         Self {
             settings: Mutex::new(Settings {
+                runtime_mode: RuntimeMode::LmStudio,
+                models_directory: String::new(),
+                llama_server_path: String::new(),
                 endpoint: "http://127.0.0.1:1234/v1".into(),
                 model_id: String::new(),
                 adapter_id: "translategemma".into(),
@@ -68,17 +71,17 @@ fn write_clipboard(text: String) -> Result<(), RuntimeError> {
         .map_err(|error| RuntimeError::Connection(format!("clipboard: {error}")))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_runtime_status(state: tauri::State<'_, AppState>) -> Result<RuntimeStatus, RuntimeError> {
     translation::status(&settings(&state)?)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_models(state: tauri::State<'_, AppState>) -> Result<Vec<LocalModel>, RuntimeError> {
     translation::list_models(&settings(&state)?)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn translate(
     state: tauri::State<'_, AppState>,
     request: TranslationRequest,
@@ -121,12 +124,31 @@ fn update_settings(
     Ok(next)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
+fn check_llama_server(path: String) -> Result<String, RuntimeError> {
+    runtimes::llama_server::check_server(&path)
+}
+
+#[tauri::command(async)]
+fn locate_llama_server(directory: String) -> Result<String, RuntimeError> {
+    runtimes::llama_server::find_in_directory(std::path::Path::new(directory.trim()))
+        .map(|path| path.display().to_string())
+        .ok_or_else(|| {
+            RuntimeError::InvalidInput("llama-server.exe was not found in that folder".into())
+        })
+}
+
+#[tauri::command(async)]
+fn find_llama_server() -> Option<String> {
+    runtimes::llama_server::find_on_path().map(|path| path.display().to_string())
+}
+
+#[tauri::command(async)]
 fn detect_language(text: String) -> Result<DetectedLanguage, RuntimeError> {
     services::detection::detect_supported_language(&text)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_history(
     state: tauri::State<'_, AppState>,
     query: Option<String>,
@@ -139,7 +161,7 @@ fn list_history(
         .list_page(query.as_deref(), 20, offset.unwrap_or(0))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn clear_history(state: tauri::State<'_, AppState>) -> Result<(), RuntimeError> {
     state
         .history
@@ -161,7 +183,7 @@ fn set_history_favorite(
         .set_favorite(id, favorite)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn export_history(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
@@ -193,7 +215,7 @@ fn take_clipboard_request(
         .map(|mut value| value.take())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn lookup_lexicon(
     query: String,
     language: Option<String>,
@@ -211,13 +233,13 @@ fn lookup_lexicon(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn read_dictionary_media(directory: String, resource: String) -> Result<String, RuntimeError> {
     services::lexical::read_media_data_uri(std::path::Path::new(&directory), &resource)
         .map_err(RuntimeError::InvalidInput)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_user_dictionaries(
     directory: Option<String>,
 ) -> Result<Vec<services::lexical::UserDictionary>, RuntimeError> {
@@ -228,7 +250,7 @@ fn list_user_dictionaries(
     Ok(services::lexical::list_user_dictionaries(&directory))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn translate_word(
     state: tauri::State<'_, AppState>,
     request: TranslationRequest,
@@ -379,6 +401,9 @@ pub fn run() {
             write_clipboard,
             update_settings,
             detect_language,
+            check_llama_server,
+            find_llama_server,
+            locate_llama_server,
             list_history,
             clear_history,
             set_history_favorite,
@@ -389,8 +414,13 @@ pub fn run() {
             list_user_dictionaries,
             translate_word
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running LingvoLoc");
+        .build(tauri::generate_context!())
+        .expect("error while building LingvoLoc")
+        .run(|_app, event| {
+            if let tauri::RunEvent::Exit = event {
+                runtimes::llama_server::shutdown();
+            }
+        });
 }
 
 #[cfg(test)]

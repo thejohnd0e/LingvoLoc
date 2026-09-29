@@ -77,6 +77,12 @@ export interface TranslationRequest {
 
 export const getRuntimeStatus = () =>
   invokeNative<RuntimeStatus>('get_runtime_status');
+export const checkLlamaServer = (path: string) =>
+  invokeNative<string>('check_llama_server', { path });
+export const locateLlamaServer = (directory: string) =>
+  invokeNative<string>('locate_llama_server', { directory });
+export const findLlamaServer = () =>
+  invokeNative<string | null>('find_llama_server');
 export const getApiToken = () => invokeNative<string>('get_api_token');
 export const writeClipboard = (text: string) =>
   invokeNative<void>('write_clipboard', { text });

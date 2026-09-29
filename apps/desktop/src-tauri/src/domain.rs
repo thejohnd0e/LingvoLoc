@@ -37,9 +37,23 @@ pub struct DetectedLanguage {
     pub confidence: f64,
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum RuntimeMode {
+    #[default]
+    LmStudio,
+    Standalone,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
+    #[serde(default)]
+    pub runtime_mode: RuntimeMode,
+    #[serde(default)]
+    pub models_directory: String,
+    #[serde(default)]
+    pub llama_server_path: String,
     pub endpoint: String,
     pub model_id: String,
     pub adapter_id: String,
@@ -117,7 +131,7 @@ pub trait TranslationModelAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::Settings;
+    use super::{RuntimeMode, Settings};
 
     #[test]
     fn settings_use_frontend_camel_case_contract() {
@@ -135,5 +149,26 @@ mod tests {
         .expect("frontend settings should deserialize");
         assert_eq!(settings.model_id, "translategemma-4b-it@q8_0");
         assert_eq!(settings.secondary_language, "ru");
+        assert_eq!(settings.runtime_mode, RuntimeMode::LmStudio);
+    }
+
+    #[test]
+    fn settings_accept_standalone_mode() {
+        let settings: Settings = serde_json::from_str(
+            r#"{
+                "runtimeMode": "standalone",
+                "modelsDirectory": "D:/models",
+                "llamaServerPath": "D:/llama/llama-server.exe",
+                "endpoint": "http://127.0.0.1:1234/v1",
+                "modelId": "a.gguf",
+                "adapterId": "translategemma",
+                "sourceLanguage": "auto",
+                "targetLanguage": "ru",
+                "primaryLanguage": "en",
+                "secondaryLanguage": "ru"
+            }"#,
+        )
+        .expect("standalone settings should deserialize");
+        assert_eq!(settings.runtime_mode, RuntimeMode::Standalone);
     }
 }

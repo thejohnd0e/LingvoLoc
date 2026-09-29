@@ -1,10 +1,13 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
+use std::collections::{hash_map::DefaultHasher, HashMap};
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::io::{Cursor, Read};
-use std::path::Path;
-use std::sync::OnceLock;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::UNIX_EPOCH;
 use zip::ZipArchive;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -32,6 +35,13 @@ pub struct UserDictionary {
 }
 
 #[allow(dead_code)]
+const MAX_CACHED_DICTIONARIES: usize = 16;
+
+type CachedDictionary = (u64, Arc<Vec<LexicalEntry>>);
+
+/// Parsed StarDict folders, so a lookup does not decompress and re-parse every dictionary.
+static DICTIONARY_CACHE: Mutex<Option<HashMap<PathBuf, CachedDictionary>>> = Mutex::new(None);
+
 static FREEDICT_ENTRIES: OnceLock<Vec<LexicalEntry>> = OnceLock::new();
 
 #[allow(dead_code)]
@@ -282,12 +292,14 @@ pub fn lookup_with_user_directory(
         return Vec::new();
     }
 
-    let matches: Vec<LexicalEntry> = user_entries(user_directory, enabled_user_dictionaries)
-        .into_iter()
+    let matches: Vec<LexicalEntry> = user_entry_sets(user_directory, enabled_user_dictionaries)
+        .iter()
+        .flat_map(|set| set.iter())
         .filter(|entry| {
             language.is_none_or(|value| entry.language == value)
                 && (entry.lemma == normalized || entry.forms.iter().any(|form| form == &normalized))
         })
+        .cloned()
         .collect();
     if !matches.is_empty() {
         return merge_entries(matches);
@@ -301,7 +313,7 @@ pub fn list_user_dictionaries(user_directory: &Path) -> Vec<UserDictionary> {
         return Vec::new();
     };
     let mut dictionaries = Vec::new();
-    let root_entries = user_stardict_entries(user_directory);
+    let root_entries = cached_stardict_entries(user_directory);
     if let Some(entry) = root_entries.first() {
         dictionaries.push(UserDictionary {
             id: ".".into(),
@@ -318,7 +330,7 @@ pub fn list_user_dictionaries(user_directory: &Path) -> Vec<UserDictionary> {
             .filter_map(Result::ok)
             .filter(|file| file.path().is_dir())
             .filter_map(|file| {
-                let entries = user_stardict_entries(&file.path());
+                let entries = cached_stardict_entries(&file.path());
                 entries.first().map(|entry| UserDictionary {
                     id: file.file_name().to_string_lossy().to_string(),
                     name: entry
@@ -333,34 +345,71 @@ pub fn list_user_dictionaries(user_directory: &Path) -> Vec<UserDictionary> {
     dictionaries
 }
 
-fn user_entries(
+fn user_entry_sets(
     user_directory: Option<&Path>,
     enabled_user_dictionaries: Option<&[String]>,
-) -> Vec<LexicalEntry> {
+) -> Vec<Arc<Vec<LexicalEntry>>> {
     let Some(directory) = user_directory else {
         return Vec::new();
     };
     let Ok(files) = std::fs::read_dir(directory) else {
         return Vec::new();
     };
-    let mut entries = user_stardict_entries(directory);
-    entries.extend(
-        files
+    let mut sets = vec![cached_stardict_entries(directory)];
+    sets.extend(files.filter_map(Result::ok).filter_map(|file| {
+        let path = file.path();
+        let id = file.file_name().to_string_lossy().to_string();
+        (path.is_dir()
+            && enabled_user_dictionaries
+                .is_none_or(|enabled| enabled.iter().any(|value| value == &id)))
+        .then(|| cached_stardict_entries(&path))
+    }));
+    sets
+}
+
+/// Fingerprint of every file in a dictionary folder (name, size, modification time).
+fn dictionary_stamp(directory: &Path) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    if let Ok(files) = fs::read_dir(directory) {
+        let mut files: Vec<_> = files
             .filter_map(Result::ok)
-            .flat_map(|file| {
-                let path = file.path();
-                let id = file.file_name().to_string_lossy().to_string();
-                if path.is_dir()
-                    && enabled_user_dictionaries
-                        .is_none_or(|enabled| enabled.iter().any(|value| value == &id))
-                {
-                    user_stardict_entries(&path)
-                } else {
-                    Vec::new()
-                }
-            })
-            .collect::<Vec<_>>(),
-    );
+            .filter(|file| file.path().is_file())
+            .collect();
+        files.sort_by_key(|file| file.file_name());
+        for file in files {
+            file.file_name().hash(&mut hasher);
+            if let Ok(metadata) = file.metadata() {
+                metadata.len().hash(&mut hasher);
+                metadata
+                    .modified()
+                    .ok()
+                    .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+                    .map(|duration| duration.as_nanos())
+                    .hash(&mut hasher);
+            }
+        }
+    }
+    hasher.finish()
+}
+
+fn cached_stardict_entries(directory: &Path) -> Arc<Vec<LexicalEntry>> {
+    let stamp = dictionary_stamp(directory);
+    if let Ok(guard) = DICTIONARY_CACHE.lock() {
+        if let Some((cached_stamp, entries)) = guard.as_ref().and_then(|cache| cache.get(directory))
+        {
+            if *cached_stamp == stamp {
+                return Arc::clone(entries);
+            }
+        }
+    }
+    let entries = Arc::new(user_stardict_entries(directory));
+    if let Ok(mut guard) = DICTIONARY_CACHE.lock() {
+        let cache = guard.get_or_insert_with(HashMap::new);
+        if cache.len() >= MAX_CACHED_DICTIONARIES {
+            cache.clear();
+        }
+        cache.insert(directory.to_path_buf(), (stamp, Arc::clone(&entries)));
+    }
     entries
 }
 
@@ -881,6 +930,43 @@ mod tests {
         assert_eq!(entries[0].lemma, "дом");
         assert_eq!(entries[0].language, "ru");
         assert_eq!(entries[0].providers, vec!["rus-eng"]);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn cached_dictionary_reloads_when_files_change() {
+        let directory = std::env::temp_dir().join(format!(
+            "lingvoloc-cache-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let write_dictionary = |word: &str| {
+            let body = b"definition";
+            let mut index = word.as_bytes().to_vec();
+            index.push(0);
+            index.extend_from_slice(&0_u32.to_be_bytes());
+            index.extend_from_slice(&(body.len() as u32).to_be_bytes());
+            std::fs::write(directory.join("d.idx"), index).unwrap();
+            std::fs::write(directory.join("d.dict"), body).unwrap();
+            std::fs::write(
+                directory.join("d.ifo"),
+                "StarDict's dict ifo file\nbookname=eng-rus\n",
+            )
+            .unwrap();
+        };
+        write_dictionary("house");
+        let first = super::cached_stardict_entries(&directory);
+        assert!(std::sync::Arc::ptr_eq(
+            &first,
+            &super::cached_stardict_entries(&directory)
+        ));
+        assert_eq!(first[0].lemma, "house");
+        write_dictionary("garden");
+        let changed = super::cached_stardict_entries(&directory);
+        assert_eq!(changed[0].lemma, "garden");
         std::fs::remove_dir_all(directory).unwrap();
     }
 

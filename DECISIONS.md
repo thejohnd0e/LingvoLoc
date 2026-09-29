@@ -1,5 +1,26 @@
 # Decisions
 
+## Standalone Runtime
+
+- **Decision:** Add a `standalone` runtime mode next to LM Studio that spawns the user's `llama-server.exe` (llama.cpp) with a `.gguf` chosen from a user-selected models folder, and talks to it over the same OpenAI-compatible API on a free `127.0.0.1` port.
+- **Reason:** It reuses the existing `ModelRuntime`/adapter split and needs no C++ toolchain, while letting users pick the CPU/CUDA/Vulkan build that suits their hardware.
+- **Decision:** Do not bundle `llama-server.exe`; the settings screen holds its path, a Check button, short setup instructions, and a link to the llama.cpp releases page.
+- **Reason:** Binaries differ per GPU and are large; the user stays in control of the engine version and its license.
+- **Decision:** Standalone model ids are `.gguf` paths relative to the models folder (`mmproj` files and non-first split shards are skipped); one server process is kept and restarted when the model or executable changes, and it is killed on app exit.
+- **Reason:** Ids stay stable and cannot escape the selected folder; a single process bounds memory use.
+
+## Responsiveness
+
+- **Decision:** Mark every command that does I/O, HTTP, or dictionary parsing as `#[tauri::command(async)]` so it runs off the main (UI) thread, and show a spinner for each wait (translation, model refresh, dictionary lookup/scan, runtime check).
+- **Reason:** Synchronous Tauri commands run on the main thread; a slow lookup or a model that is still loading froze the window and Windows labelled it "Not Responding".
+- **Decision:** Cache parsed StarDict folders in memory, keyed by folder path and a fingerprint of the files' names, sizes, and modification times (at most 16 folders).
+- **Reason:** Every lookup used to decompress and re-parse every enabled dictionary. The cache trades memory for speed and reloads automatically when a dictionary file changes.
+
+## Settings Windows
+
+- **Decision:** Model runtime and dictionary folder settings live in modal windows opened by header icons (Settings, Dictionaries); the llama.cpp setting is a folder picker that locates `llama-server.exe` itself.
+- **Reason:** Keeps the main screen focused on translation and stops users from selecting the wrong executable (for example the new `llama.exe` launcher).
+
 ## Agent Documentation Structure
 
 - **Decision:** Use `AGENTS.md` as the authoritative shared instruction file. Keep `CLAUDE.md` as a pointer to it.

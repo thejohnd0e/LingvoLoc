@@ -6,6 +6,9 @@ import { useEffect, useRef, useState } from 'react';
 import {
   getRuntimeStatus,
   getApiToken,
+  checkLlamaServer,
+  findLlamaServer,
+  locateLlamaServer,
   listUserDictionaries,
   readDictionaryMedia,
   detectLanguage,
@@ -32,9 +35,14 @@ import {
 } from '../lib/settings';
 import { targetForDetectedLanguage } from '../lib/languagePair';
 import { highlightMatches } from './highlight';
+import Modal from './Modal';
+import Spinner from './Spinner';
 import TextSizeControls from './TextSizeControls';
 
 const defaultSettings: Settings = {
+  runtimeMode: 'lmStudio',
+  modelsDirectory: '',
+  llamaServerPath: '',
   endpoint: 'http://127.0.0.1:1234/v1',
   modelId: '',
   adapterId: 'translategemma',
@@ -145,7 +153,7 @@ export default function App() {
   const [source, setSource] = useState('');
   const [translation, setTranslation] = useState('');
   const [models, setModels] = useState<LocalModel[]>([]);
-  const [status, setStatus] = useState('Checking LM Studio…');
+  const [status, setStatus] = useState('Checking runtime…');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [latency, setLatency] = useState<number | null>(null);
@@ -169,6 +177,12 @@ export default function App() {
     loadEnabledDictionaries,
   );
   const [translationHighlight, setTranslationHighlight] = useState('');
+  const [serverCheck, setServerCheck] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [dictionariesOpen, setDictionariesOpen] = useState(false);
+  const [additionalOpen, setAdditionalOpen] = useState(false);
+  const [lexicalBusy, setLexicalBusy] = useState(false);
+  const [dictionariesBusy, setDictionariesBusy] = useState(false);
   const sourceInputRef = useRef<HTMLTextAreaElement>(null);
   const settingsRef = useRef(settings);
   const lexicalRequestId = useRef(0);
@@ -177,6 +191,10 @@ export default function App() {
     async () => undefined,
   );
   settingsRef.current = settings;
+  const runtimeLabel =
+    settings.runtimeMode === 'standalone' ? 'Standalone' : 'LM Studio';
+  const runtimeLabelRef = useRef(runtimeLabel);
+  runtimeLabelRef.current = runtimeLabel;
 
   useEffect(() => {
     document.documentElement.style.setProperty(
@@ -187,16 +205,27 @@ export default function App() {
   }, [textScale]);
 
   useEffect(() => {
-    void Promise.allSettled([getRuntimeStatus(), listModels(), listHistory()])
+    // Native settings must be current before the runtime is queried, otherwise a
+    // freshly started app would list models for the default LM Studio mode.
+    void updateNativeSettings(settingsRef.current)
+      .catch(() => undefined)
+      .then(() =>
+        Promise.allSettled([getRuntimeStatus(), listModels(), listHistory()]),
+      )
       .then(([runtimeResult, modelsResult, historyResult]) => {
         if (runtimeResult.status === 'fulfilled') {
           setStatus(runtimeResult.value.detail);
         } else {
-          setStatus(`LM Studio error · ${errorDetail(runtimeResult.reason)}`);
+          setStatus(
+            `${runtimeLabelRef.current} error · ${errorDetail(runtimeResult.reason)}`,
+          );
         }
         if (modelsResult.status === 'fulfilled') {
           const availableModels = modelsResult.value;
           setModels(availableModels);
+          setError((current) =>
+            current.startsWith('Model list error') ? '' : current,
+          );
           const savedModel = availableModels.find(
             (model) => model.id === settingsRef.current.modelId,
           )?.id;
@@ -228,7 +257,12 @@ export default function App() {
           window.setTimeout(() => void fitWindowToContent(), delay);
         });
       });
-  }, [settings.modelId]);
+  }, [
+    settings.modelId,
+    settings.runtimeMode,
+    settings.modelsDirectory,
+    settings.llamaServerPath,
+  ]);
 
   useEffect(() => {
     void refreshUserDictionaries(loadDictionaryPath());
@@ -297,6 +331,9 @@ export default function App() {
       });
       setTranslation(result.text);
       setLatency(result.latency_ms);
+      void getRuntimeStatus()
+        .then((runtime) => setStatus(runtime.detail))
+        .catch(() => undefined);
       try {
         await writeClipboard(result.text);
         setNotice('Translation copied to clipboard.');
@@ -363,9 +400,9 @@ export default function App() {
     try {
       const availableModels = await listModels();
       setModels(availableModels);
-      setStatus(`LM Studio · ${availableModels.length} models`);
-    } catch {
-      setStatus('LM Studio is unavailable');
+      setStatus(`${runtimeLabel} · ${availableModels.length} models`);
+    } catch (reason) {
+      setStatus(`${runtimeLabel} unavailable · ${errorDetail(reason)}`);
     } finally {
       setRefreshing(false);
     }
@@ -470,6 +507,8 @@ export default function App() {
     const requestId = ++lexicalRequestId.current;
     setLexicalResults([]);
     setLexicalMessage('Looking up…');
+    setLexicalBusy(true);
+    setAdditionalOpen(true);
     try {
       const entries = await lookupLexicon(
         query,
@@ -478,6 +517,7 @@ export default function App() {
         selectedDictionaryPath,
       );
       if (requestId !== lexicalRequestId.current) return;
+      setLexicalBusy(false);
       setLexicalQuery(query);
       setLexicalResults(entries);
       setLexicalMessage(
@@ -489,12 +529,14 @@ export default function App() {
       if (requestId !== lexicalRequestId.current) return;
       setLexicalResults([]);
       setLexicalMessage('Local dictionary is unavailable.');
+      setLexicalBusy(false);
     }
   }
 
   async function refreshUserDictionaries(
     directory = selectedDictionaryPath,
   ): Promise<UserDictionary[]> {
+    setDictionariesBusy(true);
     try {
       const dictionaries = await listUserDictionaries(directory);
       setUserDictionaries(dictionaries);
@@ -515,12 +557,58 @@ export default function App() {
     } catch (reason) {
       setLexicalMessage(`Dictionary refresh failed · ${errorDetail(reason)}`);
       return [];
+    } finally {
+      setDictionariesBusy(false);
     }
+  }
+
+  function changeRuntimeMode(runtimeMode: Settings['runtimeMode']) {
+    setModels([]);
+    setServerCheck('');
+    updateSettings({ runtimeMode, modelId: '' });
+  }
+
+  async function chooseModelsFolder() {
+    const selected = await open({ directory: true, multiple: false });
+    if (typeof selected !== 'string') return;
+    updateSettings({ modelsDirectory: selected, modelId: '' });
+  }
+
+  async function verifyLlamaServer(path: string) {
+    setServerCheck('Checking…');
+    try {
+      setServerCheck(`OK · ${await checkLlamaServer(path)}`);
+    } catch (reason) {
+      setServerCheck(`Check failed · ${errorDetail(reason)}`);
+    }
+  }
+
+  async function chooseLlamaFolder() {
+    const selected = await open({ directory: true, multiple: false });
+    if (typeof selected !== 'string') return;
+    try {
+      const executable = await locateLlamaServer(selected);
+      updateSettings({ llamaServerPath: executable });
+      await verifyLlamaServer(executable);
+    } catch (reason) {
+      setServerCheck(errorDetail(reason));
+    }
+  }
+
+  async function detectLlamaServer() {
+    const found = await findLlamaServer().catch(() => null);
+    if (!found) {
+      setServerCheck('llama-server.exe was not found in PATH.');
+      return;
+    }
+    updateSettings({ llamaServerPath: found });
+    await verifyLlamaServer(found);
   }
 
   async function chooseDictionaryFolder() {
     const selected = await open({ directory: true, multiple: false });
     if (typeof selected !== 'string') return;
+    setAdditionalOpen(true);
     setSelectedDictionaryPath(selected);
     localStorage.setItem(dictionaryPathKey, selected);
     const dictionaries = await refreshUserDictionaries(selected);
@@ -545,13 +633,24 @@ export default function App() {
     const requestId = ++lexicalRequestId.current;
     setLexicalResults([]);
     setLexicalMessage('Looking up…');
-    const entries = await lookupLexicon(
-      word,
-      undefined,
-      enabledDictionaries,
-      selectedDictionaryPath,
-    );
+    setLexicalBusy(true);
+    setAdditionalOpen(true);
+    let entries: LexicalEntry[];
+    try {
+      entries = await lookupLexicon(
+        word,
+        undefined,
+        enabledDictionaries,
+        selectedDictionaryPath,
+      );
+    } catch {
+      if (requestId !== lexicalRequestId.current) return;
+      setLexicalBusy(false);
+      setLexicalMessage('Local dictionary is unavailable.');
+      return;
+    }
     if (requestId !== lexicalRequestId.current) return;
+    setLexicalBusy(false);
     setLexicalQuery(word);
     setLexicalResults(entries);
     setLexicalMessage(
@@ -654,17 +753,68 @@ export default function App() {
             </a>
           </p>
         </div>
-        <div className="masthead-actions">
-          <TextSizeControls value={textScale} onChange={setTextScale} />
-          <button
-            className="quiet"
-            type="button"
-            title="Copy the token used to pair the Chrome extension"
-            onClick={() => void copyExtensionToken()}
-          >
-            Pair Chrome extension
-          </button>
-          <span className="status-pill">{status}</span>
+        <div className="masthead-side">
+          <div className="masthead-icons">
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Dictionaries"
+              title="Dictionaries"
+              onClick={() => setDictionariesOpen(true)}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+              </svg>
+            </button>
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Settings"
+              title="Settings"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
+          </div>
+          <div className="masthead-actions">
+            <TextSizeControls value={textScale} onChange={setTextScale} />
+            <button
+              className="quiet"
+              type="button"
+              title="Copy the token used to pair the Chrome extension"
+              onClick={() => void copyExtensionToken()}
+            >
+              Pair Chrome extension
+            </button>
+            <span className="status-pill">
+              {status.startsWith('Checking') && <Spinner />}
+              {status}
+            </span>
+          </div>
         </div>
       </header>
       <section className="workspace" aria-label="Translation workspace">
@@ -684,7 +834,11 @@ export default function App() {
               );
             }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+              if (
+                event.key === 'Enter' &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
                 event.preventDefault();
                 void runTranslation();
               }
@@ -848,7 +1002,11 @@ export default function App() {
                 updateSettings({ modelId: event.target.value })
               }
             >
-              <option value="">Select from LM Studio</option>
+              <option value="">
+                {settings.runtimeMode === 'standalone'
+                  ? 'Select a .gguf model'
+                  : 'Select from LM Studio'}
+              </option>
               {models.map((model) => (
                 <option key={model.id} value={model.id}>
                   {model.id}
@@ -863,7 +1021,7 @@ export default function App() {
               disabled={refreshing}
               onClick={() => void refreshModels()}
             >
-              <span aria-hidden="true">{refreshing ? '…' : '↻'}</span>
+              <span aria-hidden="true">{refreshing ? <Spinner /> : '↻'}</span>
             </button>
           </div>
         </div>
@@ -872,20 +1030,209 @@ export default function App() {
           disabled={loading || !settings.modelId}
           onClick={() => void runTranslation()}
         >
-          {loading ? 'Translating…' : 'Translate'} <span>Ctrl + Enter</span>
+          {loading && <Spinner />}
+          {loading ? 'Translating…' : 'Translate'} <span>Enter</span>
         </button>
       </section>
       <div className="feedback" role="status">
-        {error ||
-          notice ||
-          historyMessage ||
-          (latency === null
-            ? 'Local runtime · no request yet'
-            : `Local runtime · ${latency} ms · ${settings.modelId}`)}
+        {loading && <Spinner />}
+        {loading
+          ? settings.runtimeMode === 'standalone'
+            ? 'Translating… the model may still be loading'
+            : 'Translating…'
+          : error ||
+            notice ||
+            historyMessage ||
+            (latency === null
+              ? 'Local runtime · no request yet'
+              : `Local runtime · ${latency} ms · ${settings.modelId}`)}
         {detectedLanguage ? ` · detected ${detectedLanguage}` : ''}
       </div>
-      <details className="additional-options">
-        <summary>Additional options</summary>
+      {settingsOpen && (
+        <Modal title="Settings" onClose={() => setSettingsOpen(false)}>
+          <section className="runtime-panel" aria-label="Model runtime">
+            <span className="panel-label">MODEL RUNTIME</span>
+            <label className="runtime-mode">
+              <b>Mode</b>
+              <select
+                value={settings.runtimeMode}
+                onChange={(event) =>
+                  changeRuntimeMode(
+                    event.target.value as Settings['runtimeMode'],
+                  )
+                }
+              >
+                <option value="lmStudio">LM Studio</option>
+                <option value="standalone">Standalone (llama.cpp)</option>
+              </select>
+            </label>
+            {settings.runtimeMode === 'standalone' ? (
+              <>
+                <div className="runtime-row">
+                  <button
+                    className="translate"
+                    type="button"
+                    onClick={() => void chooseModelsFolder()}
+                  >
+                    Choose folder
+                  </button>
+                  <div>
+                    <b>Models folder</b>
+                    <code>
+                      {settings.modelsDirectory || 'No folder selected'}
+                    </code>
+                  </div>
+                </div>
+                <div className="runtime-row">
+                  <button
+                    className="translate"
+                    type="button"
+                    onClick={() => void chooseLlamaFolder()}
+                  >
+                    Choose folder
+                  </button>
+                  <div>
+                    <b>llama.cpp folder</b>
+                    <code>
+                      {settings.llamaServerPath ||
+                        'Not selected (PATH is used)'}
+                    </code>
+                    <div className="runtime-buttons">
+                      <button
+                        className="quiet"
+                        type="button"
+                        onClick={() => void detectLlamaServer()}
+                      >
+                        Find in PATH
+                      </button>
+                      <button
+                        className="quiet"
+                        type="button"
+                        onClick={() =>
+                          void verifyLlamaServer(settings.llamaServerPath)
+                        }
+                      >
+                        Check
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {serverCheck && (
+                  <p className="runtime-check" role="status">
+                    {serverCheck === 'Checking…' && <Spinner />}
+                    {serverCheck}
+                  </p>
+                )}
+                <div className="runtime-help">
+                  <b>How to set up</b>
+                  <ol>
+                    <li>
+                      Download a Windows build of llama.cpp from{' '}
+                      <a
+                        className="external-link"
+                        href="https://github.com/ggml-org/llama.cpp/releases"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          void openUrl(event.currentTarget.href);
+                        }}
+                      >
+                        https://github.com/ggml-org/llama.cpp/releases
+                      </a>{' '}
+                      (open the newest <code>bNNNNN</code> release, Assets, and
+                      download <code>llama-bNNNNN-bin-win-vulkan-x64.zip</code>{' '}
+                      for any GPU, <code>…-cpu-x64.zip</code> without a GPU, or{' '}
+                      <code>…-cuda-…-x64.zip</code> for NVIDIA plus the matching{' '}
+                      <code>cudart-…</code> zip).
+                    </li>
+                    <li>
+                      Unzip it into one folder (both zips into the same folder
+                      for CUDA) and choose that folder above.
+                    </li>
+                    <li>
+                      Choose the folder with your .gguf models and pick one in
+                      the Model list. The first translation is slower while the
+                      model loads.
+                    </li>
+                  </ol>
+                </div>
+              </>
+            ) : (
+              <p className="runtime-note">
+                Translation uses the model loaded in LM Studio at{' '}
+                <code>{settings.endpoint}</code>.
+              </p>
+            )}
+          </section>
+        </Modal>
+      )}
+      {dictionariesOpen && (
+        <Modal title="Dictionaries" onClose={() => setDictionariesOpen(false)}>
+          <section className="runtime-panel" aria-label="Dictionary folder">
+            <span className="panel-label">STARDICT DICTIONARIES</span>
+            <div className="runtime-row">
+              <button
+                className="translate"
+                type="button"
+                onClick={() => void chooseDictionaryFolder()}
+              >
+                Choose folder
+              </button>
+              <div>
+                <b>Dictionaries folder</b>
+                <code>{selectedDictionaryPath || 'No folder selected'}</code>
+                <div className="runtime-buttons">
+                  <button
+                    className="quiet"
+                    type="button"
+                    disabled={dictionariesBusy}
+                    onClick={() => {
+                      setAdditionalOpen(true);
+                      void refreshUserDictionaries(selectedDictionaryPath);
+                    }}
+                  >
+                    Refresh dictionaries
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p className="runtime-note">
+              Choose the folder where you keep dictionary folders. Each
+              dictionary needs its .ifo, .idx and .dict or .dict.dz files.
+            </p>
+            {dictionariesBusy && (
+              <p className="runtime-check" role="status">
+                <Spinner />
+                Scanning dictionaries…
+              </p>
+            )}
+            <div className="dictionary-list">
+              {userDictionaries.length ? (
+                userDictionaries.map((dictionary) => (
+                  <label key={dictionary.id}>
+                    <input
+                      type="checkbox"
+                      checked={enabledDictionaries.includes(dictionary.id)}
+                      onChange={() => toggleUserDictionary(dictionary.id)}
+                    />
+                    <span>
+                      {dictionary.name} ·{' '}
+                      {dictionary.entry_count.toLocaleString()} entries
+                    </span>
+                  </label>
+                ))
+              ) : (
+                <span>No dictionaries detected.</span>
+              )}
+            </div>
+          </section>
+        </Modal>
+      )}
+      <details
+        className="additional-options"
+        open={additionalOpen}
+        onToggle={(event) => setAdditionalOpen(event.currentTarget.open)}
+      >
+        <summary>Additional</summary>
         <section className="lexical" aria-label="Dictionary lookup">
           <div className="lexical-heading">
             <div>
@@ -919,58 +1266,12 @@ export default function App() {
               </button>
             </div>
           </div>
-          {lexicalMessage && (
-            <p className="lexical-message">{lexicalMessage}</p>
+          {(lexicalMessage || lexicalBusy) && (
+            <p className="lexical-message" role="status">
+              {lexicalBusy && <Spinner />}
+              {lexicalMessage}
+            </p>
           )}
-          <details className="dictionary-setup">
-            <summary>Dictionary setup</summary>
-            <div className="dictionary-sources">
-              <div>
-                <b>Your StarDict dictionaries</b>
-                <p>
-                  Choose the folder where you keep dictionary folders. Each
-                  dictionary needs its `.ifo`, `.idx` and `.dict` or `.dict.dz`
-                  files.
-                </p>
-                <code>{selectedDictionaryPath || 'No folder selected'}</code>
-                <div className="dictionary-list">
-                  {userDictionaries.length ? (
-                    userDictionaries.map((dictionary) => (
-                      <label key={dictionary.id}>
-                        <input
-                          type="checkbox"
-                          checked={enabledDictionaries.includes(dictionary.id)}
-                          onChange={() => toggleUserDictionary(dictionary.id)}
-                        />
-                        <span>
-                          {dictionary.name} ·{' '}
-                          {dictionary.entry_count.toLocaleString()} entries
-                        </span>
-                      </label>
-                    ))
-                  ) : (
-                    <span>No dictionaries detected.</span>
-                  )}
-                </div>
-              </div>
-              <button
-                className="translate"
-                type="button"
-                onClick={() => void chooseDictionaryFolder()}
-              >
-                Choose folder
-              </button>
-              <button
-                className="quiet"
-                type="button"
-                onClick={() =>
-                  void refreshUserDictionaries(selectedDictionaryPath)
-                }
-              >
-                Refresh dictionaries
-              </button>
-            </div>
-          </details>
           {lexicalResults.length > 0 && (
             <details className="lexical-results-disclosure" open>
               <summary>Dictionary results ({lexicalResults.length})</summary>

@@ -90,7 +90,7 @@ textarea {
 .masthead {
   display: flex;
   justify-content: space-between;
-  align-items: end;
+  align-items: stretch;
   gap: 24px;
   margin-bottom: 34px;
 }
@@ -716,5 +716,144 @@ textarea:focus {
     min-height: 34px;
     border: 1px solid #36545a;
     border-radius: 5px;
+  }
+}
+.external-link {
+  color: #c7f36b;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #29434c;
+  border-radius: 6px;
+  background: #172b34;
+  color: #c7f36b;
+  cursor: pointer;
+}
+.icon-button:hover {
+  border-color: #3b6470;
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px;
+  overflow-y: auto;
+  background: rgba(4, 12, 16, 0.72);
+}
+.modal {
+  width: min(680px, 100%);
+  padding: 22px;
+  border: 1px solid #29434c;
+  border-radius: 8px;
+  background: #10222b;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.runtime-panel {
+  display: grid;
+  gap: 16px;
+  color: #c4d2d1;
+  font-size: 0.85rem;
+}
+.runtime-mode {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.runtime-note {
+  margin: 0;
+  color: #8fa7a8;
+}
+.runtime-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+.runtime-row .translate {
+  width: 100%;
+  margin-left: 0;
+}
+.runtime-row code {
+  display: block;
+  margin: 4px 0 6px;
+  color: #b6d4bc;
+  overflow-wrap: anywhere;
+}
+.runtime-buttons {
+  display: flex;
+  gap: 16px;
+}
+.runtime-check {
+  margin: 0;
+  color: #86b8ad;
+  overflow-wrap: anywhere;
+}
+.runtime-help ol {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  color: #8fa7a8;
+}
+.runtime-help li {
+  margin-bottom: 6px;
+}
+@media (max-width: 560px) {
+  .runtime-row {
+    grid-template-columns: 1fr;
+  }
+}
+.masthead-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+.masthead-icons {
+  display: flex;
+  gap: 8px;
+}
+.spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: 8px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.15em;
+  animation: spin 0.8s linear infinite;
+}
+.refresh .spinner {
+  margin-right: 0;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.4s;
   }
 }
