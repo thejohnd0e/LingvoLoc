@@ -3,7 +3,7 @@
 ## Current Release
 
 - Version `2.0.5` is the current release across the root, desktop, extension, Tauri, Cargo, and extension packaging metadata.
-- The last recorded release gate passed: `npm run check`, `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`, and `npm run desktop:build`.
+- `v2.0.5` is published on GitHub Releases (installer and extension ZIP attached). The last recorded release gate passed: `npm run check`, `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`, and `npm run desktop:build`.
 - Release artifacts are `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_2.0.5_x64-setup.exe` and `apps/extension/LingvoLoc-extension-2.0.5.zip`.
 
 ## Completed
@@ -13,26 +13,34 @@
 - Dictionary lookup uses only user-selected StarDict folders. Dictionary selection is persisted; `.dict.dz`, common audio/image references, and `res.zip` media are supported. Bundled and app-data dictionary fallbacks are intentionally not used.
 - Translation word selection supports model-assisted forward and reverse highlighting without adding word requests to translation history.
 - The desktop and extension have responsive layouts, visible focus states, persisted text-size controls, and current LingvoLoc branding.
+- 2.0.5 work: Standalone is the default mode; Settings has Download/Update llama.cpp (GPU-aware, fixed install folder, up-to-date message), a GPU support row with the device in use, Add to PATH, and separate Model runtime / Dictionaries / Browser extension sections; the tray menu was reworked (see below); clipboard popup translation was fixed; user-dictionary articles are separate named cards; the extension overlay is fluid and opens from the toolbar button, with a detach-to-window button; the installer installs WebView2 when missing and links the C runtime statically.
 - Agent handoff guidance in `AGENTS.md` now records the repository shape, authoritative commands, runtime constraints, and version-update requirements.
 
 ## Currently Works
 
-- Standalone mode (default; Settings window): press Download llama.cpp (GPU-appropriate build fetched automatically, with progress), choose a models folder, pick a `.gguf`, and translate without LM Studio. An existing llama.cpp folder can still be chosen under Advanced. The download flow has unit tests for asset selection but has not been exercised end to end against GitHub yet. `llama-server` is started with `--no-jinja --chat-template gemma` because TranslateGemma's embedded Jinja template rejects plain-text messages and some conversions fall back to ChatML. Verified manually on Windows with llama.cpp build b11243 (CUDA 13.4, RTX 3060) using TranslateGemma 4B Q8_0 and 12B Q4_K_S.
-- Blocking native commands run off the UI thread and parsed StarDict folders are cached, so lookups no longer freeze the window; waits show a spinner. Dictionary and runtime settings open from header icons.
+- Standalone mode (default; Settings window): press Download llama.cpp (GPU-appropriate build fetched automatically, with progress), choose a models folder, pick a `.gguf`, and translate without LM Studio. An existing llama.cpp folder can still be chosen under Advanced. The download flow has unit tests for asset selection and was confirmed on an NVIDIA machine (CUDA build, fixed folder). `llama-server` is started with `--no-jinja --chat-template gemma` because TranslateGemma's embedded Jinja template rejects plain-text messages and some conversions fall back to ChatML. Verified manually on Windows with llama.cpp build b11243 (CUDA 13.4, RTX 3060) using TranslateGemma 4B Q8_0 and 12B Q4_K_S.
+- Blocking native commands run off the UI thread and parsed StarDict folders are cached, so lookups no longer freeze the window; waits show a spinner. Dictionary, runtime, and extension-token settings live in the Settings window.
 
 - `npm run dev`, `npm run desktop:dev`, desktop frontend builds, native Tauri/NSIS builds, and extension build/package commands are established in the root `package.json`.
 - LM Studio model discovery uses loaded instances from `/api/v1/models`, with a cache-busted `/v1/models` fallback for older versions. Startup restores and validates the persisted model for desktop and extension requests.
 - History supports paging, search highlighting, favorites, CSV export, clear, schema migration, and retention of 1,000 non-favorite rows.
+- Extension: the toolbar button and the context menu open the same movable, resizable in-page overlay (right/bottom/corner handles, size remembered); the detach button (⧉) moves the content to a separate browser window that survives tab switches; restricted pages fall back to that window. Clipboard copy in the overlay no longer logs permission-policy errors.
+- Status pill: shows `Standalone · ready · <model file>` before the first translation and `Standalone · running <model>` after it. `llama-server` is started lazily on the first translation (not at app start); a "load model at startup" option was considered and declined.
 - The desktop executable runs without a console window. Closing hides it to the tray; relaunching a pinned shortcut focuses the existing process.
 - Tray menu: Open LingvoLoc (Ctrl+Shift+L), Translate clipboard (Ctrl+Shift+T), Settings… (opens the settings window), Start with Windows (checkbox; per-user `HKCU\...\Run` value launching the app with `--tray` so the main window stays hidden), Quit. Left-click toggles the main window. The autostart toggle has not been exercised end to end.
 - Extension API tests and desktop TypeScript/Rust tests are part of `npm run check`.
 
 ## In Progress
 
-- No product implementation is currently in progress in the worktree.
+- No implementation is in progress; the worktree is clean at release `v2.0.5`.
 - The next product area is dictionary quality. The current generic StarDict parser renders cleaned record content but assigns `language: "und"` and `part_of_speech: "User dictionary"`; it now maps the source language from `bookname`/file name (falls back to `und`), but does not yet reliably split rich `rus-eng` records into structured senses and fields.
 
 ## Known Issues And Blockers
+
+- Not yet verified on real hardware or a clean machine: the Download llama.cpp flow on AMD/Intel/no-GPU machines (on the maintainer's NVIDIA machine it produced the fixed `llama.cpp/` folder with `version.txt` = `b11247 CUDA`), the Start with Windows toggle, the Add to PATH button in a fresh profile, the installer on a machine without WebView2, and the `+crt-static` build on other machines. Layout changes (header, dictionary cards, extension overlay) were checked by the user on one machine only.
+- The integrated-GPU name list in `runtimes/llama_server.rs` (`is_integrated`) is heuristic; an unusual integrated GPU could be preferred over a discrete Vulkan card.
+- The `Start with Windows` registry value stores the executable path; after moving the install folder the checkbox must be toggled off and on. The installer has no uninstall hook that removes the value.
+- The extension archive for a version is tracked in git; release ZIPs for released versions must not be repackaged (`npm run extension:package` overwrites `LingvoLoc-extension-<version>.zip`).
 
 - In LM Studio mode, LM Studio must be running at `http://127.0.0.1:1234/v1` with a compatible model loaded; in Standalone mode llama.cpp must be downloaded (or an existing folder chosen) and a models folder selected. Translation and extension requests otherwise fail.
 - Native builds require Rust, WebView2, and Windows C++ build tools/Windows SDK. Visual Studio provides the compiler tools on this machine, but they may not be on the general `PATH`.
@@ -45,9 +53,13 @@
 
 ## Next Recommended Step
 
-- Add language metadata mapping and representative `rus-eng` fixture tests around `user_stardict_entries` and `parse_stardict_index_with_audio` in `apps/desktop/src-tauri/src/services/lexical.rs`. Then improve record parsing only as needed to make those fixtures produce stable definitions, translations, examples, and sense separation. Run focused Rust tests first, followed by `npm run check`.
+- First do the manual verifications listed in `TODO.md` if hardware is available. Then, for product work: add language metadata mapping and representative `rus-eng` fixture tests around `user_stardict_entries` and `parse_stardict_index_with_audio` in `apps/desktop/src-tauri/src/services/lexical.rs`. Then improve record parsing only as needed to make those fixtures produce stable definitions, translations, examples, and sense separation. Run focused Rust tests first, followed by `npm run check`.
 
 ## Inspect First
+
+- `apps/desktop/src-tauri/src/runtimes/llama_download.rs` and `llama_server.rs`: llama.cpp download/selection, device pinning, PATH editing, server lifecycle.
+- `apps/desktop/src-tauri/src/lib.rs`: tray menu, autostart wiring, native commands.
+- `apps/extension/src/background.ts`, `popup.ts`, `popup.css`: overlay injection, resize handles, detach window, fluid layout.
 
 - `AGENTS.md`: repository commands, constraints, and version coordination.
 - `TODO.md`: remaining actionable work only.

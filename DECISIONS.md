@@ -4,8 +4,14 @@
 
 - **Decision:** Add a `standalone` runtime mode next to LM Studio that spawns the user's `llama-server.exe` (llama.cpp) with a `.gguf` chosen from a user-selected models folder, and talks to it over the same OpenAI-compatible API on a free `127.0.0.1` port.
 - **Reason:** It reuses the existing `ModelRuntime`/adapter split and needs no C++ toolchain, while letting users pick the CPU/CUDA/Vulkan build that suits their hardware.
-- **Decision:** Do not bundle `llama-server.exe` in the installer; the settings screen has a **Download llama.cpp** button that fetches the newest GitHub release into the app data folder (fixed folder `llama.cpp/`, release recorded in `version.txt`), choosing CUDA 12 + cudart for NVIDIA (detected via `nvcuda.dll`), Vulkan for other GPUs (`vulkan-1.dll`), and CPU otherwise. Choosing an existing folder, Find in PATH, and Check remain under **Advanced**.
+- **Decision:** Do not bundle `llama-server.exe` in the installer; the settings screen has a **Download llama.cpp** button that fetches the newest GitHub release into the app data folder (fixed folder `llama.cpp/`, release recorded in `version.txt`), choosing CUDA 12 + cudart for NVIDIA (video card names from `Win32_VideoController` plus the `nvcuda.dll` driver), Vulkan for other GPUs (`vulkan-1.dll`), and CPU otherwise. The release is picked from `releases?per_page=20`, not `releases/latest`, because `latest` points at a binary-less tooling tag (`v0.5.0`) and the real `bNNNNN` builds are prereleases. Choosing an existing folder, Find in PATH, and Check remain under **Advanced**.
 - **Reason:** Binaries differ per GPU and are large, so the installer stays small and end users never unpack archives by hand; the engine and its license still come straight from upstream.
+- **Decision:** The install folder has no version in its name; an update downloads into a sibling `.new` folder, stops the running server, and swaps the folders. An up-to-date install (same release and variant in `version.txt`) is not downloaded again.
+- **Reason:** The saved executable path and any user PATH entry stay valid across updates; a running `llama-server` locks its executable on Windows.
+- **Decision:** When `llama-server --list-devices` reports more than one device, pass `--device` with the strongest one (CUDA/ROCm, then discrete Vulkan, then integrated by name markers). The settings screen shows the device in use.
+- **Reason:** Integrated GPUs report shared system memory, so memory size alone would prefer them over a discrete card. The name-marker list for integrated GPUs is heuristic and not exhaustive.
+- **Decision:** "Add to PATH" edits the user `Environment\Path` value in the registry through PowerShell (`ExpandString`, then a `WM_SETTINGCHANGE` broadcast), never the machine PATH.
+- **Reason:** No administrator rights are needed and existing `%VAR%` entries are preserved.
 - **Decision:** `standalone` is the default runtime mode (Rust `RuntimeMode::default`, frontend defaults). Users with saved settings keep their stored mode.
 - **Reason:** New users should not need LM Studio or any other prerequisite.
 - **Decision:** The NSIS installer downloads the WebView2 runtime when missing (`embedBootstrapper`) and the C runtime is linked statically (`.cargo/config.toml`, `+crt-static`).
@@ -22,8 +28,10 @@
 
 ## Settings Windows
 
-- **Decision:** Model runtime and dictionary folder settings live in modal windows opened by header icons (Settings, Dictionaries); the llama.cpp setting is a folder picker that locates `llama-server.exe` itself.
+- **Decision:** The header has a single Settings icon. The Settings window holds three sections separated by rules: Model runtime, Dictionaries, and Browser extension (copy the pairing token). Choosing an existing llama.cpp folder locates `llama-server.exe` itself and sits under Advanced.
 - **Reason:** Keeps the main screen focused on translation and stops users from selecting the wrong executable (for example the new `llama.exe` launcher).
+- **Decision:** Articles from different user dictionaries are never merged (`merge_entries` also compares providers for `User dictionary` entries) and each card shows its dictionary name.
+- **Reason:** Merging joined definitions from unrelated dictionaries and lost the dictionary name.
 
 ## Agent Documentation Structure
 
@@ -77,7 +85,7 @@
 
 ## System Tray
 
-- **Decision:** Use Tauri's built-in tray icon with explicit `Show LingvoLoc`, `Hide LingvoLoc`, and `Quit` menu actions.
+- **Decision:** Use Tauri's built-in tray icon. Its menu is `Open LingvoLoc`, `Translate clipboard`, `Settings…`, a `Start with Windows` checkbox, and `Quit`; the separate Show/Hide items were removed because left-click already toggles the window.
 - **Reason:** This adds a native Windows background entry point without introducing another plugin or changing the main translation flow.
 - **Decision:** Intercept the main window's close request and hide the window; only the tray `Quit` action exits the process.
 - **Reason:** Closing the window should behave as minimize-to-tray so the local translation service remains immediately available.
@@ -130,10 +138,22 @@
 - **Decision:** Do not bundle RuWordNet until its XML distribution terms are confirmed in writing.
 - **Reason:** RuWordNet is described as CC BY-SA 4.0 but its published acquisition path is non-commercial and requires requesting the XML files; that is not a sufficient basis for an unrestricted LingvoLoc release.
 
+- **Decision:** `Start with Windows` writes the per-user `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` value through `reg.exe` and launches the app with `--tray`, which hides the main window on startup. `Settings…` shows the window and emits an `open-settings` event the frontend listens for.
+- **Reason:** No administrator rights or extra crates; the app starts silently in the tray. The registry value stores the executable path, so it must be toggled off and on after moving the install folder.
+
+## Clipboard Popup Settings
+
+- **Decision:** The clipboard popup reads settings from local storage for every request and falls back to the native model id when the stored one is empty; failures show the real error text.
+- **Reason:** The popup window is created at app start, before the main window restores or picks a model, so a snapshot taken at mount had an empty model and every request failed.
+
 ## Local Extension API
 
 - **Decision:** Start the extension integration with a loopback HTTP API bound to `127.0.0.1:47831`, authenticated by a per-process bearer token and restricted CORS origins.
 - **Reason:** The browser extension must remain a thin client while arbitrary websites must not be able to invoke privileged local translation actions.
+- **Decision:** The extension has no `default_popup`. The toolbar button and the context menu both inject the same draggable, resizable in-page overlay (an iframe of `popup.html`); pages where injection fails (`chrome://`, store, PDF viewer) get a `chrome.windows.create` popup window instead. The framed page is fluid, has right/bottom/corner resize handles, and the size is stored in `chrome.storage.local`.
+- **Reason:** A browser action popup cannot be moved or resized. The overlay's iframe gets `allow="clipboard-write"` but copy uses a selection-based fallback there because the host page's permissions policy blocks the Clipboard API.
+- **Decision:** Keeping the translator visible across tabs is done by a detach button that opens `popup.html?window=1` in a separate browser window and hands over text, languages, and result through `chrome.storage.local` (`detachState`).
+- **Reason:** A per-tab overlay cannot follow tab switches without the broad "all sites" host permission; a real window needs no new permissions. It cannot be forced always-on-top.
 
 ## Lexical Provider Aggregation
 
