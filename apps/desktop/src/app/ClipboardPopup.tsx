@@ -2,6 +2,7 @@ import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import { useEffect, useState } from 'react';
 import {
   detectLanguage,
+  getNativeSettings,
   takeClipboardRequest,
   translate,
   writeClipboard,
@@ -13,6 +14,7 @@ import {
   saveClipboardTextScale,
   type Settings,
 } from '../lib/settings';
+import { errorDetail } from '../lib/errors';
 import { targetForDetectedLanguage } from '../lib/languagePair';
 import TextSizeControls from './TextSizeControls';
 
@@ -30,7 +32,6 @@ const defaultSettings: Settings = {
 };
 
 export default function ClipboardPopup() {
-  const [settings] = useState(() => loadSettings(defaultSettings));
   const [textScale, setTextScale] = useState(loadClipboardTextScale);
   const [source, setSource] = useState('Waiting for clipboard…');
   const [result, setResult] = useState<TranslationResult | null>(null);
@@ -49,6 +50,15 @@ export default function ClipboardPopup() {
         setSource(text);
         setResult(null);
         setStatus('Translating…');
+        // The popup is created at startup, before the main window has restored or chosen
+        // a model, so settings are read fresh for every request.
+        let settings = loadSettings(defaultSettings);
+        if (!settings.modelId) {
+          settings = {
+            ...settings,
+            modelId: (await getNativeSettings()).modelId,
+          };
+        }
         const sourceLanguage =
           settings.sourceLanguage === 'auto'
             ? (await detectLanguage(text)).code
@@ -71,8 +81,8 @@ export default function ClipboardPopup() {
         setResult(translated);
         await writeClipboard(translated.text);
         setStatus(`Copied · ${translated.latency_ms} ms`);
-      } catch {
-        setStatus('Translation failed. Check LM Studio and clipboard access.');
+      } catch (reason) {
+        setStatus(`Translation failed · ${errorDetail(reason)}`);
       }
     };
     void pollClipboardRequest();
@@ -81,7 +91,7 @@ export default function ClipboardPopup() {
       active = false;
       window.clearInterval(timer);
     };
-  }, [settings]);
+  }, []);
 
   useEffect(() => {
     const resizeToContent = async () => {

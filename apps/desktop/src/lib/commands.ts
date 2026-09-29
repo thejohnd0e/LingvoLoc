@@ -119,6 +119,7 @@ export const getApiToken = () => invokeNative<string>('get_api_token');
 export const writeClipboard = (text: string) =>
   invokeNative<void>('write_clipboard', { text });
 export const listModels = () => invokeNative<LocalModel[]>('list_models');
+export const getNativeSettings = () => invokeNative<Settings>('get_settings');
 export const updateSettings = (next: Settings) =>
   invokeNative<Settings>('update_settings', { next });
 export const translate = (request: TranslationRequest) =>

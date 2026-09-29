@@ -41,6 +41,7 @@ import {
   saveSettings,
   type Settings,
 } from '../lib/settings';
+import { errorDetail } from '../lib/errors';
 import { targetForDetectedLanguage } from '../lib/languagePair';
 import { highlightMatches } from './highlight';
 import Modal from './Modal';
@@ -78,25 +79,6 @@ function loadEnabledDictionaries(): string[] {
 
 function loadDictionaryPath(): string {
   return localStorage.getItem(dictionaryPathKey) ?? '';
-}
-
-function errorDetail(reason: unknown): string {
-  if (reason instanceof Error) return reason.message;
-  if (typeof reason === 'string') return reason;
-  if (reason && typeof reason === 'object') {
-    const value = reason as Record<string, unknown>;
-    if (typeof value.message === 'string') return value.message;
-    if (typeof value.error === 'string') return value.error;
-    try {
-      const serialized = JSON.stringify(reason);
-      if (serialized && serialized !== '{}') return serialized;
-    } catch {
-      // Fall through to the generic message for non-serializable errors.
-    }
-  }
-  return String(reason) === '[object Object]'
-    ? 'unknown error'
-    : String(reason);
 }
 
 function sanitizeDictionaryHtml(value: string): string {
@@ -840,6 +822,27 @@ export default function App() {
             <button
               className="icon-button"
               type="button"
+              aria-label="Copy extension pairing token"
+              title="Copy the token used to pair the Chrome extension"
+              onClick={() => void copyExtensionToken()}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4" />
+              </svg>
+            </button>
+            <button
+              className="icon-button"
+              type="button"
               aria-label="Dictionaries"
               title="Dictionaries"
               onClick={() => setDictionariesOpen(true)}
@@ -884,14 +887,6 @@ export default function App() {
           </div>
           <div className="masthead-actions">
             <TextSizeControls value={textScale} onChange={setTextScale} />
-            <button
-              className="quiet"
-              type="button"
-              title="Copy the token used to pair the Chrome extension"
-              onClick={() => void copyExtensionToken()}
-            >
-              Pair Chrome extension
-            </button>
             <span className="status-pill">
               {status.startsWith('Checking') && <Spinner />}
               {status}
