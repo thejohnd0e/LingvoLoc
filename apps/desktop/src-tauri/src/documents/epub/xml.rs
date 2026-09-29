@@ -1,19 +1,98 @@
 #[cfg(test)]
 mod tests {
+    use super::super::super::{BlockType, DocumentBlock};
+
     #[test]
     fn xml_parser_boundary_will_supply_ordered_blocks() {
         let _ = super::parse_document;
     }
+
+    #[test]
+    fn extracts_only_xhtml_blocks_and_reports_atomic_unsupported_subtrees() {
+        let xml = br#"<html xmlns="http://www.w3.org/1999/xhtml"><body>
+            <h1> Heading <em>one</em> </h1>
+            <p>First <a href="https://example.test">linked</a> paragraph.</p>
+            <ul><li>One</li><li>Two</li></ul>
+            <table><tr><th>Head</th><td>Cell</td></tr></table>
+            <p>before <script>do not expose</script> after</p>
+            <foreign xmlns="urn:foreign"><h1>foreign heading</h1></foreign>
+        </body></html>"#;
+
+        let parsed = super::parse_document(xml, "OPS/chapter.xhtml").unwrap();
+        assert_eq!(
+            parsed
+                .blocks
+                .iter()
+                .map(|block| block.source_text.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "Heading one",
+                "First linked paragraph.",
+                "One",
+                "Two",
+                "Head",
+                "Cell"
+            ]
+        );
+        assert_eq!(parsed.blocks[0].block_type, BlockType::Heading);
+        assert!(parsed
+            .diagnostics
+            .iter()
+            .any(|item| item.contains("script")));
+        assert!(parsed
+            .diagnostics
+            .iter()
+            .any(|item| item.contains("foreign")));
+        assert!(!parsed
+            .blocks
+            .iter()
+            .any(|block| block.source_text.contains("foreign")));
+    }
+
+    #[test]
+    fn rewrites_text_nodes_with_escaping_and_preserves_markup_and_whitespace() {
+        let xml = br#"<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body><p id="keep">Original <a href="link.xhtml#anchor">link</a>.</p></body></html>"#;
+        let mut block = super::parse_document(xml, "OPS/chapter.xhtml")
+            .unwrap()
+            .blocks
+            .remove(0);
+        block.translated_text = Some(" translated & <kept> ".into());
+
+        let rewritten = super::rewrite_document(xml, "OPS/chapter.xhtml", &[block]).unwrap();
+        let text = String::from_utf8(rewritten).unwrap();
+        assert!(text.contains("id=\"keep\""));
+        assert!(text.contains("href=\"link.xhtml#anchor\""));
+        assert!(text.contains("xml:space=\"preserve\""));
+        assert!(text.contains("translated &amp;") || text.contains("&amp;"));
+        assert!(text.contains("&lt;") && text.contains("&gt;"));
+    }
+
+    #[test]
+    fn rejects_missing_or_untranslated_rewrite_blocks() {
+        let xml =
+            br#"<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Original</p></body></html>"#;
+        let block = DocumentBlock {
+            id: "OPS/chapter.xhtml#0".into(),
+            ordinal: 0,
+            block_type: BlockType::Paragraph,
+            source_text: "Original".into(),
+            translated_text: None,
+        };
+        assert!(super::rewrite_document(xml, "OPS/chapter.xhtml", &[block]).is_err());
+    }
 }
 use std::collections::HashMap;
 
-use quick_xml::events::Event;
-use quick_xml::Reader;
+use quick_xml::events::{BytesText, Event};
+use quick_xml::name::{Namespace, ResolveResult};
+use quick_xml::{NsReader, Reader, Writer};
 
 use super::super::{BlockType, DocumentBlock};
 use super::block;
 use crate::domain::RuntimeError;
 use quick_xml::XmlVersion;
+
+const XHTML_NS: &[u8] = b"http://www.w3.org/1999/xhtml";
 
 #[derive(Debug, Clone)]
 pub(super) struct ManifestItem {
@@ -126,59 +205,89 @@ pub(super) fn parse_opf(
 }
 
 pub(super) fn parse_document(bytes: &[u8], path: &str) -> Result<ParsedDocument, RuntimeError> {
-    let mut reader = Reader::from_reader(bytes);
+    let mut reader = NsReader::from_reader(bytes);
     let mut buffer = Vec::new();
     let mut depth = 0_usize;
-    let mut current: Option<(usize, BlockType, String)> = None;
-    let mut skipped = 0_usize;
+    let mut current: Option<Candidate> = None;
+    let mut skipped: Option<Skipped> = None;
     let mut ordinal = 0_usize;
     let mut blocks = Vec::new();
     let mut diagnostics = Vec::new();
     loop {
-        match reader.read_event_into(&mut buffer).map_err(xml_error)? {
+        let (namespace, event) = reader
+            .read_resolved_event_into(&mut buffer)
+            .map_err(xml_error)?;
+        match event {
             Event::Start(element) => {
                 depth += 1;
-                let qualified_name = element.name();
-                let name = local_name(qualified_name.as_ref());
-                if skipped > 0 {
-                    skipped += 1;
-                } else if unsupported(name) {
-                    skipped = 1;
-                    diagnostics.push(format!("unsupported EPUB XHTML element: {name}"));
+                let name = local_name(element.name().as_ref()).to_string();
+                if let Some(skip) = &mut skipped {
+                    let _ = skip;
+                } else if !is_xhtml(&namespace) || unsupported(&name) {
+                    skipped = Some(Skipped {
+                        depth,
+                        name,
+                        has_text: false,
+                    });
+                    if let Some(candidate) = &mut current {
+                        candidate.unsupported = true;
+                    }
                 } else if current.is_none() {
-                    if let Some(kind) = semantic_type(name) {
-                        current = Some((depth, kind, String::new()));
+                    if let Some(kind) = semantic_type(&name) {
+                        current = Some(Candidate {
+                            depth,
+                            kind,
+                            text: String::new(),
+                            text_nodes: 0,
+                            unsupported: false,
+                        });
                     }
                 }
             }
             Event::Empty(element) => {
                 let qualified_name = element.name();
                 let name = local_name(qualified_name.as_ref());
-                if unsupported(name) {
+                if (!is_xhtml(&namespace) && has_text_attribute(&element)) || unsupported(name) {
                     diagnostics.push(format!("unsupported EPUB XHTML element: {name}"));
+                    if let Some(candidate) = &mut current {
+                        candidate.unsupported = true;
+                    }
                 }
             }
-            Event::Text(text) if skipped == 0 => {
-                if let Some((_, _, value)) = &mut current {
-                    let decoded = text.xml_content(XmlVersion::Implicit1_0);
-                    value.push_str(decoded.as_ref());
+            Event::Text(text) => {
+                if let Some(skip) = &mut skipped {
+                    skip.has_text = true;
+                } else if let Some(candidate) = &mut current {
+                    candidate.text_nodes += 1;
+                    candidate
+                        .text
+                        .push_str(&text.xml_content(XmlVersion::Implicit1_0));
                 }
             }
             Event::End(_element) => {
-                if skipped > 0 {
-                    skipped -= 1;
+                if skipped.as_ref().is_some_and(|skip| skip.depth == depth) {
+                    let skip = skipped.take().unwrap();
+                    if skip.has_text {
+                        diagnostics.push(format!("unsupported EPUB XHTML element: {}", skip.name));
+                    }
                 } else if current
                     .as_ref()
-                    .is_some_and(|(start, _, _)| *start == depth)
+                    .is_some_and(|candidate| candidate.depth == depth)
                 {
-                    let (_, kind, text) = current.take().unwrap();
-                    if !text.trim().is_empty() {
+                    let candidate = current.take().unwrap();
+                    if !candidate.unsupported && !candidate.text.trim().is_empty() {
                         blocks.push(block(
                             format!("{path}#{ordinal}"),
                             ordinal,
-                            kind,
-                            text.trim().to_string(),
+                            candidate.kind,
+                            candidate.text.trim().to_string(),
                         ));
+                        if candidate.text_nodes > 1 {
+                            diagnostics.push(
+                                "translation may cross EPUB XHTML formatting boundaries in a multi-node block"
+                                    .into(),
+                            );
+                        }
                         ordinal += 1;
                     }
                 }
@@ -193,6 +302,229 @@ pub(super) fn parse_document(bytes: &[u8], path: &str) -> Result<ParsedDocument,
         blocks,
         diagnostics,
     })
+}
+
+#[derive(Debug)]
+struct Candidate {
+    depth: usize,
+    kind: BlockType,
+    text: String,
+    text_nodes: usize,
+    unsupported: bool,
+}
+
+#[derive(Debug)]
+struct Skipped {
+    depth: usize,
+    name: String,
+    has_text: bool,
+}
+
+pub(super) fn rewrite_document(
+    source: &[u8],
+    path: &str,
+    blocks: &[DocumentBlock],
+) -> Result<Vec<u8>, RuntimeError> {
+    let mut reader = NsReader::from_reader(source);
+    let mut writer = Writer::new(Vec::new());
+    let mut buffer = Vec::new();
+    let mut depth = 0_usize;
+    let mut element = Vec::new();
+    let mut element_depth = 0_usize;
+    let mut block_index = 0_usize;
+
+    loop {
+        let (namespace, event) = reader
+            .read_resolved_event_into(&mut buffer)
+            .map_err(xml_error)?;
+        let is_eof = matches!(event, Event::Eof);
+        let is_start = matches!(&event, Event::Start(_));
+        let is_end = matches!(&event, Event::End(_));
+        if !element.is_empty() {
+            let closes_element = is_end && depth == element_depth;
+            element.push(event.into_owned());
+            if closes_element {
+                rewrite_element(&mut writer, &element, path, blocks, &mut block_index)?;
+                element.clear();
+            }
+        } else if matches!(&event, Event::Start(value) if is_xhtml(&namespace) && semantic_type(local_name(value.name().as_ref())).is_some())
+        {
+            element_depth = depth + 1;
+            element.push(event.into_owned());
+        } else {
+            writer.write_event(event.into_owned()).map_err(xml_write)?;
+        }
+        if is_start {
+            depth += 1;
+        } else if is_end {
+            depth = depth.saturating_sub(1);
+        }
+        if is_eof {
+            break;
+        }
+        buffer.clear();
+    }
+    if !element.is_empty() {
+        return Err(RuntimeError::InvalidInput(
+            "unterminated EPUB XHTML element".into(),
+        ));
+    }
+    if block_index != blocks.len() {
+        return Err(RuntimeError::InvalidInput(format!(
+            "missing translated EPUB block {}",
+            block_index
+        )));
+    }
+    Ok(writer.into_inner())
+}
+
+fn rewrite_element(
+    writer: &mut Writer<Vec<u8>>,
+    events: &[Event<'static>],
+    path: &str,
+    blocks: &[DocumentBlock],
+    block_index: &mut usize,
+) -> Result<(), RuntimeError> {
+    let Some(info) = element_info(events) else {
+        for event in events {
+            writer.write_event(event.clone()).map_err(xml_write)?;
+        }
+        return Ok(());
+    };
+    let Some(block) = blocks.get(*block_index) else {
+        return Err(RuntimeError::InvalidInput(format!(
+            "missing translated EPUB block {}",
+            block_index
+        )));
+    };
+    if block.id != format!("{path}#{}", *block_index) {
+        return Err(RuntimeError::InvalidInput(format!(
+            "unexpected translated EPUB block id: {}",
+            block.id
+        )));
+    }
+    let replacement = block
+        .translated_text
+        .as_deref()
+        .ok_or_else(|| RuntimeError::InvalidInput("EPUB job has untranslated blocks".into()))?;
+    let replacement = preserve_outer_whitespace(&info.text, replacement);
+    let lengths = info.lengths;
+    let total = lengths.iter().sum::<usize>().max(1);
+    let mut offset = 0_usize;
+    let mut source_offset = 0_usize;
+    let mut text_index = 0_usize;
+    let preserve = replacement.trim() != replacement;
+    for event in events {
+        match event {
+            Event::Start(start) if text_index == 0 => {
+                let mut start = start.clone();
+                if preserve && !has_xml_space(&start) {
+                    start.push_attribute(("xml:space", "preserve"));
+                }
+                writer.write_event(Event::Start(start)).map_err(xml_write)?;
+            }
+            Event::Text(_) => {
+                let end = if lengths.len() == 1 || text_index + 1 == lengths.len() {
+                    replacement.chars().count()
+                } else {
+                    replacement.chars().count() * (source_offset + lengths[text_index]) / total
+                };
+                let value = replacement
+                    .chars()
+                    .skip(offset)
+                    .take(end.saturating_sub(offset))
+                    .collect::<String>();
+                writer
+                    .write_event(Event::Text(BytesText::new(&value)))
+                    .map_err(xml_write)?;
+                offset = end;
+                source_offset += lengths[text_index];
+                text_index += 1;
+            }
+            other => writer.write_event(other.clone()).map_err(xml_write)?,
+        }
+    }
+    *block_index += 1;
+    Ok(())
+}
+
+struct ElementInfo {
+    text: String,
+    lengths: Vec<usize>,
+}
+
+fn element_info(events: &[Event<'_>]) -> Option<ElementInfo> {
+    let mut text = String::new();
+    let mut lengths = Vec::new();
+    let mut unsupported_element = false;
+    for event in events {
+        match event {
+            Event::Start(element) | Event::Empty(element) => {
+                let qualified_name = element.name();
+                let name = local_name(qualified_name.as_ref());
+                if unsupported(name) || has_foreign_namespace(element) {
+                    unsupported_element = true;
+                }
+            }
+            Event::Text(value) => {
+                let value = value.xml_content(XmlVersion::Implicit1_0).into_owned();
+                lengths.push(value.chars().count());
+                text.push_str(&value);
+            }
+            _ => {}
+        }
+    }
+    (!unsupported_element && !text.trim().is_empty()).then_some(ElementInfo { text, lengths })
+}
+
+fn preserve_outer_whitespace(source: &str, replacement: &str) -> String {
+    let leading = source.len() - source.trim_start().len();
+    let trailing = source.len() - source.trim_end().len();
+    if leading == 0 && trailing == 0 {
+        return replacement.to_string();
+    }
+    format!(
+        "{}{}{}",
+        &source[..leading],
+        replacement.trim(),
+        &source[source.len() - trailing..]
+    )
+}
+
+fn is_xhtml(namespace: &ResolveResult<'_>) -> bool {
+    match namespace {
+        ResolveResult::Bound(Namespace(value)) => value.as_bytes() == XHTML_NS,
+        ResolveResult::Unbound => true,
+        ResolveResult::Unknown(_) => false,
+    }
+}
+
+fn has_text_attribute(element: &quick_xml::events::BytesStart<'_>) -> bool {
+    element
+        .attributes()
+        .flatten()
+        .any(|attribute| attribute.key.as_ref() == "alt" || attribute.key.as_ref() == "title")
+}
+
+fn has_foreign_namespace(element: &quick_xml::events::BytesStart<'_>) -> bool {
+    element.attributes().flatten().any(|attribute| {
+        attribute.key.as_ref() == "xmlns"
+            && attribute
+                .normalized_value(XmlVersion::Implicit1_0)
+                .map(|value| value.as_bytes() != XHTML_NS)
+                .unwrap_or(true)
+    })
+}
+
+fn has_xml_space(element: &quick_xml::events::BytesStart<'_>) -> bool {
+    element
+        .attributes()
+        .flatten()
+        .any(|attribute| attribute.key.as_ref() == "xml:space" || attribute.key.as_ref() == "space")
+}
+
+fn xml_write(error: std::io::Error) -> RuntimeError {
+    RuntimeError::Connection(format!("write EPUB XML: {error}"))
 }
 
 fn semantic_type(name: &str) -> Option<BlockType> {

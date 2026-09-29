@@ -1,8 +1,11 @@
 mod package;
 mod xml;
 
+use std::io::{Cursor, Read, Write};
+
 use super::{BlockType, DocumentBlock};
 use crate::domain::RuntimeError;
+use zip::{write::SimpleFileOptions, ZipArchive, ZipWriter};
 
 pub const PARSER_VERSION: &str = "epub-v1";
 
@@ -34,6 +37,86 @@ pub fn analyze(bytes: &[u8]) -> Result<Analysis, RuntimeError> {
         diagnostics,
         spine: package.spine,
     })
+}
+
+pub fn export(source: &[u8], blocks: &[DocumentBlock]) -> Result<Vec<u8>, RuntimeError> {
+    let package = package::read_package(source)?;
+    let blocks = coalesce_segments(blocks)?;
+    let mut archive = ZipArchive::new(Cursor::new(source))
+        .map_err(|error| RuntimeError::InvalidInput(format!("invalid EPUB package: {error}")))?;
+    let mut output = ZipWriter::new(Cursor::new(Vec::new()));
+
+    for index in 0..archive.len() {
+        let mut entry = archive
+            .by_index(index)
+            .map_err(|error| RuntimeError::InvalidInput(format!("invalid EPUB entry: {error}")))?;
+        let name = entry.name().to_string();
+        if package.spine.iter().any(|spine| spine.path == name) {
+            let mut content = Vec::new();
+            entry.read_to_end(&mut content).map_err(|error| {
+                RuntimeError::InvalidInput(format!("cannot read EPUB entry {name}: {error}"))
+            })?;
+            let document_blocks = blocks
+                .iter()
+                .filter(|block| block.id.starts_with(&format!("{name}#")))
+                .cloned()
+                .collect::<Vec<_>>();
+            let rewritten = xml::rewrite_document(&content, &name, &document_blocks)?;
+            output
+                .start_file(name, SimpleFileOptions::default())
+                .map_err(zip_error)?;
+            output.write_all(&rewritten).map_err(write_error)?;
+        } else {
+            output.raw_copy_file(entry).map_err(zip_error)?;
+        }
+    }
+
+    output
+        .finish()
+        .map_err(zip_error)
+        .map(|cursor| cursor.into_inner())
+}
+
+fn coalesce_segments(blocks: &[DocumentBlock]) -> Result<Vec<DocumentBlock>, RuntimeError> {
+    let mut result = Vec::new();
+    for block in blocks {
+        let Some((parent_id, _)) = block.id.rsplit_once("::part-") else {
+            result.push(block.clone());
+            continue;
+        };
+        if let Some(parent) = result
+            .iter_mut()
+            .find(|item: &&mut DocumentBlock| item.id == parent_id)
+        {
+            if let Some(text) = &block.translated_text {
+                let combined = parent.translated_text.get_or_insert_default();
+                if !combined.is_empty() {
+                    combined.push(' ');
+                }
+                combined.push_str(text);
+            }
+        } else {
+            let mut parent = block.clone();
+            parent.id = parent_id.to_string();
+            parent.translated_text = block.translated_text.clone();
+            result.push(parent);
+        }
+    }
+    result.sort_by_key(|block| block.ordinal);
+    if result.iter().any(|block| block.translated_text.is_none()) {
+        return Err(RuntimeError::InvalidInput(
+            "EPUB job has untranslated blocks".into(),
+        ));
+    }
+    Ok(result)
+}
+
+fn zip_error(error: zip::result::ZipError) -> RuntimeError {
+    RuntimeError::Connection(format!("EPUB ZIP error: {error}"))
+}
+
+fn write_error(error: std::io::Error) -> RuntimeError {
+    RuntimeError::Connection(format!("EPUB write error: {error}"))
 }
 
 #[allow(dead_code)]
@@ -80,5 +163,69 @@ mod tests {
             .diagnostics
             .iter()
             .any(|diagnostic| diagnostic.contains("foreign")));
+    }
+
+    #[test]
+    fn export_preserves_non_xhtml_entries_and_rewrites_both_spine_documents() {
+        let source = super::package::fixture_bytes();
+        let analysis = analyze(&source).unwrap();
+        let mut blocks = analysis.blocks.clone();
+        for block in &mut blocks {
+            block.translated_text = Some(format!("<translated {}>", block.ordinal));
+        }
+
+        let exported = export(&source, &blocks).unwrap();
+        let mut original = zip::ZipArchive::new(std::io::Cursor::new(source)).unwrap();
+        let mut rewritten = zip::ZipArchive::new(std::io::Cursor::new(exported)).unwrap();
+        for name in [
+            "mimetype",
+            "OPS/content.opf",
+            "OPS/styles.css",
+            "OPS/images/diagram.svg",
+        ] {
+            let mut before = Vec::new();
+            let mut after = Vec::new();
+            original
+                .by_name(name)
+                .unwrap()
+                .read_to_end(&mut before)
+                .unwrap();
+            rewritten
+                .by_name(name)
+                .unwrap()
+                .read_to_end(&mut after)
+                .unwrap();
+            assert_eq!(before, after, "changed untouched EPUB entry {name}");
+        }
+        let mut chapter_two = String::new();
+        rewritten
+            .by_name("OPS/chapter-two.xhtml")
+            .unwrap()
+            .read_to_string(&mut chapter_two)
+            .unwrap();
+        assert!(chapter_two.contains("&lt;translated 0&gt;"));
+    }
+
+    #[test]
+    fn coalesces_segmented_epub_blocks_before_export() {
+        let blocks = vec![
+            DocumentBlock {
+                id: "OPS/chapter.xhtml#0::part-0000".into(),
+                ordinal: 0,
+                block_type: BlockType::Paragraph,
+                source_text: "one".into(),
+                translated_text: Some("first".into()),
+            },
+            DocumentBlock {
+                id: "OPS/chapter.xhtml#0::part-0001".into(),
+                ordinal: 1,
+                block_type: BlockType::Paragraph,
+                source_text: "two".into(),
+                translated_text: Some("second".into()),
+            },
+        ];
+        let combined = coalesce_segments(&blocks).unwrap();
+        assert_eq!(combined[0].id, "OPS/chapter.xhtml#0");
+        assert_eq!(combined[0].translated_text.as_deref(), Some("first second"));
     }
 }
