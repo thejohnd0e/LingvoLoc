@@ -817,10 +817,10 @@ export default function App() {
             v{import.meta.env.VITE_APP_VERSION}{' '}
             <span aria-hidden="true">·</span>{' '}
             <a
-              href="https://github.com/thejohnd0e/LingoLoc"
+              href="https://github.com/thejohnd0e/LingvoLoc"
               onClick={(event) => {
                 event.preventDefault();
-                void openUrl('https://github.com/thejohnd0e/LingoLoc');
+                void openUrl('https://github.com/thejohnd0e/LingvoLoc');
               }}
             >
               GitHub
