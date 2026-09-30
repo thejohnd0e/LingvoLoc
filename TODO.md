@@ -17,9 +17,11 @@
 ## PDF
 
 - [x] Phase 8 first increment: analysis, in-place layout-preserving export, job commands, Files panel support, unit and PDFium integration tests.
-- [ ] Try a real model on a few PDF pages through the UI and review the rendered result (spacing, shrink factor, headings).
-- [ ] Multi-column reading order, tables and figure captions; per-page consistent font scale; bundled OFL Cyrillic font instead of the Windows fonts.
-- [ ] Verify the installer ships `pdfium/pdfium.dll` (run `scripts/fetch-pdfium.ps1`, then `npm run desktop:build`) and review PDFium third-party notices.
+- [ ] (In progress, user tests by hand) Review real-model PDF output page by page and fix layout problems they report; see `STATUS.md` PDF Handoff.
+- [ ] Even paragraph spacing (reflow vertically inside a page) and a second line for tight single-line list items.
+- [ ] Paragraphs split across a page break are two blocks; consider joining them.
+- [ ] Multi-column reading order, tables and figure captions; bundled OFL Cyrillic font instead of the Windows fonts.
+- [ ] Verify the installer ships `pdfium/pdfium.dll` (run `scripts/fetch-pdfium.ps1`, then `npm run desktop:build`) bundle `resources/pdfium/licenses/` (the glob only copies files) and review PDFium third-party notices.
 - [ ] (Optional, requested) Phase 9: export a PDF translation as a reading-friendly EPUB (and DOCX) from the same blocks.
 
 ## Next
