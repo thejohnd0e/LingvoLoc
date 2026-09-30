@@ -6,13 +6,13 @@
 - `v2.1.1` is published on GitHub Releases (installer and extension ZIP attached). The last recorded release gate passed: `npm run check`, `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`, and `npm run desktop:build`.
 - Release artifacts are `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_2.1.1_x64-setup.exe` and `apps/extension/LingvoLoc-extension-2.1.1.zip`.
 
-## Document Translation Stalls (Mitigated, Root Cause Unproven)
+## Document Translation Stalls (Closed By The User, Root Cause Never Isolated)
 
 - Symptom: a document job stayed `translating` while one block request never finished. Seen at blocks 54-64 of several 80-block jobs (`txt-38624-1790741713343` at block 56: `coordinator_acquired`, then `request_end ... elapsed_ms=120009 result=error`) and at block 119 of a 561-block EPUB (`txt-55600-1790747942527`: `coordinator_acquired` but no `http_send`, i.e. it stopped before any HTTP request left the app).
 - Not reproducible outside the app: 240 sequential requests from a Python client and 300 from the app's Rust client against a fresh `llama-server` (same flags) never stalled, and the same block text translates fine in other jobs. The trigger therefore depends on in-app or host state (the user runs the app inside an RDP session). The llama-server log had no task for the stalled block.
 - Mitigations shipped in commit `7a81976` (NOT a proven root-cause fix): streaming requests with a 45 s idle timeout and one restart+retry in Standalone (`runtimes/lm_studio.rs`, `runtimes/llama_server.rs`); no per-completion blocking reqwest client any more; runtime step events and a `request_slow` watchdog (every 20 s, with `last_event=`) written to `%TEMP%\lingvoloc-document-worker.log` (`trace.rs`).
-- Status: after the last rebuild the user reported no more stalls and successfully translated several books (including the 561-block EPUB and multi-file queues). Keep the incident open until it survives more real use.
-- If it recurs: read the `job=runtime` and `request_slow ... last_event=` lines around the stalled block in the worker log. `last_event=http_thread_spawn` or `translate_begin` means the stall is before the HTTP request (thread/runtime/proxy/OS level); `http_send` without `http_headers` means the server accepted but never answered (check `complete_error ... health=`).
+- Status: closed on 2026-09-30. After the last rebuild the user translated several real books (including the 561-block EPUB and multi-file queues) with no stalls and considers the problem solved. The exact cause was never isolated; the mitigations below are the fix in practice.
+- Only if it ever recurs, reopen it: read the `job=runtime` and `request_slow ... last_event=` lines around the stalled block in the worker log. `last_event=http_thread_spawn` or `translate_begin` means the stall is before the HTTP request (thread/runtime/proxy/OS level); `http_send` without `http_headers` means the server accepted but never answered (check `complete_error ... health=`).
 - By design a job with every block translated stays `translating` until Export; this is not a hang (the UI now says "translated, ready to export" and hides Pause/Cancel).
 
 ## Completed
@@ -74,7 +74,7 @@
 
 ## Next Recommended Step
 
-- Keep using real books and watch for a stall (see the incident section for what to read in the worker log). Do not describe the stall as fixed until it survives more use.
+- The stall incident is closed (see its section for what to read if it ever returns).
 - Then return to the open validation items: EPUB/FB2/DOCX in real readers (blocked on missing tools), Windows pause/resume/cancel with a real model, and clean-machine installer checks.
 - Then dictionary quality: structured senses for common `rus-eng` StarDict records (see `TODO.md`, Next).
 - Optional small follow-ups: overwrite/unique-name handling for queue exports, show tokens/s in the extension, Windows job object for `llama-server`.
