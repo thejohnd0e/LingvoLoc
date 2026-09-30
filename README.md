@@ -1,5 +1,15 @@
 # LingvoLoc
 
+![License MIT](https://img.shields.io/badge/license-MIT-blue)
+![Platform Windows](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4?logo=windows&logoColor=white)
+![Runs locally](https://img.shields.io/badge/runs-100%25%20locally-2ea44f)
+![Tauri 2](https://img.shields.io/badge/Tauri-2-24c8db?logo=tauri&logoColor=white)
+![Rust](https://img.shields.io/badge/Rust-stable-b7410e?logo=rust&logoColor=white)
+![React](https://img.shields.io/badge/React-TypeScript-3178c6?logo=react&logoColor=white)
+![llama.cpp](https://img.shields.io/badge/engine-llama.cpp-6e5494)
+![Documents](https://img.shields.io/badge/files-TXT%20%7C%20DOCX%20%7C%20EPUB%20%7C%20FB2-8a5cf5)
+![Chrome extension](https://img.shields.io/badge/extension-Chromium%20MV3-4285f4?logo=googlechrome&logoColor=white)
+
 ## Overview
 
 LingvoLoc is a Windows-first desktop application for private, local translation with a selectable local model (TranslateGemma and Gemma 3 are recommended; Hunyuan-MT and Qwen are also supported). Everything runs on your computer.
