@@ -274,6 +274,18 @@ export const analyzeFb2 = (
     sourceLanguage,
     targetLanguage,
   });
+export const analyzePdf = (
+  sourcePath: string,
+  sourceLanguage: string,
+  targetLanguage: string,
+  pages?: string,
+) =>
+  invokeNative<DocumentJobView>('analyze_pdf', {
+    sourcePath,
+    sourceLanguage,
+    targetLanguage,
+    pages: pages?.trim() || null,
+  });
 export const startTxtJob = (jobId: string) =>
   invokeNative<DocumentJobView>('start_txt_job', { jobId });
 export const startDocxJob = (jobId: string) =>
@@ -282,6 +294,8 @@ export const startEpubJob = (jobId: string) =>
   invokeNative<DocumentJobView>('start_epub_job', { jobId });
 export const startFb2Job = (jobId: string) =>
   invokeNative<DocumentJobView>('start_fb2_job', { jobId });
+export const startPdfJob = (jobId: string) =>
+  invokeNative<DocumentJobView>('start_pdf_job', { jobId });
 export const resumeTxtJob = (jobId: string) =>
   invokeNative<DocumentJobView>('resume_txt_job', { jobId });
 export const resumeDocxJob = (jobId: string) =>
@@ -290,6 +304,8 @@ export const resumeEpubJob = (jobId: string) =>
   invokeNative<DocumentJobView>('resume_epub_job', { jobId });
 export const resumeFb2Job = (jobId: string) =>
   invokeNative<DocumentJobView>('resume_fb2_job', { jobId });
+export const resumePdfJob = (jobId: string) =>
+  invokeNative<DocumentJobView>('resume_pdf_job', { jobId });
 export const getDocumentJob = (jobId: string) =>
   invokeNative<DocumentJobView>('get_document_job', { jobId });
 export const getDocumentProgress = (jobId: string) =>
@@ -319,6 +335,11 @@ export const exportEpubJob = (jobId: string, outputPath?: string) =>
   });
 export const exportFb2Job = (jobId: string, outputPath?: string) =>
   invokeNative<DocumentExport>('export_fb2_job', {
+    jobId,
+    outputPath: outputPath ?? null,
+  });
+export const exportPdfJob = (jobId: string, outputPath?: string) =>
+  invokeNative<DocumentExport>('export_pdf_job', {
     jobId,
     outputPath: outputPath ?? null,
   });

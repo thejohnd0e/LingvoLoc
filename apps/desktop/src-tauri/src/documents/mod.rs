@@ -3,6 +3,7 @@ pub mod docx;
 mod domain;
 pub mod epub;
 pub mod fb2;
+pub mod pdf;
 mod segmentation;
 mod store;
 mod txt;

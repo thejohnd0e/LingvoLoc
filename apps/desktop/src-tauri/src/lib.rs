@@ -529,7 +529,11 @@ pub fn run() {
             documents::commands::export_txt_job,
             documents::commands::export_docx_job,
             documents::commands::export_epub_job,
-            documents::commands::fb2::export_fb2_job
+            documents::commands::fb2::export_fb2_job,
+            documents::commands::pdf::analyze_pdf,
+            documents::commands::pdf::start_pdf_job,
+            documents::commands::pdf::resume_pdf_job,
+            documents::commands::pdf::export_pdf_job
         ])
         .build(tauri::generate_context!())
         .expect("error while building LingvoLoc")

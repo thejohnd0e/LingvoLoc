@@ -16,6 +16,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
 pub mod fb2;
+pub mod pdf;
 
 const CONFIGURATION_VERSION: &str = "txt-v1";
 

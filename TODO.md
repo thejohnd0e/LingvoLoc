@@ -14,6 +14,14 @@
 - [ ] Validate a deterministic translated FB2 with an independent reader or structural validator; no FB2 validation tool is installed on the current host.
 - [ ] Manually validate translated DOCX output in Microsoft Word and LibreOffice. This remains blocked on viewers not being installed on the current host.
 
+## PDF
+
+- [x] Phase 8 first increment: analysis, in-place layout-preserving export, job commands, Files panel support, unit and PDFium integration tests.
+- [ ] Try a real model on a few PDF pages through the UI and review the rendered result (spacing, shrink factor, headings).
+- [ ] Multi-column reading order, tables and figure captions; per-page consistent font scale; bundled OFL Cyrillic font instead of the Windows fonts.
+- [ ] Verify the installer ships `pdfium/pdfium.dll` (run `scripts/fetch-pdfium.ps1`, then `npm run desktop:build`) and review PDFium third-party notices.
+- [ ] (Optional, requested) Phase 9: export a PDF translation as a reading-friendly EPUB (and DOCX) from the same blocks.
+
 ## Next
 
 - [x] Document translation stalls: closed by the user on 2026-09-30 after real-book testing (mitigations: streaming with idle timeout, tracing; cause never isolated).

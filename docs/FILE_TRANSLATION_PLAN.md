@@ -453,7 +453,7 @@ If the user explicitly requests multiple agents, one can implement and another r
 - [x] Phase 7 EPUB: implementation complete for bounded spine XHTML paragraphs, headings, list items, and table cells; validator/reader smoke validation remains open.
 - [x] Phase 7 FB2: separate `fb2-v1` implementation supports section headings, body/epigraph/note paragraphs, safe XML-preserving export, and diagnostics; independent reader/validator validation remains open.
 - [ ] Phase 7 validation: open deterministic translated EPUB and FB2 fixtures in independent readers or validators; DOCX Word/LibreOffice validation also remains open.
-- [ ] Phase 8: technical PDF layout preservation.
+- [~] Phase 8: technical PDF layout preservation (first increment implemented; see STATUS.md for limits).
 - [ ] Phase 9: PDF to DOCX/EPUB.
 - [ ] Phase 10: separately scoped OCR and quality improvements.
 

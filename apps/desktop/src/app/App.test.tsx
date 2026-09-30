@@ -42,14 +42,17 @@ vi.mock('../lib/commands', () => ({
   analyzeDocx: vi.fn(),
   analyzeEpub: vi.fn(),
   analyzeFb2: vi.fn(),
+  analyzePdf: vi.fn(),
   startTxtJob: vi.fn(),
   startDocxJob: vi.fn(),
   startEpubJob: vi.fn(),
   startFb2Job: vi.fn(),
+  startPdfJob: vi.fn(),
   resumeTxtJob: vi.fn(),
   resumeDocxJob: vi.fn(),
   resumeEpubJob: vi.fn(),
   resumeFb2Job: vi.fn(),
+  resumePdfJob: vi.fn(),
   listDocumentJobs: vi.fn().mockResolvedValue([]),
   getDocumentProgress: vi.fn().mockRejectedValue(new Error('no progress')),
   getDocumentJob: vi.fn().mockRejectedValue(new Error('no document job')),
@@ -60,6 +63,7 @@ vi.mock('../lib/commands', () => ({
   exportDocxJob: vi.fn(),
   exportEpubJob: vi.fn(),
   exportFb2Job: vi.fn(),
+  exportPdfJob: vi.fn(),
 }));
 
 import * as commands from '../lib/commands';
@@ -264,7 +268,7 @@ describe('translation workspace', () => {
         expect.objectContaining({
           filters: [
             expect.objectContaining({
-              extensions: ['txt', 'docx', 'epub', 'fb2'],
+              extensions: ['txt', 'docx', 'epub', 'fb2', 'pdf'],
             }),
           ],
         }),
@@ -325,6 +329,46 @@ describe('translation workspace', () => {
       );
     },
   );
+
+  it('sends the PDF page range and offers to analyze again when it changes', async () => {
+    const sourcePath = 'C:/books/manual.pdf';
+    const view = (pages: string) => ({
+      ...epubView('ready'),
+      job: {
+        ...epubView('ready').job,
+        format: 'pdf',
+        configuration_version: pages ? `pdf-v1;pages=${pages}` : 'pdf-v1',
+        source_path: sourcePath,
+      },
+    });
+    dialogMocks.open.mockResolvedValue(sourcePath);
+    vi.mocked(commands.analyzePdf).mockResolvedValue(view('1-6'));
+    render(
+      <DocumentsPanel
+        sourceLanguage="ru"
+        targetLanguage="en"
+        modelId="model"
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('PDF page ranges'), {
+      target: { value: '1-6' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /choose/i }));
+    await screen.findByRole('button', { name: 'Start translation' });
+    expect(commands.analyzePdf).toHaveBeenCalledWith(
+      sourcePath,
+      'ru',
+      'en',
+      '1-6',
+    );
+    expect(screen.getByText('Pages: 1-6')).toBeTruthy();
+    expect(screen.queryByText(/Analyze again/)).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('PDF page ranges'), {
+      target: { value: '7-9' },
+    });
+    expect(await screen.findByText(/Analyze again with pages/)).toBeTruthy();
+  });
 
   it('keeps the full document filename available when displaying a long FB2 basename', async () => {
     const basename = `${'verylongfilename'.repeat(10)}.fb2`;
@@ -413,7 +457,7 @@ describe('translation workspace', () => {
       expect.objectContaining({
         filters: [
           expect.objectContaining({
-            extensions: ['txt', 'docx', 'epub', 'fb2'],
+            extensions: ['txt', 'docx', 'epub', 'fb2', 'pdf'],
           }),
         ],
       }),

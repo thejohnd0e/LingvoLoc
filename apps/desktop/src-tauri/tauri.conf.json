@@ -39,6 +39,7 @@
     "active": true,
     "targets": ["nsis"],
     "icon": ["icons/icon.png"],
+    "resources": { "resources/pdfium/*": "pdfium/" },
     "windows": {
       "webviewInstallMode": { "type": "embedBootstrapper", "silent": true },
       "nsis": {

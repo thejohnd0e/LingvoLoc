@@ -5,12 +5,14 @@ import {
   analyzeDocx,
   analyzeEpub,
   analyzeFb2,
+  analyzePdf,
   analyzeTxt,
   cancelDocumentJob,
   clearDocumentJob,
   exportDocxJob,
   exportEpubJob,
   exportFb2Job,
+  exportPdfJob,
   exportTxtJob,
   getDocumentJob,
   getDocumentProgress,
@@ -19,15 +21,18 @@ import {
   resumeDocxJob,
   resumeEpubJob,
   resumeFb2Job,
+  resumePdfJob,
   resumeTxtJob,
   startDocxJob,
   startEpubJob,
   startFb2Job,
+  startPdfJob,
   startTxtJob,
   type DocumentJobSummary,
   type DocumentJobView,
 } from '../lib/commands';
 import { errorDetail } from '../lib/errors';
+import Spinner from './Spinner';
 import {
   formatDuration,
   formatEta,
@@ -35,10 +40,19 @@ import {
 } from './documentProgress';
 
 const storedJobKey = 'lingvoloc.document-job-id';
-const supportedExtensions = ['txt', 'docx', 'epub', 'fb2'];
+const supportedExtensions = ['txt', 'docx', 'epub', 'fb2', 'pdf'];
 
 function fileName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
+}
+
+/** Page selection stored in a PDF job's configuration version, or ''. */
+function jobPages(configuration: string): string {
+  return configuration.split(';pages=')[1] ?? '';
+}
+
+function normalizePages(value: string): string {
+  return value.replace(/\s+/g, '');
 }
 
 function summaryLabel(summary: DocumentJobSummary): string {
@@ -52,7 +66,7 @@ function summaryLabel(summary: DocumentJobSummary): string {
   return state.replace(/_/g, ' ');
 }
 
-type DocumentFormat = 'txt' | 'docx' | 'epub' | 'fb2';
+type DocumentFormat = 'txt' | 'docx' | 'epub' | 'fb2' | 'pdf';
 
 const documentFormats: Record<
   DocumentFormat,
@@ -63,6 +77,7 @@ const documentFormats: Record<
       sourcePath: string,
       sourceLanguage: string,
       targetLanguage: string,
+      pages?: string,
     ) => Promise<DocumentJobView>;
     start: (jobId: string) => Promise<DocumentJobView>;
     resume: (jobId: string) => Promise<DocumentJobView>;
@@ -104,11 +119,22 @@ const documentFormats: Record<
     resume: resumeFb2Job,
     export: exportFb2Job,
   },
+  pdf: {
+    label: 'PDF',
+    extension: 'pdf',
+    analyze: analyzePdf,
+    start: startPdfJob,
+    resume: resumePdfJob,
+    export: exportPdfJob,
+  },
 };
 
 function documentFormat(value: string): DocumentFormat {
   const format = value.toLowerCase();
-  return format === 'docx' || format === 'epub' || format === 'fb2'
+  return format === 'docx' ||
+    format === 'epub' ||
+    format === 'fb2' ||
+    format === 'pdf'
     ? format
     : 'txt';
 }
@@ -125,7 +151,7 @@ interface DocumentsPanelProps {
 }
 
 const generatedTranslation =
-  /\.translated\.[a-z]{2,3}(-[a-z0-9]+)?\.(txt|docx|epub|fb2)$/i;
+  /\.translated\.[a-z]{2,3}(-[a-z0-9]+)?\.(txt|docx|epub|fb2|pdf)$/i;
 
 export default function DocumentsPanel({
   sourceLanguage,
@@ -153,6 +179,9 @@ export default function DocumentsPanel({
   const [queueRunning, setQueueRunning] = useState(false);
   const [queueMessage, setQueueMessage] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [pdfPages, setPdfPages] = useState('');
+  /** File being analyzed right now, for the wait indicator. */
+  const [analyzing, setAnalyzing] = useState<string | null>(null);
   const dropHandler = useRef<(paths: string[]) => void>(() => undefined);
 
   async function refreshRecent() {
@@ -204,10 +233,11 @@ export default function DocumentsPanel({
       supportedExtensions.includes((path.split('.').pop() ?? '').toLowerCase()),
     );
     if (supported.length === 0) {
-      setMessage('Unsupported file. Choose .txt, .docx, .epub, or .fb2.');
+      setMessage('Unsupported file. Choose .txt, .docx, .epub, .fb2, or .pdf.');
       return;
     }
     setBusy(true);
+    setAnalyzing(fileName(supported[0]));
     const failures: string[] = [];
     let created = 0;
     let first: DocumentJobView | null = null;
@@ -215,11 +245,20 @@ export default function DocumentsPanel({
     for (const [index, path] of supported.entries()) {
       const format =
         documentFormats[documentFormat(path.split('.').pop() ?? '')];
-      setMessage(
-        `Analyzing ${format.label} ${index + 1} / ${supported.length}: ${fileName(path)}…`,
+      setAnalyzing(
+        `${format.label} ${index + 1} / ${supported.length}: ${fileName(path)}`,
       );
+      setMessage('');
       try {
-        const next = await format.analyze(path, sourceLanguage, targetLanguage);
+        const next =
+          format.extension === 'pdf'
+            ? await format.analyze(
+                path,
+                sourceLanguage,
+                targetLanguage,
+                pdfPages,
+              )
+            : await format.analyze(path, sourceLanguage, targetLanguage);
         clearedJobIds.current.delete(next.job.id);
         created += 1;
         first ??= next;
@@ -247,6 +286,7 @@ export default function DocumentsPanel({
         .filter(Boolean)
         .join(' '),
     );
+    setAnalyzing(null);
     setBusy(false);
     void refreshRecent();
   }
@@ -306,6 +346,13 @@ export default function DocumentsPanel({
       setMessage(`Open failed · ${errorDetail(reason)}`);
       void refreshRecent();
     }
+  }
+
+  async function reanalyzeWithPages() {
+    if (!job || busy || queueRunning) return;
+    const path = job.job.source_path;
+    await removeJob(job.job.id);
+    await analyzePaths([path]);
   }
 
   async function removeJob(jobId: string) {
@@ -591,12 +638,12 @@ export default function DocumentsPanel({
       <div className="documents-heading">
         <div>
           <span className="panel-label">
-            DOCUMENTS / TXT + DOCX + EPUB + FB2
+            DOCUMENTS / TXT + DOCX + EPUB + FB2 + PDF
           </span>
           <h2>Translate a document</h2>
           <p>
-            TXT, DOCX, EPUB, and FB2 are supported. Drop files anywhere on the
-            window or choose several at once. The original file is never
+            TXT, DOCX, EPUB, FB2, and PDF are supported. Drop files anywhere on
+            the window or choose several at once. The original file is never
             replaced.
           </p>
         </div>
@@ -606,9 +653,36 @@ export default function DocumentsPanel({
           onClick={() => void chooseAndAnalyze()}
           disabled={busy || queueRunning}
         >
-          Choose .txt, .docx, .epub, or .fb2
+          Choose .txt, .docx, .epub, .fb2, or .pdf
         </button>
       </div>
+      {analyzing && (
+        <p className="document-analyzing" role="status">
+          <Spinner />
+          Analyzing {analyzing}… reading a large file can take several seconds.
+        </p>
+      )}
+      {message && (
+        <p className="document-message" role="status">
+          {message}
+        </p>
+      )}
+      <label className="document-pages">
+        <span>PDF pages (optional)</span>
+        <input
+          type="text"
+          value={pdfPages}
+          placeholder="all pages, or e.g. 5-12, 20, 30-"
+          onChange={(event) => setPdfPages(event.target.value)}
+          disabled={busy || queueRunning}
+          aria-label="PDF page ranges"
+        />
+        <small>
+          Applied when a PDF is added: only these pages are translated and saved
+          to a separate PDF (<code>.pN-M.pdf</code>). Changing it later needs
+          the file to be analyzed again.
+        </small>
+      </label>
       {job && (
         <div className="document-job" aria-live="polite">
           <div className="document-job-meta">
@@ -618,6 +692,11 @@ export default function DocumentsPanel({
             <span>
               {job.job.source_language} → {job.job.target_language}
             </span>
+            {job.job.format === 'pdf' && (
+              <span>
+                Pages: {jobPages(job.job.configuration_version) || 'all'}
+              </span>
+            )}
             <span>Model: {modelId || 'not selected'}</span>
             <span>
               Status:{' '}
@@ -626,6 +705,30 @@ export default function DocumentsPanel({
                 : job.job.state}
             </span>
           </div>
+          {job.job.format === 'pdf' &&
+            state === 'ready' &&
+            normalizePages(pdfPages) !==
+              normalizePages(jobPages(job.job.configuration_version)) && (
+              <button
+                className="quiet"
+                type="button"
+                onClick={() => void reanalyzeWithPages()}
+                disabled={busy || queueRunning}
+              >
+                Analyze again with pages “{pdfPages.trim() || 'all'}”
+              </button>
+            )}
+          {job.job.format === 'pdf' &&
+            state !== 'ready' &&
+            normalizePages(pdfPages) !==
+              normalizePages(jobPages(job.job.configuration_version)) && (
+              <p className="document-message">
+                This job uses pages “
+                {jobPages(job.job.configuration_version) || 'all'}”. To use “
+                {pdfPages.trim() || 'all'}”, clear the job and add the file
+                again.
+              </p>
+            )}
           <progress max={job.total_blocks || 1} value={job.translated_blocks} />
           <span className="document-progress">
             {translationDone
@@ -769,11 +872,6 @@ export default function DocumentsPanel({
             </button>
           </div>
         </div>
-      )}
-      {message && (
-        <p className="document-message" role="status">
-          {message}
-        </p>
       )}
       {queueMessage && (
         <p className="document-message" role="status">

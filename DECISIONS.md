@@ -32,6 +32,17 @@
 - **Decision:** Export translated FB2 through the existing temporary-file and no-source-replacement safeguards; use `CompletedWithWarnings` when parser diagnostics exist.
 - **Reason:** FB2 must retain document-job recovery and safe export semantics already used by TXT, DOCX, and EPUB.
 
+## Phase 8 PDF
+
+- **Decision:** Translate text PDFs in place with `pdfium-render` (PDFium loaded at runtime from `pdfium.dll`, bundled in the installer via `scripts/fetch-pdfium.ps1`), block ids `pdf#pNNNN-KKK`, no geometry stored in the job database: export re-runs the same deterministic analysis on the hash-checked source.
+- **Reason:** Blocks stay plain text like the other formats, so the existing worker, recovery and queue are reused; geometry never goes stale because the source must be unchanged.
+- **Decision:** Remove the original text objects and add new embedded-font text objects (never white boxes), copying the original fill colour; keep everything else on the page.
+- **Reason:** Copy/search must not mix original and translated text, and backgrounds, panels and images must survive.
+- **Decision:** Code, page numbers and short all-caps labels are not translated. Code is recognised by a dark panel with coloured text or by code tokens, because real books often set code in the body font.
+- **Reason:** Translating code corrupts it; the heuristic is deliberately conservative and unrecognised code is translated rather than dropped.
+- **Decision:** PDFium can be bound once per process, so one instance lives behind a mutex (`pdf/engine.rs`).
+- **Decision:** A reading-friendly EPUB output for PDFs is optional and comes after layout preservation (user request 2026-09-30).
+
 ## Standalone Runtime
 
 - **Decision:** Add a `standalone` runtime mode next to LM Studio that spawns the user's `llama-server.exe` (llama.cpp) with a `.gguf` chosen from a user-selected models folder, and talks to it over the same OpenAI-compatible API on a free `127.0.0.1` port.

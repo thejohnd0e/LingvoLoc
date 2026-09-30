@@ -39,3 +39,6 @@ target/
 # Local user dictionary archives
 DIC/
 .playwright-mcp/
+
+# PDFium runtime fetched by scripts/fetch-pdfium.ps1
+apps/desktop/src-tauri/resources/pdfium/
