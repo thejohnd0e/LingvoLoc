@@ -223,6 +223,12 @@ export interface DocumentJobView {
   cancelled: boolean;
 }
 
+export interface DocumentJobSummary {
+  job: DocumentJob;
+  total_blocks: number;
+  translated_blocks: number;
+}
+
 export interface DocumentExport {
   output_path: string;
   job: DocumentJobView;
@@ -258,24 +264,44 @@ export const analyzeEpub = (
     sourceLanguage,
     targetLanguage,
   });
+export const analyzeFb2 = (
+  sourcePath: string,
+  sourceLanguage: string,
+  targetLanguage: string,
+) =>
+  invokeNative<DocumentJobView>('analyze_fb2', {
+    sourcePath,
+    sourceLanguage,
+    targetLanguage,
+  });
 export const startTxtJob = (jobId: string) =>
   invokeNative<DocumentJobView>('start_txt_job', { jobId });
 export const startDocxJob = (jobId: string) =>
   invokeNative<DocumentJobView>('start_docx_job', { jobId });
 export const startEpubJob = (jobId: string) =>
   invokeNative<DocumentJobView>('start_epub_job', { jobId });
+export const startFb2Job = (jobId: string) =>
+  invokeNative<DocumentJobView>('start_fb2_job', { jobId });
 export const resumeTxtJob = (jobId: string) =>
   invokeNative<DocumentJobView>('resume_txt_job', { jobId });
 export const resumeDocxJob = (jobId: string) =>
   invokeNative<DocumentJobView>('resume_docx_job', { jobId });
 export const resumeEpubJob = (jobId: string) =>
   invokeNative<DocumentJobView>('resume_epub_job', { jobId });
+export const resumeFb2Job = (jobId: string) =>
+  invokeNative<DocumentJobView>('resume_fb2_job', { jobId });
 export const getDocumentJob = (jobId: string) =>
   invokeNative<DocumentJobView>('get_document_job', { jobId });
+export const getDocumentProgress = (jobId: string) =>
+  invokeNative<DocumentJobSummary>('get_document_progress', { jobId });
+export const listDocumentJobs = () =>
+  invokeNative<DocumentJobSummary[]>('list_document_jobs');
 export const pauseDocumentJob = (jobId: string) =>
   invokeNative<DocumentJobView>('pause_document_job', { jobId });
 export const cancelDocumentJob = (jobId: string) =>
   invokeNative<DocumentJobView>('cancel_document_job', { jobId });
+export const clearDocumentJob = (jobId: string) =>
+  invokeNative<void>('clear_document_job', { jobId });
 export const exportTxtJob = (jobId: string, outputPath?: string) =>
   invokeNative<DocumentExport>('export_txt_job', {
     jobId,
@@ -288,6 +314,11 @@ export const exportDocxJob = (jobId: string, outputPath?: string) =>
   });
 export const exportEpubJob = (jobId: string, outputPath?: string) =>
   invokeNative<DocumentExport>('export_epub_job', {
+    jobId,
+    outputPath: outputPath ?? null,
+  });
+export const exportFb2Job = (jobId: string, outputPath?: string) =>
+  invokeNative<DocumentExport>('export_fb2_job', {
     jobId,
     outputPath: outputPath ?? null,
   });

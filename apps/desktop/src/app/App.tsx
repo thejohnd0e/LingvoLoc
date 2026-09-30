@@ -50,6 +50,8 @@ import Spinner from './Spinner';
 import TextSizeControls from './TextSizeControls';
 import DocumentsPanel from './DocumentsPanel';
 
+const modeKey = 'lingvoloc.mode';
+
 const defaultSettings: Settings = {
   runtimeMode: 'standalone',
   modelsDirectory: '',
@@ -176,6 +178,14 @@ export default function App() {
   const [pathBusy, setPathBusy] = useState(false);
   const [llamaDownload, setLlamaDownload] =
     useState<LlamaDownloadProgress | null>(null);
+  const [mode, setMode] = useState<'text' | 'files'>(() => {
+    try {
+      return localStorage.getItem(modeKey) === 'files' ? 'files' : 'text';
+    } catch {
+      return 'text';
+    }
+  });
+  const [fileProgress, setFileProgress] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [additionalOpen, setAdditionalOpen] = useState(false);
   const [lexicalBusy, setLexicalBusy] = useState(false);
@@ -814,6 +824,25 @@ export default function App() {
       : null;
   }
 
+  function chooseMode(next: 'text' | 'files') {
+    setMode(next);
+    try {
+      localStorage.setItem(modeKey, next);
+    } catch {
+      // The mode is only a convenience; ignore blocked storage.
+    }
+  }
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (event.key === '1') chooseMode('text');
+      if (event.key === '2') chooseMode('files');
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   return (
     <main className="shell">
       <header className="masthead">
@@ -839,6 +868,29 @@ export default function App() {
         </div>
         <div className="masthead-side">
           <div className="masthead-icons">
+            <div className="mode-switch" role="tablist" aria-label="Mode">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === 'text'}
+                title="Text translation (Ctrl+1)"
+                onClick={() => chooseMode('text')}
+              >
+                Text
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === 'files'}
+                title="File translation (Ctrl+2)"
+                onClick={() => chooseMode('files')}
+              >
+                Files
+                {fileProgress !== null && (
+                  <span className="mode-badge">{fileProgress}%</span>
+                )}
+              </button>
+            </div>
             <button
               className="icon-button"
               type="button"
@@ -870,7 +922,11 @@ export default function App() {
           </div>
         </div>
       </header>
-      <section className="workspace" aria-label="Translation workspace">
+      <section
+        className="workspace"
+        aria-label="Translation workspace"
+        hidden={mode !== 'text'}
+      >
         <div className="panel">
           <span className="panel-label">
             Source · {settings.sourceLanguage}
@@ -939,7 +995,11 @@ export default function App() {
           </button>
         </div>
       </section>
-      <section className="controls" aria-label="Translation settings">
+      <section
+        className="controls"
+        aria-label="Translation settings"
+        data-mode={mode}
+      >
         <label>
           From
           <select
@@ -1087,7 +1147,7 @@ export default function App() {
           {loading ? 'Translating…' : 'Translate'} <span>Enter</span>
         </button>
       </section>
-      <div className="feedback" role="status">
+      <div className="feedback" role="status" hidden={mode !== 'text'}>
         {loading && <Spinner />}
         {loading
           ? settings.runtimeMode === 'standalone'
@@ -1102,8 +1162,13 @@ export default function App() {
         {detectedLanguage ? ` · detected ${detectedLanguage}` : ''}
       </div>
       <DocumentsPanel
+        hidden={mode !== 'files'}
+        onActivity={setFileProgress}
+        onFileDrop={() => chooseMode('files')}
         sourceLanguage={settings.sourceLanguage}
-        targetLanguage={settings.targetLanguage}
+        targetLanguage={
+          settings.sourceLanguage === 'auto' ? 'auto' : settings.targetLanguage
+        }
         modelId={settings.modelId}
       />
       {settingsOpen && (
@@ -1351,6 +1416,7 @@ export default function App() {
       )}
       <details
         className="additional-options"
+        hidden={mode !== 'text'}
         open={additionalOpen}
         onToggle={(event) => setAdditionalOpen(event.currentTarget.open)}
       >

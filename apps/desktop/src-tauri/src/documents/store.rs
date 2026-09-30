@@ -121,6 +121,59 @@ impl DocumentJobStore {
             .map_err(|error| RuntimeError::Connection(format!("document job read: {error}")))
     }
 
+    /// Newest jobs first, with block counts computed in SQL so a list of large books
+    /// does not load every block.
+    pub fn summaries(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<(DocumentJob, usize, usize)>, RuntimeError> {
+        self.query_summaries(
+            "ORDER BY j.rowid DESC LIMIT ?1",
+            i64::try_from(limit).unwrap_or(i64::MAX),
+        )
+    }
+
+    /// One job with block counts and without its blocks; used for progress polling.
+    pub fn summary(&self, id: &str) -> Result<Option<(DocumentJob, usize, usize)>, RuntimeError> {
+        Ok(self.query_summaries_by_id(id)?.into_iter().next())
+    }
+
+    fn query_summaries_by_id(
+        &self,
+        id: &str,
+    ) -> Result<Vec<(DocumentJob, usize, usize)>, RuntimeError> {
+        let mut statement = self
+            .connection
+            .prepare(&format!("{SUMMARY_SELECT} WHERE j.id = ?1"))
+            .map_err(summary_error)?;
+        let rows = statement
+            .query_map([id], summary_row)
+            .map_err(summary_error)?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(summary_error)
+    }
+
+    fn query_summaries(
+        &self,
+        tail: &str,
+        limit: i64,
+    ) -> Result<Vec<(DocumentJob, usize, usize)>, RuntimeError> {
+        let mut statement = self
+            .connection
+            .prepare(&format!("{SUMMARY_SELECT} {tail}"))
+            .map_err(summary_error)?;
+        let rows = statement
+            .query_map([limit], summary_row)
+            .map_err(summary_error)?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(summary_error)
+    }
+
+    pub fn delete(&self, id: &str) -> Result<(), RuntimeError> {
+        self.connection
+            .execute("DELETE FROM document_jobs WHERE id = ?1", [id])
+            .map_err(|error| RuntimeError::Connection(format!("document job delete: {error}")))?;
+        Ok(())
+    }
+
     pub fn blocks(&self, job_id: &str) -> Result<Vec<DocumentBlock>, RuntimeError> {
         let mut statement = self
             .connection
@@ -325,6 +378,28 @@ fn save_block_transaction(
     Ok(())
 }
 
+const SUMMARY_SELECT: &str = "SELECT j.id, j.source_path, j.source_hash, j.format,
+        j.parser_version, j.source_language, j.target_language, j.runtime_snapshot,
+        j.configuration_version, j.state, j.error,
+        (SELECT COUNT(*) FROM document_blocks b WHERE b.job_id = j.id),
+        (SELECT COUNT(*) FROM document_blocks b
+          WHERE b.job_id = j.id AND b.translated_text IS NOT NULL)
+        FROM document_jobs j";
+
+fn summary_error(error: rusqlite::Error) -> RuntimeError {
+    RuntimeError::Connection(format!("document job summary: {error}"))
+}
+
+fn summary_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<(DocumentJob, usize, usize)> {
+    let total: i64 = row.get(11)?;
+    let translated: i64 = row.get(12)?;
+    Ok((
+        row_to_job(row)?,
+        usize::try_from(total).unwrap_or_default(),
+        usize::try_from(translated).unwrap_or_default(),
+    ))
+}
+
 fn row_to_job(row: &rusqlite::Row<'_>) -> rusqlite::Result<DocumentJob> {
     let state: String = row.get(9)?;
     Ok(DocumentJob {
@@ -411,6 +486,27 @@ mod tests {
         store.initialize().unwrap();
         store.create(&job()).unwrap();
         store
+    }
+
+    #[test]
+    fn summaries_list_newest_first_with_counts() {
+        let mut store = initialized_store_with_job();
+        let mut second = job();
+        second.id = "job-2".into();
+        store.create(&second).unwrap();
+        store.save_block("job-1", &block("b-1", 0, "one")).unwrap();
+
+        let list = store.summaries(10).unwrap();
+
+        assert_eq!(list[0].0.id, "job-2");
+        let one = store.summary("job-1").unwrap().unwrap();
+        assert_eq!((one.1, one.2), (1, 1));
+        assert!(store.summary("missing").unwrap().is_none());
+        assert_eq!((list[0].1, list[0].2), (0, 0));
+        assert_eq!(
+            (list[1].0.id.as_str(), list[1].1, list[1].2),
+            ("job-1", 1, 1)
+        );
     }
 
     #[test]
@@ -501,17 +597,19 @@ mod tests {
     }
 
     #[test]
-    fn diagnostics_cascade_when_job_is_deleted() {
+    fn deleting_a_job_cascades_to_blocks_and_diagnostics() {
         let mut store = initialized_store_with_job();
+        store
+            .save_block("job-1", &block("b-1", 0, "source"))
+            .unwrap();
         store
             .replace_diagnostics("job-1", &["warning".into()])
             .unwrap();
 
-        store
-            .connection
-            .execute("DELETE FROM document_jobs WHERE id = ?1", ["job-1"])
-            .unwrap();
+        store.delete("job-1").unwrap();
 
+        assert!(store.get("job-1").unwrap().is_none());
+        assert!(store.blocks("job-1").unwrap().is_empty());
         assert!(store.diagnostics("job-1").unwrap().is_empty());
     }
 

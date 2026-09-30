@@ -4,6 +4,7 @@ use crate::domain::{
     TranslationRequest, TranslationResult,
 };
 use crate::runtimes::{llama_server::StandaloneRuntime, lm_studio::LmStudioRuntime};
+use crate::trace::runtime_event as trace_runtime;
 use std::time::Instant;
 
 pub fn runtime(settings: &Settings) -> Result<Box<dyn ModelRuntime>, RuntimeError> {
@@ -35,7 +36,16 @@ pub fn translate(
     settings.model_id = request.model_id.clone();
     let runtime = runtime(&settings)?;
     let started = Instant::now();
-    let completion = runtime.complete(adapter.build_request(&request)?)?;
+    let built = adapter.build_request(&request)?;
+    trace_runtime(
+        "translate_begin",
+        &format!("chars={}", request.text.chars().count()),
+    );
+    let completion = runtime.complete(built)?;
+    trace_runtime(
+        "translate_complete_returned",
+        &format!("ms={}", started.elapsed().as_millis()),
+    );
     let completion_tokens = completion.completion_tokens;
     let text = adapter.parse_response(completion)?;
     Ok(TranslationResult {

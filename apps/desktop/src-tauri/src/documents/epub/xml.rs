@@ -120,6 +120,25 @@ mod tests {
     }
 
     #[test]
+    fn svg_is_reported_only_when_it_contains_text() {
+        let cover = br#"<html xmlns="http://www.w3.org/1999/xhtml"><body>
+            <svg xmlns="http://www.w3.org/2000/svg">
+              <image width="10" height="10"/>
+            </svg><p>Text</p></body></html>"#;
+        let parsed = super::parse_document(cover, "OPS/cover.xhtml").unwrap();
+        assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+
+        let labelled = br#"<html xmlns="http://www.w3.org/1999/xhtml"><body>
+            <svg xmlns="http://www.w3.org/2000/svg"><text>Label</text></svg>
+            <p>Text</p></body></html>"#;
+        let parsed = super::parse_document(labelled, "OPS/chart.xhtml").unwrap();
+        assert!(parsed
+            .diagnostics
+            .iter()
+            .any(|item| item.contains("unsupported EPUB XHTML element: svg")));
+    }
+
+    #[test]
     fn rejects_external_xhtml_resource_references_during_analysis() {
         for resource in [
             r#"<img src="https://example.test/image.png"/>"#,
@@ -439,7 +458,10 @@ pub(super) fn parse_document(bytes: &[u8], path: &str) -> Result<ParsedDocument,
                     validate_css_references(&text.xml_content(XmlVersion::Implicit1_0))?;
                 }
                 if let Some(skip) = &mut skipped {
-                    skip.has_text = true;
+                    // Indentation between child tags is not translatable text.
+                    if !text.xml_content(XmlVersion::Implicit1_0).trim().is_empty() {
+                        skip.has_text = true;
+                    }
                 } else if let Some(candidate) = &mut current {
                     candidate.text_nodes += 1;
                     candidate

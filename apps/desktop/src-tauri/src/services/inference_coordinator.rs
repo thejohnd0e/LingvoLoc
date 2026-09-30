@@ -120,19 +120,31 @@ impl InferenceCoordinator {
         Ok(())
     }
 
-    /// Stops accepting new work and waits for the active blocking request to finish.
-    pub fn shutdown(&self) {
+    /// Stops accepting new work without waiting for an active blocking request.
+    pub fn begin_shutdown(&self) {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
         state.shutting_down = true;
         self.wake.notify_all();
+    }
+
+    pub fn wait_for_idle(&self) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
         while state.active || state.lifecycle_busy {
             state = match self.wake.wait(state) {
                 Ok(state) => state,
                 Err(_) => return,
             };
         }
+    }
+
+    /// Stops accepting new work and waits for the active blocking request to finish.
+    pub fn shutdown(&self) {
+        self.begin_shutdown();
+        self.wait_for_idle();
     }
 
     fn lock_state(&self) -> Result<std::sync::MutexGuard<'_, CoordinatorState>, RuntimeError> {
@@ -280,6 +292,34 @@ mod tests {
         assert!(coordinator
             .run_interactive("model-a", || ok("late"))
             .is_err());
+    }
+
+    #[test]
+    fn begin_shutdown_rejects_new_work_before_active_work_drains() {
+        let coordinator = Arc::new(InferenceCoordinator::default());
+        let active = Arc::new(Barrier::new(2));
+        let release = Arc::new(Barrier::new(2));
+        let worker_coordinator = Arc::clone(&coordinator);
+        let worker_active = Arc::clone(&active);
+        let worker_release = Arc::clone(&release);
+        let worker = thread::spawn(move || {
+            worker_coordinator
+                .run_interactive("model-a", || {
+                    worker_active.wait();
+                    worker_release.wait();
+                    ok("done")
+                })
+                .unwrap();
+        });
+
+        active.wait();
+        coordinator.begin_shutdown();
+        assert!(coordinator
+            .run_interactive("model-a", || ok("late"))
+            .is_err());
+        release.wait();
+        coordinator.wait_for_idle();
+        worker.join().unwrap();
     }
 
     #[test]

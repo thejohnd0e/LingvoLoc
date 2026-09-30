@@ -4,6 +4,7 @@ pub mod documents;
 mod domain;
 mod runtimes;
 mod services;
+mod trace;
 
 use domain::{
     DetectedLanguage, LocalModel, RuntimeError, RuntimeMode, RuntimeStatus, Settings,
@@ -510,27 +511,37 @@ pub fn run() {
             documents::commands::analyze_txt,
             documents::commands::analyze_docx,
             documents::commands::analyze_epub,
+            documents::commands::fb2::analyze_fb2,
             documents::commands::start_txt_job,
             documents::commands::start_docx_job,
             documents::commands::start_epub_job,
+            documents::commands::fb2::start_fb2_job,
             documents::commands::resume_txt_job,
             documents::commands::resume_docx_job,
             documents::commands::resume_epub_job,
+            documents::commands::fb2::resume_fb2_job,
             documents::commands::get_document_job,
+            documents::commands::list_document_jobs,
+            documents::commands::get_document_progress,
             documents::commands::pause_document_job,
             documents::commands::cancel_document_job,
+            documents::commands::clear_document_job,
             documents::commands::export_txt_job,
             documents::commands::export_docx_job,
-            documents::commands::export_epub_job
+            documents::commands::export_epub_job,
+            documents::commands::fb2::export_fb2_job
         ])
         .build(tauri::generate_context!())
         .expect("error while building LingvoLoc")
         .run(|_app, event| {
             if let tauri::RunEvent::Exit = event {
                 if let Some(state) = _app.try_state::<AppState>() {
-                    state.inference.shutdown();
+                    state.inference.begin_shutdown();
+                    runtimes::llama_server::interrupt("application exit");
+                    state.inference.wait_for_idle();
+                } else {
+                    runtimes::llama_server::interrupt("application exit");
                 }
-                runtimes::llama_server::shutdown();
             }
         });
 }

@@ -74,6 +74,8 @@ Select text and use the toolbar button or the right-click menu **Translate selec
 
 The status pill in the header shows the runtime and the selected model. The app persists endpoint, model, adapter, language selections, two independently selected pair languages, and text-size settings locally. Automatic source detection is enabled by default; successful translations are copied to the clipboard when WebView2 allows clipboard access. The clipboard popup has its own text-size setting, can be resized, and fits its height to its content.
 
+The **Documents** panel translates TXT, DOCX, EPUB, and plain FB2 files through the same local model. FB2 section headings, paragraphs, epigraphs, and notes are translated while metadata, links, images, and embedded resources are preserved. Unsupported FB2 content is left unchanged and reported in the job diagnostics; archived FB2 files are not supported.
+
 ## Development
 
 The sections below are for contributors building LingvoLoc from source.

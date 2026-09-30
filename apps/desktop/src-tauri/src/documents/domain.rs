@@ -42,6 +42,9 @@ pub enum JobState {
 
 impl JobState {
     pub fn transition_to(self, next: Self) -> Result<Self, JobTransitionError> {
+        if self == Self::Failed && next == Self::Translating {
+            return Ok(next);
+        }
         if self.is_terminal() {
             return Err(JobTransitionError::Terminal(self));
         }
@@ -70,6 +73,7 @@ impl JobState {
                 | (Paused, Translating)
                 | (Interrupted, Translating)
                 | (Paused, Cancelled)
+                | (Failed, Translating)
                 | (Exporting, Completed)
                 | (Exporting, CompletedWithWarnings)
                 | (Exporting, Failed)
@@ -119,3 +123,16 @@ impl std::fmt::Display for JobTransitionError {
 }
 
 impl std::error::Error for JobTransitionError {}
+
+#[cfg(test)]
+mod tests {
+    use super::JobState;
+
+    #[test]
+    fn failed_jobs_can_resume_translation() {
+        assert_eq!(
+            JobState::Failed.transition_to(JobState::Translating),
+            Ok(JobState::Translating)
+        );
+    }
+}

@@ -21,6 +21,17 @@
 - **Decision:** Treat an EPUB validator or reader smoke check as a release gate separate from automated tests. The current host has no `epubcheck`, Calibre/`ebook-convert`, Pandoc, or repository EPUBCheck JAR.
 - **Reason:** Package/XML tests prove deterministic reconstruction and preservation, but they cannot prove that an independent EPUB consumer accepts and renders the output.
 
+## Phase 7 FB2
+
+- **Decision:** Add FB2 as a separate plain-XML format on the existing document-job pipeline, using parser/configuration version `fb2-v1`; do not accept archived `.fb2.zip` inputs in the first increment.
+- **Reason:** This enables common `.fb2` books without coupling EPUB ZIP-package assumptions to FB2 or introducing archive extraction.
+- **Decision:** Translate section-title paragraphs, body paragraphs, epigraph paragraphs, and note-body paragraphs in XML order. Leave book metadata unchanged and preserve namespaces, links, identifiers, images, and binary resources.
+- **Reason:** Stable text blocks support the existing recoverable worker while leaving structural and non-text content intact.
+- **Decision:** Do not resolve custom or external XML entities. Preserve the affected paragraph unchanged and report a diagnostic; report unsupported text-bearing elements the same way.
+- **Reason:** This avoids fetching external DTDs or inventing entity text while allowing supported paragraphs in the rest of a book to be translated.
+- **Decision:** Export translated FB2 through the existing temporary-file and no-source-replacement safeguards; use `CompletedWithWarnings` when parser diagnostics exist.
+- **Reason:** FB2 must retain document-job recovery and safe export semantics already used by TXT, DOCX, and EPUB.
+
 ## Standalone Runtime
 
 - **Decision:** Add a `standalone` runtime mode next to LM Studio that spawns the user's `llama-server.exe` (llama.cpp) with a `.gguf` chosen from a user-selected models folder, and talks to it over the same OpenAI-compatible API on a free `127.0.0.1` port.
@@ -214,6 +225,19 @@
 - **Reason:** The current runtimes use blocking HTTP and Standalone owns one shared server; yielding between blocks keeps interactive translation responsive without forcibly cancelling an active request.
 - **Decision:** Runtime lifecycle changes and application exit quiesce the coordinator before replacing or stopping the shared llama-server; lifecycle operations do not permanently disable normal inference unless the application is shutting down.
 - **Reason:** Updating llama.cpp or changing settings must not stop a server underneath an active request or race a queued document block.
+
+## Document Hang Incident
+
+- **Decision:** Treat the block-56 document hang as an unresolved runtime/HTTP problem, not as a frontend polling or coordinator problem, until a fresh reproduction proves otherwise.
+- **Evidence:** The worker log shows `coordinator_acquired` for block 56 and then a request error exactly 120009 ms later; preceding blocks complete normally. The current `Connection: close` header and server interrupt/restart behavior did not prevent this case.
+- **Consequence:** The next fix must instrument and bound the model request at the runtime boundary, correlate it with the llama-server task/log, and add a regression test before changing UI state handling. Green unit/build gates alone do not close this incident.
+
+## Streaming Requests With Idle Timeout
+
+- **Decision:** Chat completions use `stream: true`, read on a dedicated thread with a small tokio runtime; each wait (headers, every chunk) has a 45 s idle deadline and the whole request a 900 s cap. Servers that ignore `stream` and return JSON are still accepted.
+- **Reason:** The blocking reqwest client has no per-read timeout, so a server that accepts a request and goes silent held a document block for the full 120 s. Idle detection bounds a stall to 45 s and lets Standalone restart and retry.
+- **Decision:** Runtime/HTTP/server-lifecycle events are logged to the same file as the document worker.
+- **Reason:** The block-56 stall could not be reproduced outside the app; the next occurrence must show whether the server was alive and answering `/health`.
 
 ## Document Segmentation
 

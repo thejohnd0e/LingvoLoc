@@ -15,6 +15,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
+pub mod fb2;
+
 const CONFIGURATION_VERSION: &str = "txt-v1";
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -26,6 +28,47 @@ pub struct DocumentJobView {
     pub total_blocks: usize,
     pub paused: bool,
     pub cancelled: bool,
+}
+
+/// Lightweight row for the recent-jobs list (no blocks or diagnostics).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DocumentJobSummary {
+    pub job: DocumentJob,
+    pub total_blocks: usize,
+    pub translated_blocks: usize,
+}
+
+#[tauri::command(async)]
+pub fn list_document_jobs(app: AppHandle) -> Result<Vec<DocumentJobSummary>, RuntimeError> {
+    let store = open_store(&app)?;
+    Ok(store
+        .summaries(30)?
+        .into_iter()
+        .map(
+            |(job, total_blocks, translated_blocks)| DocumentJobSummary {
+                job,
+                total_blocks,
+                translated_blocks,
+            },
+        )
+        .collect())
+}
+
+/// Progress without blocks or diagnostics; cheap enough to poll on large books.
+#[tauri::command(async)]
+pub fn get_document_progress(
+    app: AppHandle,
+    job_id: String,
+) -> Result<DocumentJobSummary, RuntimeError> {
+    let store = open_store(&app)?;
+    let (job, total_blocks, translated_blocks) = store
+        .summary(&job_id)?
+        .ok_or_else(|| RuntimeError::InvalidInput("document job not found".into()))?;
+    Ok(DocumentJobSummary {
+        job,
+        total_blocks,
+        translated_blocks,
+    })
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -45,11 +88,11 @@ fn store_path(app: &AppHandle) -> Result<PathBuf, RuntimeError> {
     Ok(directory.join("document-jobs.sqlite"))
 }
 
-fn open_store(app: &AppHandle) -> Result<DocumentJobStore, RuntimeError> {
+pub(super) fn open_store(app: &AppHandle) -> Result<DocumentJobStore, RuntimeError> {
     DocumentJobStore::open(&store_path(app)?)
 }
 
-fn new_job_id() -> String {
+pub(super) fn new_job_id() -> String {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -59,7 +102,7 @@ fn new_job_id() -> String {
 
 static TEMP_NONCE: AtomicU64 = AtomicU64::new(0);
 
-fn create_temporary_output(parent: &Path) -> Result<(PathBuf, fs::File), RuntimeError> {
+pub(super) fn create_temporary_output(parent: &Path) -> Result<(PathBuf, fs::File), RuntimeError> {
     for _ in 0..32 {
         let nonce = TEMP_NONCE.fetch_add(1, Ordering::Relaxed);
         let path = parent.join(format!(
@@ -105,7 +148,11 @@ fn sanitize_filename_component(value: &str) -> String {
     }
 }
 
-fn default_output_path(source: &Path, target_language: &str, extension: &str) -> PathBuf {
+pub(super) fn default_output_path(
+    source: &Path,
+    target_language: &str,
+    extension: &str,
+) -> PathBuf {
     let stem = source
         .file_stem()
         .and_then(|value| value.to_str())
@@ -114,7 +161,10 @@ fn default_output_path(source: &Path, target_language: &str, extension: &str) ->
     source.with_file_name(format!("{stem}.translated.{language}.{extension}"))
 }
 
-fn view(store: &DocumentJobStore, job_id: &str) -> Result<DocumentJobView, RuntimeError> {
+pub(super) fn view(
+    store: &DocumentJobStore,
+    job_id: &str,
+) -> Result<DocumentJobView, RuntimeError> {
     let job = store
         .get(job_id)?
         .ok_or_else(|| RuntimeError::InvalidInput("document job not found".into()))?;
@@ -209,7 +259,7 @@ pub fn analyze_txt(
     view(&store, &job_id)
 }
 
-fn run_job(
+pub(super) fn run_job(
     store: &mut DocumentJobStore,
     state: &tauri::State<'_, crate::AppState>,
     job_id: &str,
@@ -227,6 +277,7 @@ fn run_job(
             let label = match job.format.as_str() {
                 "txt" => "TXT",
                 "epub" => "EPUB",
+                "fb2" => "FB2",
                 _ => "DOCX",
             };
             RuntimeError::Connection(format!("read {label} source: {error}"))
@@ -266,7 +317,7 @@ fn run_job(
     result
 }
 
-fn resolve_document_languages(
+pub(super) fn resolve_document_languages(
     source_language: &str,
     target_language: &str,
     sample: &str,
@@ -286,6 +337,11 @@ fn resolve_document_languages(
     } else {
         target_language.to_string()
     };
+    if source == target {
+        return Err(RuntimeError::InvalidInput(format!(
+            "source and target language are both '{source}'. Choose a different target language; the file may already be translated."
+        )));
+    }
     Ok((source, target))
 }
 
@@ -632,6 +688,7 @@ pub fn get_document_job(app: AppHandle, job_id: String) -> Result<DocumentJobVie
 pub fn pause_document_job(app: AppHandle, job_id: String) -> Result<DocumentJobView, RuntimeError> {
     let store = open_store(&app)?;
     store.transition(&job_id, JobState::Pausing, Some("pause requested"))?;
+    crate::runtimes::llama_server::interrupt("pause requested");
     view(&store, &job_id)
 }
 
@@ -642,7 +699,21 @@ pub fn cancel_document_job(
 ) -> Result<DocumentJobView, RuntimeError> {
     let store = open_store(&app)?;
     store.transition(&job_id, JobState::Cancelled, Some("cancelled by user"))?;
+    crate::runtimes::llama_server::interrupt("job cancelled");
     view(&store, &job_id)
+}
+
+#[tauri::command(async)]
+pub fn clear_document_job(app: AppHandle, job_id: String) -> Result<(), RuntimeError> {
+    let store = open_store(&app)?;
+    let state = store.get(&job_id)?.map(|job| job.state);
+    if matches!(
+        state,
+        Some(JobState::Translating | JobState::Pausing | JobState::Cancelled)
+    ) {
+        crate::runtimes::llama_server::interrupt("job cleared");
+    }
+    store.delete(&job_id)
 }
 
 #[tauri::command(async)]
@@ -828,7 +899,7 @@ pub fn export_epub_job(
     })
 }
 
-fn same_path(left: &Path, right: &Path) -> bool {
+pub(super) fn same_path(left: &Path, right: &Path) -> bool {
     match (fs::canonicalize(left), fs::canonicalize(right)) {
         (Ok(left), Ok(right)) => left == right,
         _ => left
@@ -867,6 +938,8 @@ mod tests {
 
     #[test]
     fn keeps_explicit_document_language_direction() {
+        let same = resolve_document_languages("en", "en", "Hello", &settings()).unwrap_err();
+        assert!(same.to_string().contains("both 'en'"), "{same}");
         let resolved = resolve_document_languages("de", "fr", "Hallo", &settings()).unwrap();
         assert_eq!(resolved, ("de".into(), "fr".into()));
     }

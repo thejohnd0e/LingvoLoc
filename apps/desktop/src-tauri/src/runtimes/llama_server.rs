@@ -3,11 +3,13 @@ use crate::domain::{
     CompletionRequest, CompletionResponse, LocalModel, ModelRuntime, RuntimeError, RuntimeStatus,
 };
 use crate::runtimes::lm_studio::LmStudioRuntime;
+use crate::trace::runtime_event as trace_runtime;
 use reqwest::blocking::Client;
 use serde::Serialize;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -27,6 +29,7 @@ struct RunningServer {
 
 /// One llama-server process is shared by the whole app and restarted when the model changes.
 static SERVER: Mutex<Option<RunningServer>> = Mutex::new(None);
+static INTERRUPT_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 pub struct StandaloneRuntime {
     models_directory: PathBuf,
@@ -102,20 +105,91 @@ impl ModelRuntime for StandaloneRuntime {
     }
 
     fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, RuntimeError> {
+        let started = Instant::now();
+        trace_runtime("standalone_begin", "");
         self.require_models_directory()?;
         let exe = effective_server_path(&self.server_path)?;
         let model = resolve_model(&self.models_directory, &self.model_id)?;
+        trace_runtime(
+            "standalone_paths_ok",
+            &format!("ms={}", started.elapsed().as_millis()),
+        );
         let endpoint = ensure_server(&exe, &model)?;
-        LmStudioRuntime::new(&endpoint)?.complete(request)
+        trace_runtime(
+            "standalone_server_ok",
+            &format!("ms={}", started.elapsed().as_millis()),
+        );
+        let generation = INTERRUPT_GENERATION.load(Ordering::Acquire);
+        match LmStudioRuntime::new(&endpoint)?.complete(request.clone()) {
+            Ok(response) => Ok(response),
+            Err(error) => {
+                let interrupted = INTERRUPT_GENERATION.load(Ordering::Acquire) != generation;
+                trace_runtime(
+                    "complete_error",
+                    &format!(
+                        "interrupted={interrupted} error={error} {}",
+                        describe_server(&endpoint)
+                    ),
+                );
+                if !should_restart_after(&error, interrupted) {
+                    return Err(error);
+                }
+                shutdown_because("restart after failed request");
+                let endpoint = ensure_server(&exe, &model)?;
+                let retried = LmStudioRuntime::new(&endpoint)?.complete(request);
+                trace_runtime("retry_result", &format!("ok={}", retried.is_ok()));
+                retried
+            }
+        }
     }
 }
 
+/// Snapshot of the child process and a quick `/health` probe, logged when a request
+/// fails so a stalled server can be told apart from a dead one.
+fn describe_server(endpoint: &str) -> String {
+    let process = match SERVER.try_lock() {
+        Ok(mut guard) => match guard.as_mut() {
+            Some(server) => match server.child.try_wait() {
+                Ok(None) => format!("pid={} alive=true", server.child.id()),
+                Ok(Some(status)) => format!("pid={} exited={status}", server.child.id()),
+                Err(error) => format!("pid={} wait_error={error}", server.child.id()),
+            },
+            None => "server=none".into(),
+        },
+        Err(_) => "server=locked".into(),
+    };
+    let health = endpoint.trim_end_matches("/v1").to_string() + "/health";
+    let probe = Client::builder()
+        .timeout(Duration::from_secs(3))
+        .build()
+        .ok()
+        .map(|client| match client.get(&health).send() {
+            Ok(response) => format!("health={}", response.status().as_u16()),
+            Err(error) => format!("health_error={error}"),
+        })
+        .unwrap_or_else(|| "health=unprobed".into());
+    format!("{process} {probe}")
+}
+
 pub fn shutdown() {
+    shutdown_because("runtime change");
+}
+
+fn shutdown_because(reason: &str) {
     if let Ok(mut guard) = SERVER.lock() {
         if let Some(mut server) = guard.take() {
+            trace_runtime(
+                "server_stop",
+                &format!("pid={} reason={reason}", server.child.id()),
+            );
             stop(&mut server.child);
         }
     }
+}
+
+pub fn interrupt(reason: &str) {
+    INTERRUPT_GENERATION.fetch_add(1, Ordering::AcqRel);
+    shutdown_because(&format!("interrupt: {reason}"));
 }
 
 /// Runs `llama-server --version` so the settings screen can validate the chosen executable.
@@ -358,6 +432,14 @@ fn stop(child: &mut Child) {
     let _ = child.wait();
 }
 
+fn should_restart_after(error: &RuntimeError, interrupted: bool) -> bool {
+    !interrupted
+        && matches!(
+            error,
+            RuntimeError::Connection(_) | RuntimeError::Timeout(_)
+        )
+}
+
 fn log_path() -> PathBuf {
     std::env::temp_dir().join("lingvoloc-llama-server.log")
 }
@@ -484,6 +566,14 @@ fn ensure_server(exe: &Path, model: &Path) -> Result<String, RuntimeError> {
         std::thread::sleep(Duration::from_millis(300));
     }
 
+    trace_runtime(
+        "server_start",
+        &format!(
+            "pid={} port={port} model={}",
+            child.id(),
+            model.file_name().unwrap_or_default().to_string_lossy()
+        ),
+    );
     *guard = Some(RunningServer {
         child,
         exe: exe.to_path_buf(),
@@ -706,6 +796,26 @@ mod tests {
     #[test]
     fn strips_ansi_colors_from_log_output() {
         assert_eq!(strip_ansi("\u{1b}[31mE\u{1b}[0m srv"), "E srv");
+    }
+
+    #[test]
+    fn restarts_standalone_server_after_transport_failures() {
+        assert!(should_restart_after(
+            &RuntimeError::Timeout("stalled".into()),
+            false
+        ));
+        assert!(should_restart_after(
+            &RuntimeError::Connection("refused".into()),
+            false
+        ));
+        assert!(!should_restart_after(
+            &RuntimeError::MalformedResponse("invalid JSON".into()),
+            false
+        ));
+        assert!(!should_restart_after(
+            &RuntimeError::Timeout("interrupted".into()),
+            true
+        ));
     }
 
     #[test]

@@ -9,6 +9,10 @@
     "core:window:allow-scale-factor",
     "core:window:allow-set-size",
     "dialog:default",
-    "opener:default"
+    "opener:allow-default-urls",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [{ "path": "**" }]
+    }
   ]
 }

@@ -7,15 +7,20 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 import {
   analyzeDocx,
   analyzeEpub,
+  analyzeFb2,
   analyzeTxt,
+  clearDocumentJob,
   exportDocxJob,
   exportEpubJob,
+  exportFb2Job,
   exportTxtJob,
   resumeDocxJob,
   resumeEpubJob,
+  resumeFb2Job,
   resumeTxtJob,
   startDocxJob,
   startEpubJob,
+  startFb2Job,
   startTxtJob,
 } from './commands';
 
@@ -40,6 +45,13 @@ const commandCases = [
     start: startEpubJob,
     resume: resumeEpubJob,
     export: exportEpubJob,
+  },
+  {
+    format: 'fb2',
+    analyze: analyzeFb2,
+    start: startFb2Job,
+    resume: resumeFb2Job,
+    export: exportFb2Job,
   },
 ] as const;
 
@@ -82,4 +94,11 @@ describe('document command wrappers', () => {
       );
     },
   );
+
+  it('maps persistent document cleanup to the native command', async () => {
+    await clearDocumentJob('job-1');
+    expect(invokeMock).toHaveBeenLastCalledWith('clear_document_job', {
+      jobId: 'job-1',
+    });
+  });
 });
