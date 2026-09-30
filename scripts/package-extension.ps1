@@ -1,8 +1,14 @@
 $ErrorActionPreference = 'Stop'
 
 npm run extension:build
-$source = Join-Path $PSScriptRoot '..\apps\extension\dist'
-$destination = Join-Path $PSScriptRoot '..\apps\extension\LingvoLoc-extension-2.2.5.zip'
+$extension = Join-Path $PSScriptRoot '..\apps\extension'
+# The ZIP name follows the extension package version so a release never overwrites another version's archive.
+$version = (Get-Content -Raw -LiteralPath (Join-Path $extension 'package.json') | ConvertFrom-Json).version
+if (-not $version) {
+  throw 'apps/extension/package.json has no version'
+}
+$source = Join-Path $extension 'dist'
+$destination = Join-Path $extension "LingvoLoc-extension-$version.zip"
 if (Test-Path -LiteralPath $destination) {
   Remove-Item -LiteralPath $destination -Force
 }
