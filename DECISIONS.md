@@ -239,6 +239,17 @@
 - **Decision:** Runtime/HTTP/server-lifecycle events are logged to the same file as the document worker.
 - **Reason:** The block-56 stall could not be reproduced outside the app; the next occurrence must show whether the server was alive and answering `/health`.
 
+## Files Mode, Job List And Queue
+
+- **Decision:** One window with a Text | Files switch (persisted, Ctrl+1/2); both views stay mounted and only `hidden` toggles, and the Files tab shows a progress badge.
+- **Reason:** Model, runtime and language pair are shared, and a running job must keep polling while the user translates text.
+- **Decision:** The Files view lists recent jobs from a lightweight SQL summary and polls progress with `get_document_progress`; `get_document_job` (all blocks) is used only when opening a job or after an action.
+- **Reason:** Polling every block of a 4000-block book every 750 ms was wasteful.
+- **Decision:** The queue runs ready jobs one at a time in creation order and exports each next to its source without a dialog; pause, cancel, failure or an existing output stops it. Files are analyzed while nothing else runs (drops during a run are refused).
+- **Reason:** One coordinator slot and one SQLite writer per job; never overwriting outputs is an existing safety rule.
+- **Decision:** Same source and target language is rejected natively; a `.translated.<lang>` file name only produces a note, never a refusal; the Documents panel sends `auto` as the target when the source is `auto`.
+- **Reason:** A file name says nothing about content, and a stale stored target caused `en -> en` jobs.
+
 ## Document Segmentation
 
 - **Decision:** When a tokenizer is unavailable, bound document input with a conservative character budget after reserving space for the adapter prompt and model output. Split paragraphs at sentence boundaries, then whitespace, and finally Unicode scalar boundaries for a single oversized token.

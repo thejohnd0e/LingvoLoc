@@ -16,7 +16,7 @@
 
 ## Next
 
-- [ ] **P0: Root cause still unknown; mitigation + tracing shipped in source (rebuild and reinstall to use it). Reproduce and fix the real document hang at block 56.** Current evidence: job `txt-38624-1790741713343` reaches `coordinator_acquired` for block 56, then the HTTP request returns only after `120009 ms` with an error and no saved block. Capture the request payload and matching llama-server task/log state before changing the worker.
+- [ ] **P0 (mitigated, root cause unproven): keep watching for stalls with the shipped tracing; if one recurs read the `job=runtime`/`request_slow` lines. Original report: reproduce and fix the real document hang at block 56.** Current evidence: job `txt-38624-1790741713343` reaches `coordinator_acquired` for block 56, then the HTTP request returns only after `120009 ms` with an error and no saved block. Capture the request payload and matching llama-server task/log state before changing the worker.
 - [x] (done, stream + 45 s idle timeout, tests in `runtimes/lm_studio.rs`) Add a runtime-boundary regression test for a model HTTP response that stalls or never completes; verify that the job transitions to a visible terminal/recoverable state and cannot remain apparently active indefinitely.
 - [x] (done: native same-language rejection + picker guard) Prevent or clearly warn when a LingvoLoc-generated `.translated.<lang>.<ext>` output is selected as a new source, especially when analysis resolves to the same language (`en → en`).
 
