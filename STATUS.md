@@ -2,9 +2,9 @@
 
 ## Current Release
 
-- Version `2.1.1` is the current release across the root, desktop, extension, Tauri, Cargo, and extension packaging metadata.
-- `v2.1.1` is published on GitHub Releases (installer and extension ZIP attached). The last recorded release gate passed: `npm run check`, `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`, and `npm run desktop:build`.
-- Release artifacts are `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_2.1.1_x64-setup.exe` and `apps/extension/LingvoLoc-extension-2.1.1.zip`.
+- Version `2.2.5` is the current release across the root, desktop, extension, Tauri, Cargo, and extension packaging metadata (`Cargo.lock` follows `Cargo.toml`).
+- `v2.2.5` is the release built from the commit tagged `v2.2.5` (installer and extension ZIP attached on GitHub Releases); it adds Files mode, the job list and queue, drag-and-drop, streaming model requests with an idle timeout, FB2 support, and coloured dictionary cards. The release gate was `npm run check`, `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`, and `npm run desktop:build`.
+- Release artifacts are `apps/desktop/src-tauri/target/release/bundle/nsis/LingvoLoc_2.2.5_x64-setup.exe` and `apps/extension/LingvoLoc-extension-2.2.5.zip`. Never repackage the ZIP of a published version (`npm run extension:package` overwrites it).
 
 ## Document Translation Stalls (Closed By The User, Root Cause Never Isolated)
 

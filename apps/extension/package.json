@@ -1,7 +1,7 @@
 {
   "name": "@lingvoloc/extension",
   "private": true,
-  "version": "2.1.1",
+  "version": "2.2.5",
   "type": "module",
   "scripts": {
     "build": "vite build",

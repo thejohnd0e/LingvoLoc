@@ -76,6 +76,17 @@ The status pill in the header shows the runtime and the selected model. The app 
 
 Switch to **Files** in the header (or press Ctrl+2) to translate documents: choose several files or drop them on the window, follow the recent-jobs list, and translate all ready files in a row (each result is saved next to its source as `<name>.translated.<lang>.<ext>`). The Files view translates TXT, DOCX, EPUB, and plain FB2 files through the same local model. FB2 section headings, paragraphs, epigraphs, and notes are translated while metadata, links, images, and embedded resources are preserved. Unsupported FB2 content is left unchanged and reported in the job diagnostics; archived FB2 files are not supported.
 
+### Translating files
+
+- **Modes.** The header has a **Text | Files** switch (also Ctrl+1 and Ctrl+2); the last mode is remembered. Both views stay loaded, so a file keeps translating while you switch to Text, and the Files tab shows its progress. Text requests run before the next block of a file, so text translation stays usable but is slower while a file is being translated.
+- **Adding files.** Press **Choose…** (several files at once are allowed) or drop files anywhere on the window. Supported formats are TXT, DOCX, EPUB, and plain FB2. Each file becomes its own job; the source language is detected automatically and the target follows your main language pair.
+- **Jobs and queue.** **Recent jobs** lists your latest jobs with their status and progress. Open a job to see it, remove it, or use **Clear finished**. When two or more files are ready, **Translate N ready files in a row** translates them one after another and saves each next to its source as `<name>.translated.<lang>.<ext>`; an existing output file is never overwritten, and a pause, cancel, or error stops the queue.
+- **Progress and completion.** The card shows blocks translated, an estimate while running, and finally "Translated N / N blocks in <time>". Pause and Cancel disappear once everything is translated; single files are saved with **Export translated…** to a location you choose. Jobs survive restarts and can be resumed.
+- **Warnings.** Unsupported content (for example SVG with text, or scripts) is left unchanged and listed under the job; paragraphs that contain italics or links are summarized in one line, because their formatting position may shift.
+- **Troubleshooting.** A request to the model that is silent for 45 seconds is treated as stalled; in Standalone mode the local server is restarted and the request is retried once. Diagnostic events are written to `lingvoloc-document-worker.log` in your temporary folder (`%TEMP%`).
+
+Dictionary articles from your StarDict folders are colour-coded for the dark theme (pronunciation, part of speech, usage labels, examples, and cross references), and the repeated headword and sense markers such as `< I >` are hidden.
+
 ## Development
 
 The sections below are for contributors building LingvoLoc from source.
