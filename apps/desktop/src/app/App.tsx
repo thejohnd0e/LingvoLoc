@@ -49,6 +49,7 @@ import Modal from './Modal';
 import Spinner from './Spinner';
 import TextSizeControls from './TextSizeControls';
 import DocumentsPanel from './DocumentsPanel';
+import { sanitizeDictionaryHtml } from '../lib/dictionaryHtml';
 
 const modeKey = 'lingvoloc.mode';
 
@@ -83,43 +84,6 @@ function loadEnabledDictionaries(): string[] {
 
 function loadDictionaryPath(): string {
   return localStorage.getItem(dictionaryPathKey) ?? '';
-}
-
-function sanitizeDictionaryHtml(value: string): string {
-  const document = new DOMParser().parseFromString(value, 'text/html');
-  for (const element of document.body.querySelectorAll('*')) {
-    if (
-      ['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED'].includes(element.tagName)
-    ) {
-      element.remove();
-      continue;
-    }
-    if (['AUDIO', 'SOURCE', 'IMG'].includes(element.tagName)) {
-      const src = element.getAttribute('src') ?? '';
-      const hasDeferredMedia = element.hasAttribute(
-        'data-dictionary-media-resource',
-      );
-      if (
-        !hasDeferredMedia &&
-        !/^data:(audio|image)\/[a-z0-9.+-]+;base64,/i.test(src)
-      ) {
-        element.remove();
-        continue;
-      }
-    }
-    for (const attribute of [...element.attributes]) {
-      if (attribute.name.toLowerCase().startsWith('on')) {
-        element.removeAttribute(attribute.name);
-      }
-      if (
-        attribute.name === 'href' &&
-        !/^(https?:|mailto:|#)/i.test(attribute.value)
-      ) {
-        element.removeAttribute(attribute.name);
-      }
-    }
-  }
-  return document.body.innerHTML;
 }
 
 async function fitWindowToContent() {
