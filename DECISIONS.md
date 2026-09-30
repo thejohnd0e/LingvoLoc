@@ -250,6 +250,15 @@
 - **Decision:** Same source and target language is rejected natively; a `.translated.<lang>` file name only produces a note, never a refusal; the Documents panel sends `auto` as the target when the source is `auto`.
 - **Reason:** A file name says nothing about content, and a stale stored target caused `en -> en` jobs.
 
+## Repository Name, Release Version And Dictionary Colours
+
+- **Decision:** The GitHub repository is named `LingvoLoc` like the product; `LingoLoc` was the name we deliberately avoided. Internal identifiers (`com.lingoloc.desktop`, `lingoloc.sqlite`, `lingoloc.settings`) keep the old spelling.
+- **Reason:** A rename of the repository only needs a redirect, but changing the bundle identifier or storage names would orphan users' settings, history, and jobs.
+- **Decision:** The extension ZIP name comes from `apps/extension/package.json` in `scripts/package-extension.ps1`; the README uses only static badges.
+- **Reason:** A hard-coded name overwrote the published 2.1.1 archive once; dynamic badges do not render for a private repository and a version badge would go stale.
+- **Decision:** Dictionary colours are applied as classes derived from the `<c c="name">` colour name (letters only) with a fixed dark-theme palette, never as inline styles.
+- **Reason:** Dictionaries are designed for light backgrounds and their markup is untrusted input to `dangerouslySetInnerHTML`.
+
 ## Document Segmentation
 
 - **Decision:** When a tokenizer is unavailable, bound document input with a conservative character budget after reserving space for the adapter prompt and model output. Split paragraphs at sentence boundaries, then whitespace, and finally Unicode scalar boundaries for a single oversized token.

@@ -33,6 +33,8 @@
 - [x] Drag-and-drop of files onto the window and the multi-file queue were verified by the user on real books (2026-09-30).
 - [x] Progress polling uses `get_document_progress` (counters and state only, no blocks) instead of `get_document_job`.
 
+- [ ] Next release: bump the version (root, desktop, extension `package.json`, `manifest.json`, `tauri.conf.json`, `Cargo.toml`, lock files), run `npm run check`, `npm run desktop:build`, `npm run extension:package`, then tag and `gh release create` (see the `v2.2.5` release for the notes format). Include the unreleased items listed in `STATUS.md`.
+
 ## Models
 
 - [ ] Verify the Hunyuan-MT and Qwen adapters end to end in the desktop UI (only benchmark-script and unit-test coverage so far).
