@@ -1072,3 +1072,93 @@ textarea:focus {
     display: none;
   }
 }
+
+.dictionary-definition-html .dc-darkcyan,
+.dictionary-definition-html .dc-teal,
+.dictionary-definition-html .dc-lightseagreen,
+.dictionary-definition-html .dc-cadetblue,
+.dictionary-definition-html .dc-mediumturquoise {
+  color: #6fd3d0;
+}
+.dictionary-definition-html .dc-orange,
+.dictionary-definition-html .dc-sienna,
+.dictionary-definition-html .dc-darkorange,
+.dictionary-definition-html .dc-chocolate,
+.dictionary-definition-html .dc-peru {
+  color: #f2b35e;
+}
+.dictionary-definition-html .dc-orangered,
+.dictionary-definition-html .dc-red,
+.dictionary-definition-html .dc-crimson,
+.dictionary-definition-html .dc-firebrick,
+.dictionary-definition-html .dc-lightcoral,
+.dictionary-definition-html .dc-tomato,
+.dictionary-definition-html .dc-coral,
+.dictionary-definition-html .dc-salmon {
+  color: #ff8f7a;
+}
+.dictionary-definition-html .dc-maroon,
+.dictionary-definition-html .dc-brown,
+.dictionary-definition-html .dc-darkred {
+  color: #e58b9d;
+}
+.dictionary-definition-html .dc-blue,
+.dictionary-definition-html .dc-darkblue,
+.dictionary-definition-html .dc-darkslateblue,
+.dictionary-definition-html .dc-royalblue,
+.dictionary-definition-html .dc-steelblue,
+.dictionary-definition-html .dc-navy,
+.dictionary-definition-html .dc-mediumblue {
+  color: #8fb4ff;
+}
+.dictionary-definition-html .dc-darkmagenta,
+.dictionary-definition-html .dc-indigo,
+.dictionary-definition-html .dc-purple,
+.dictionary-definition-html .dc-magenta,
+.dictionary-definition-html .dc-darkviolet,
+.dictionary-definition-html .dc-mediumorchid {
+  color: #d59bf0;
+}
+.dictionary-definition-html .dc-green,
+.dictionary-definition-html .dc-lightgreen,
+.dictionary-definition-html .dc-darkgreen,
+.dictionary-definition-html .dc-seagreen,
+.dictionary-definition-html .dc-forestgreen,
+.dictionary-definition-html .dc-olive {
+  color: #8fd68f;
+}
+.dictionary-definition-html .dc-darkslategray,
+.dictionary-definition-html .dc-lightslategray,
+.dictionary-definition-html .dc-slategray,
+.dictionary-definition-html .dc-gray,
+.dictionary-definition-html .dc-grey {
+  color: #a9bdbb;
+}
+.dictionary-definition-html .dc-dimgray,
+.dictionary-definition-html .dc-dimgrey,
+.dictionary-definition-html .dc-darkgray,
+.dictionary-definition-html .dc-darkgrey,
+.dictionary-definition-html .dc-silver {
+  color: #93a7a5;
+}
+.dictionary-definition-html .dc-rosybrown {
+  color: #b39f9b;
+}
+.dictionary-definition-html ex {
+  color: #cfe4d8;
+}
+.dictionary-definition-html abr {
+  color: #9ad0c4;
+}
+.dictionary-definition-html kref {
+  color: #8fb4ff;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.dictionary-definition-html dtrn {
+  color: #e6d38a;
+}
+.dictionary-definition-html co {
+  color: #93a7a5;
+  font-style: italic;
+}

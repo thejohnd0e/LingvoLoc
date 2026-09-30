@@ -27,4 +27,13 @@ describe('sanitizeDictionaryHtml', () => {
     expect(html).not.toContain('script');
     expect(html).not.toContain('onclick');
   });
+
+  it('turns colour names into theme classes without inline styles', () => {
+    const html = sanitizeDictionaryHtml(
+      '<c c="darkcyan">[mɒm]</c><c c="red;background:url(x)">x</c>',
+    );
+    expect(html).toContain('dc-darkcyan');
+    expect(html).not.toContain('style');
+    expect(html).not.toContain('dc-red;');
+  });
 });

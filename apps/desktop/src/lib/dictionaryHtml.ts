@@ -5,6 +5,16 @@
 function tidyDictionaryArticle(document: Document): void {
   for (const key of document.body.querySelectorAll('k')) key.remove();
 
+  // Dictionaries colour spans with `<c c="darkcyan">`. Only a plain colour name is
+  // turned into a class (styled for the dark theme in styles.css); nothing from the
+  // dictionary reaches an inline style.
+  for (const span of document.body.querySelectorAll('c[c]')) {
+    const name = span.getAttribute('c') ?? '';
+    if (/^[a-z]{3,20}$/i.test(name)) {
+      span.classList.add('dc', `dc-${name.toLowerCase()}`);
+    }
+  }
+
   const text = (element: Element | null) => element?.textContent?.trim() ?? '';
   for (const open of [...document.body.querySelectorAll('*')]) {
     if (!open.isConnected || text(open) !== '<') continue;
