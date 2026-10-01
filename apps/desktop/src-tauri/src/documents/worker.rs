@@ -115,6 +115,7 @@ where
                 source_language: job.source_language.clone(),
                 target_language: job.target_language.clone(),
                 text: segment.source_text.clone(),
+                translation_style: job.translation_style,
             };
             // Logs a warning while a single block request keeps running, with the
             // most recent runtime event, so a stall shows where it stopped.
@@ -235,6 +236,7 @@ mod tests {
     use super::*;
     use crate::documents::store::content_hash;
     use crate::documents::{BlockType, DocumentBlock, DocumentJob};
+    use crate::domain::TranslationStyle;
     use std::path::PathBuf;
 
     fn settings() -> Settings {
@@ -249,6 +251,7 @@ mod tests {
             target_language: "ru".into(),
             primary_language: "en".into(),
             secondary_language: "ru".into(),
+            translation_style: TranslationStyle::Neutral,
         }
     }
 
@@ -264,6 +267,7 @@ mod tests {
             target_language: "ru".into(),
             runtime_snapshot: "model-a".into(),
             configuration_version: "1".into(),
+            translation_style: TranslationStyle::Neutral,
             state: JobState::Queued,
             error: None,
         };
@@ -298,6 +302,7 @@ mod tests {
             target_language: "ru".into(),
             runtime_snapshot: "model-a".into(),
             configuration_version: "1".into(),
+            translation_style: TranslationStyle::Neutral,
             state: JobState::Queued,
             error: None,
         };
@@ -410,6 +415,42 @@ mod tests {
                 ..WorkerReport::default()
             }
         );
+    }
+
+    #[test]
+    fn uses_the_persisted_job_style_instead_of_current_settings() {
+        let mut store = store();
+        store
+            .set_translation_style_for_test("job-1", "literary")
+            .unwrap();
+        store
+            .save_block(
+                "job-1",
+                &DocumentBlock {
+                    id: "one".into(),
+                    ordinal: 1,
+                    block_type: BlockType::Paragraph,
+                    source_text: "first".into(),
+                    translated_text: None,
+                },
+            )
+            .unwrap();
+        let mut current = settings();
+        current.translation_style = TranslationStyle::Technical;
+        let report = translate_job_with(
+            &mut store,
+            &InferenceCoordinator::default(),
+            "job-1",
+            &current,
+            "model-a",
+            SegmentationLimits::default(),
+            |request| {
+                assert_eq!(request.translation_style, TranslationStyle::Literary);
+                Ok("translated".into())
+            },
+        )
+        .unwrap();
+        assert_eq!(report.translated_blocks, 1);
     }
 
     #[test]

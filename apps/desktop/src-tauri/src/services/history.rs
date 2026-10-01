@@ -249,6 +249,7 @@ mod tests {
             source_language: "en".into(),
             target_language: "de".into(),
             text: "Hello".into(),
+            translation_style: crate::domain::TranslationStyle::Neutral,
         }
     }
 

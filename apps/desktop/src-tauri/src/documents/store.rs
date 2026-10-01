@@ -4,7 +4,7 @@ use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use sha2::{Digest, Sha256};
 use std::path::Path;
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 pub struct DocumentJobStore {
     connection: Connection,
@@ -46,6 +46,7 @@ impl DocumentJobStore {
                     target_language TEXT NOT NULL,
                     runtime_snapshot TEXT NOT NULL,
                     configuration_version TEXT NOT NULL,
+                    translation_style TEXT NOT NULL DEFAULT 'neutral',
                     state TEXT NOT NULL,
                     error TEXT
                 );
@@ -78,6 +79,20 @@ impl DocumentJobStore {
                 "document job schema {version} is newer than supported schema {SCHEMA_VERSION}"
             )));
         }
+        let has_translation_style: bool = self
+            .connection
+            .prepare("SELECT translation_style FROM document_jobs LIMIT 0")
+            .is_ok();
+        if !has_translation_style {
+            self.connection
+                .execute(
+                    "ALTER TABLE document_jobs ADD COLUMN translation_style TEXT NOT NULL DEFAULT 'neutral'",
+                    [],
+                )
+                .map_err(|error| {
+                    RuntimeError::Connection(format!("document job style migration: {error}"))
+                })?;
+        }
         self.connection
             .execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))
             .map_err(|error| RuntimeError::Connection(format!("document job migration: {error}")))
@@ -88,8 +103,9 @@ impl DocumentJobStore {
             .execute(
                 "INSERT INTO document_jobs
                  (id, source_path, source_hash, format, parser_version, source_language,
-                  target_language, runtime_snapshot, configuration_version, state, error)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                  target_language, runtime_snapshot, configuration_version, translation_style,
+                  state, error)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                 params![
                     job.id,
                     job.source_path,
@@ -100,6 +116,9 @@ impl DocumentJobStore {
                     job.target_language,
                     job.runtime_snapshot,
                     job.configuration_version,
+                    serde_json::to_string(&job.translation_style)
+                        .unwrap()
+                        .trim_matches('"'),
                     state_name(job.state),
                     job.error,
                 ],
@@ -112,7 +131,8 @@ impl DocumentJobStore {
         self.connection
             .query_row(
                 "SELECT id, source_path, source_hash, format, parser_version, source_language,
-                        target_language, runtime_snapshot, configuration_version, state, error
+                        target_language, runtime_snapshot, configuration_version, translation_style,
+                        state, error
                  FROM document_jobs WHERE id = ?1",
                 [id],
                 row_to_job,
@@ -350,6 +370,21 @@ impl DocumentJobStore {
     pub fn source_is_current(job: &DocumentJob, source: &[u8]) -> bool {
         content_hash(source) == job.source_hash
     }
+
+    #[cfg(test)]
+    pub(crate) fn set_translation_style_for_test(
+        &self,
+        job_id: &str,
+        style: &str,
+    ) -> Result<(), RuntimeError> {
+        self.connection
+            .execute(
+                "UPDATE document_jobs SET translation_style = ?1 WHERE id = ?2",
+                params![style, job_id],
+            )
+            .map(|_| ())
+            .map_err(|error| RuntimeError::Connection(format!("document job style test: {error}")))
+    }
 }
 
 fn save_block_transaction(
@@ -380,7 +415,7 @@ fn save_block_transaction(
 
 const SUMMARY_SELECT: &str = "SELECT j.id, j.source_path, j.source_hash, j.format,
         j.parser_version, j.source_language, j.target_language, j.runtime_snapshot,
-        j.configuration_version, j.state, j.error,
+        j.configuration_version, j.translation_style, j.state, j.error,
         (SELECT COUNT(*) FROM document_blocks b WHERE b.job_id = j.id),
         (SELECT COUNT(*) FROM document_blocks b
           WHERE b.job_id = j.id AND b.translated_text IS NOT NULL)
@@ -391,8 +426,8 @@ fn summary_error(error: rusqlite::Error) -> RuntimeError {
 }
 
 fn summary_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<(DocumentJob, usize, usize)> {
-    let total: i64 = row.get(11)?;
-    let translated: i64 = row.get(12)?;
+    let total: i64 = row.get(12)?;
+    let translated: i64 = row.get(13)?;
     Ok((
         row_to_job(row)?,
         usize::try_from(total).unwrap_or_default(),
@@ -401,7 +436,8 @@ fn summary_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<(DocumentJob, usize,
 }
 
 fn row_to_job(row: &rusqlite::Row<'_>) -> rusqlite::Result<DocumentJob> {
-    let state: String = row.get(9)?;
+    let style: String = row.get(9)?;
+    let state: String = row.get(10)?;
     Ok(DocumentJob {
         id: row.get(0)?,
         source_path: row.get(1)?,
@@ -412,14 +448,21 @@ fn row_to_job(row: &rusqlite::Row<'_>) -> rusqlite::Result<DocumentJob> {
         target_language: row.get(6)?,
         runtime_snapshot: row.get(7)?,
         configuration_version: row.get(8)?,
-        state: serde_json::from_str(&format!("\"{state}\"")).map_err(|error| {
+        translation_style: serde_json::from_str(&format!("\"{style}\"")).map_err(|error| {
             rusqlite::Error::FromSqlConversionFailure(
                 9,
                 rusqlite::types::Type::Text,
                 Box::new(error),
             )
         })?,
-        error: row.get(10)?,
+        state: serde_json::from_str(&format!("\"{state}\"")).map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(
+                10,
+                rusqlite::types::Type::Text,
+                Box::new(error),
+            )
+        })?,
+        error: row.get(11)?,
     })
 }
 
@@ -450,6 +493,7 @@ pub fn content_hash(content: &[u8]) -> String {
 mod tests {
     use super::*;
     use crate::documents::{BlockType, DocumentBlock, DocumentJob, JobState};
+    use crate::domain::TranslationStyle;
 
     fn store() -> DocumentJobStore {
         DocumentJobStore {
@@ -467,6 +511,7 @@ mod tests {
             target_language: "ru".into(),
             runtime_snapshot: "model-a".into(),
             configuration_version: "1".into(),
+            translation_style: TranslationStyle::Neutral,
             state: JobState::Queued,
             error: None,
         }
@@ -614,7 +659,7 @@ mod tests {
     }
 
     #[test]
-    fn schema_version_one_upgrades_without_losing_jobs_or_blocks() {
+    fn schema_version_two_upgrades_without_losing_jobs_or_blocks() {
         let mut store = store();
         store
             .connection
@@ -641,12 +686,46 @@ mod tests {
                     translated_text TEXT,
                     PRIMARY KEY (job_id, block_id)
                 );
-                PRAGMA user_version = 1;",
+                    CREATE TABLE document_diagnostics (
+                        job_id TEXT NOT NULL REFERENCES document_jobs(id) ON DELETE CASCADE,
+                        ordinal INTEGER NOT NULL,
+                        message TEXT NOT NULL,
+                        PRIMARY KEY (job_id, ordinal)
+                    );
+                    PRAGMA user_version = 2;",
             )
             .unwrap();
-        store.create(&job()).unwrap();
-        // A version 1 database can already hold translated blocks. Schema version 2 only adds the
-        // diagnostics table, so the migration must not drop stored block rows.
+        let old_job = job();
+        store
+            .connection
+            .execute(
+                "INSERT INTO document_jobs
+                 (id, source_path, source_hash, format, parser_version, source_language,
+                  target_language, runtime_snapshot, configuration_version, state, error)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                params![
+                    old_job.id,
+                    old_job.source_path,
+                    old_job.source_hash,
+                    old_job.format,
+                    old_job.parser_version,
+                    old_job.source_language,
+                    old_job.target_language,
+                    old_job.runtime_snapshot,
+                    old_job.configuration_version,
+                    state_name(old_job.state),
+                    old_job.error,
+                ],
+            )
+            .unwrap();
+        store
+            .connection
+            .execute(
+                "INSERT INTO document_diagnostics (job_id, ordinal, message)
+                 VALUES ('job-1', 0, 'legacy warning')",
+                [],
+            )
+            .unwrap();
         store
             .save_block("job-1", &block("b-1", 0, "kept text"))
             .unwrap();
@@ -657,15 +736,32 @@ mod tests {
             .connection
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
         assert_eq!(store.get("job-1").unwrap(), Some(job()));
-        assert!(store.diagnostics("job-1").unwrap().is_empty());
+        assert_eq!(
+            store.get("job-1").unwrap().unwrap().translation_style,
+            TranslationStyle::Neutral
+        );
+        assert_eq!(store.diagnostics("job-1").unwrap(), vec!["legacy warning"]);
 
         let blocks = store.blocks("job-1").unwrap();
         assert_eq!(blocks.len(), 1, "migration dropped a stored block");
         assert_eq!(blocks[0].id, "b-1");
         assert_eq!(blocks[0].source_text, "kept text");
         assert_eq!(blocks[0].translated_text.as_deref(), Some("translated"));
+    }
+
+    #[test]
+    fn rejects_unknown_persisted_translation_style() {
+        let store = initialized_store_with_job();
+        store
+            .set_translation_style_for_test("job-1", "unknown")
+            .unwrap();
+
+        assert!(matches!(
+            store.get("job-1"),
+            Err(RuntimeError::Connection(message)) if message.contains("document job read")
+        ));
     }
 
     #[test]
