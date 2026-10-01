@@ -58,7 +58,7 @@
 
 ## Known Issues And Blockers
 
-- The header **GitHub** link did nothing until `3.1.2` (missing `opener:allow-open-url` permission, fixed in `capabilities/default.json`); the fix was built and released but the click was not re-verified by the user yet.
+- The header **GitHub** link works since `3.1.2` (confirmed by the user on 2026-10-01); it needed the `opener:allow-open-url` permission in `capabilities/default.json`.
 - Name review: preliminary only (`docs/NAME_REVIEW.md`); the user closed it without an official register search. ABBYY's "Lingvo" mark is a known likeness risk.
 
 - PDF limits: rotated pages and pages without text are left unchanged and listed as diagnostics, text inside raster images is not translated, and each paragraph is re-wrapped left-aligned (no justification). The v2 flow planner handles body columns, panels, captions, table cells, obstacles, shared scale/leading, and conservative cross-page joins. PDFium raw character extraction returns ordinary spaces as U+0020; its convenience `all()` formatter may display them as U+00A0, so the regression test uses raw Unicode values. Production translation uses bundled Noto Sans/Serif fonts, and the staged bundle includes PDFium plus its notices and Noto attribution.
