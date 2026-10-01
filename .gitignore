@@ -49,3 +49,10 @@ LingvoLoc-portable/
 # Local test material and agent state (copyrighted books, tooling)
 example_books/
 .omo/
+
+# Local-only project and agent documentation
+AGENTS.md
+DECISIONS.md
+PDF_solution.md
+STATUS.md
+TODO.md
