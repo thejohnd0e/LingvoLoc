@@ -8,6 +8,7 @@ export default defineConfig({
       input: {
         popup: 'popup.html',
         background: 'src/background.ts',
+        selectionTracker: 'src/selectionTracker.ts',
       },
       output: {
         entryFileNames: 'assets/[name].js',

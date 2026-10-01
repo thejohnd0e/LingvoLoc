@@ -1,3 +1,5 @@
+import { AUTO_TRANSLATE_KEY } from './popupState';
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: 'translate-selection',
@@ -21,8 +23,12 @@ async function openWindow() {
 async function openTranslator(
   tab: chrome.tabs.Tab | undefined,
   selection: string,
+  autoTranslate: boolean,
 ) {
-  await chrome.storage.local.set({ pendingSelection: selection });
+  await chrome.storage.local.set({
+    pendingSelection: selection,
+    [AUTO_TRANSLATE_KEY]: autoTranslate,
+  });
   const stored = await chrome.storage.local.get('overlaySize');
   const savedSize = stored.overlaySize as
     { width?: number; height?: number } | undefined;
@@ -47,7 +53,36 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== 'translate-selection') {
     return;
   }
-  await openTranslator(tab, info.selectionText?.trim() ?? '');
+  let selection = info.selectionText?.trim() ?? '';
+  const stored = await chrome.storage.local.get('latestSelection');
+  const latestSelection = stored.latestSelection as
+    { pageUrl?: string; text?: string } | undefined;
+  const pageUrl = info.pageUrl ?? tab?.url;
+  const latestText =
+    latestSelection?.pageUrl === pageUrl
+      ? latestSelection?.text?.trim()
+      : undefined;
+  if (latestText) {
+    selection = latestText;
+  }
+  await chrome.storage.local.remove('latestSelection');
+  if (!latestText) {
+    try {
+      if (tab?.id) {
+        const [result] = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: readSelectionWithParagraphs,
+        });
+        const extracted = result?.result?.trim();
+        if (extracted) {
+          selection = extracted;
+        }
+      }
+    } catch {
+      // Restricted pages fall back to the text supplied by the context menu.
+    }
+  }
+  await openTranslator(tab, selection, true);
 });
 
 chrome.action.onClicked.addListener(async (tab) => {
@@ -56,14 +91,14 @@ chrome.action.onClicked.addListener(async (tab) => {
     if (tab.id) {
       const [result] = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        func: () => window.getSelection()?.toString() ?? '',
+        func: readSelectionWithParagraphs,
       });
       selection = result?.result?.trim() ?? '';
     }
   } catch {
     // Restricted pages cannot be read; the window opens without a selection.
   }
-  await openTranslator(tab, selection);
+  await openTranslator(tab, selection, false);
 });
 
 function overlayScript(popupUrl: string, sizeJson: string) {
@@ -228,4 +263,45 @@ function overlayScript(popupUrl: string, sizeJson: string) {
   });
   overlay.append(close, frame, rightHandle, bottomHandle, resizeHandle);
   document.documentElement.appendChild(overlay);
+}
+
+function readSelectionWithParagraphs() {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) return '';
+  const fragment = selection.getRangeAt(0).cloneContents();
+  const blockTags = new Set([
+    'ADDRESS',
+    'ARTICLE',
+    'ASIDE',
+    'BLOCKQUOTE',
+    'DIV',
+    'FIGCAPTION',
+    'H1',
+    'H2',
+    'H3',
+    'H4',
+    'H5',
+    'H6',
+    'HEADER',
+    'LI',
+    'P',
+    'PRE',
+    'SECTION',
+    'TR',
+  ]);
+  const read = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
+    if (node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+      return Array.from(node.childNodes, read).join('');
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+    const element = node as HTMLElement;
+    if (element.tagName === 'BR') return '\n';
+    const content = Array.from(element.childNodes, read).join('');
+    return blockTags.has(element.tagName) ? `\n\n${content}\n\n` : content;
+  };
+  return read(fragment)
+    .replace(/[ \t]*\n[ \t]*/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }

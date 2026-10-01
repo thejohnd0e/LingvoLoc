@@ -1,5 +1,20 @@
 import './popup.css';
 import { getSelectedText, getStatus, translate } from './api';
+import {
+  AUTO_TRANSLATE_KEY,
+  clampTextSplit,
+  DEFAULT_TEXT_SPLIT,
+  isOriginalTextExpanded,
+  isAutoTranslateRequest,
+  ORIGINAL_TEXT_EXPANDED_KEY,
+  TEXT_SPLIT_KEY,
+} from './popupState';
+import {
+  formatParagraphIndents,
+  splitParagraphs,
+  stripParagraphIndents,
+  translateParagraphs,
+} from './popupFormatting';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) {
@@ -12,6 +27,8 @@ const state = {
   target: 'ru',
   text: '',
   fontSize: 16,
+  textSplit: DEFAULT_TEXT_SPLIT,
+  originalTextExpanded: true,
 };
 
 app.innerHTML = `
@@ -43,8 +60,10 @@ app.innerHTML = `
       <span class="direction" aria-hidden="true">→</span>
       <label class="field compact"><span>To</span><select id="target"><option value="ru">Russian</option><option value="en">English</option><option value="de">German</option><option value="es">Spanish</option><option value="fr">French</option><option value="it">Italian</option><option value="pt">Portuguese</option><option value="pl">Polish</option><option value="uk">Ukrainian</option><option value="zh">Chinese</option><option value="ko">Korean</option><option value="th">Thai</option></select></label>
     </div>
-    <label class="field grow"><span>Selected text</span><textarea id="text" rows="5" placeholder="Select text on a page, or paste it here"></textarea></label>
-    <button id="translate" type="button"><span>Translate locally</span><b>Ctrl ↵</b></button>
+    <div class="text-heading"><button id="original-toggle" class="spoiler-toggle" type="button" aria-expanded="true" aria-controls="original-text-field"><span class="field-label">Original text</span><span class="spoiler-action">Hide</span><span class="spoiler-chevron" aria-hidden="true">⌄</span></button><button id="clear" class="clear-button" type="button">Clear</button></div>
+    <label id="original-text-field" class="field grow"><textarea id="text" rows="5" aria-label="Original text" placeholder="Select text on a page, or paste it here"></textarea></label>
+    <button id="translate" type="button"><span>Translate</span><b>Ctrl ↵</b></button>
+    <div id="splitter" class="splitter" role="separator" aria-orientation="horizontal"></div>
     <div class="result-wrap grow"><div class="result-heading"><span class="result-label">TRANSLATION</span><button id="copy" class="copy-button" type="button">Copy</button></div><output id="result" aria-live="polite"></output></div>
     <p class="hint">The extension sends text only to LingvoLoc on this computer.</p>
   </section>
@@ -72,6 +91,14 @@ const fontSizeLabel = document.querySelector<HTMLSpanElement>('#font-size')!;
 const status = document.querySelector<HTMLSpanElement>('#status')!;
 const result = document.querySelector<HTMLOutputElement>('#result')!;
 const copyButton = document.querySelector<HTMLButtonElement>('#copy')!;
+const clearButton = document.querySelector<HTMLButtonElement>('#clear')!;
+const originalToggle =
+  document.querySelector<HTMLButtonElement>('#original-toggle')!;
+const originalTextField = document.querySelector<HTMLLabelElement>(
+  '#original-text-field',
+)!;
+const splitter = document.querySelector<HTMLDivElement>('#splitter')!;
+const shell = document.querySelector<HTMLElement>('.shell')!;
 
 const saved = await chrome.storage.local.get([
   'detachState',
@@ -80,6 +107,9 @@ const saved = await chrome.storage.local.get([
   'fontSize',
   'extensionSource',
   'extensionTarget',
+  AUTO_TRANSLATE_KEY,
+  TEXT_SPLIT_KEY,
+  ORIGINAL_TEXT_EXPANDED_KEY,
 ]);
 await chrome.action.setBadgeText({ text: '' });
 state.token = typeof saved.apiToken === 'string' ? saved.apiToken : '';
@@ -97,6 +127,12 @@ state.source =
   typeof saved.extensionSource === 'string' ? saved.extensionSource : 'auto';
 state.target =
   typeof saved.extensionTarget === 'string' ? saved.extensionTarget : 'ru';
+state.textSplit = clampTextSplit(saved[TEXT_SPLIT_KEY]);
+state.originalTextExpanded = isOriginalTextExpanded(
+  saved[ORIGINAL_TEXT_EXPANDED_KEY],
+);
+const autoTranslate = isAutoTranslateRequest(saved[AUTO_TRANSLATE_KEY]);
+await chrome.storage.local.remove(AUTO_TRANSLATE_KEY);
 if (
   typeof saved.pendingSelection === 'string' &&
   saved.pendingSelection.trim()
@@ -116,11 +152,13 @@ if (detached) {
   await chrome.storage.local.remove('detachState');
 }
 tokenInput.value = state.token;
-textInput.value = state.text;
+textInput.value = formatParagraphIndents(state.text);
 sourceInput.value = state.source;
 targetInput.value = state.target;
+applyTextSplit();
+applyOriginalTextState();
 if (detached?.result) {
-  result.textContent = detached.result;
+  renderResult(detached.result);
 }
 
 if (state.token) {
@@ -141,6 +179,10 @@ if (state.token) {
   pairing.hidden = false;
 }
 
+if (autoTranslate && state.token && state.text.trim()) {
+  await translateCurrentText();
+}
+
 function applyFontSize() {
   const value = `${state.fontSize}px`;
   fontSizeLabel.textContent = value;
@@ -148,10 +190,50 @@ function applyFontSize() {
   result.style.fontSize = value;
 }
 
+function renderResult(text: string) {
+  result.replaceChildren();
+  for (const paragraph of splitParagraphs(text)) {
+    const element = document.createElement('p');
+    element.className = 'result-paragraph';
+    element.textContent = paragraph;
+    result.append(element);
+  }
+}
+
+function getResultText(): string {
+  return result.innerText.trim() || result.textContent?.trim() || '';
+}
+
 function changeFontSize(delta: number) {
   state.fontSize = Math.min(24, Math.max(12, state.fontSize + delta));
   void chrome.storage.local.set({ fontSize: state.fontSize });
   applyFontSize();
+}
+
+function applyTextSplit() {
+  shell.style.setProperty('--text-split', String(state.textSplit));
+  shell.style.setProperty('--text-source-grow', String(state.textSplit));
+  shell.style.setProperty('--text-result-grow', String(1 - state.textSplit));
+}
+
+function applyOriginalTextState() {
+  originalTextField.hidden = !state.originalTextExpanded;
+  shell.classList.toggle('original-collapsed', !state.originalTextExpanded);
+  originalToggle.setAttribute(
+    'aria-expanded',
+    String(state.originalTextExpanded),
+  );
+  originalToggle.setAttribute(
+    'aria-label',
+    state.originalTextExpanded
+      ? 'Collapse original text'
+      : 'Expand original text',
+  );
+  const spoilerAction = originalToggle.querySelector('.spoiler-action');
+  if (spoilerAction) {
+    spoilerAction.textContent = state.originalTextExpanded ? 'Hide' : 'Show';
+  }
+  originalToggle.classList.toggle('is-collapsed', !state.originalTextExpanded);
 }
 
 decreaseButton.addEventListener('click', () => changeFontSize(-1));
@@ -170,7 +252,11 @@ targetInput.addEventListener('change', () => {
   void chrome.storage.local.set({ extensionTarget: state.target });
 });
 textInput.addEventListener('input', () => {
-  state.text = textInput.value;
+  state.text = stripParagraphIndents(textInput.value);
+});
+textInput.addEventListener('blur', () => {
+  state.text = stripParagraphIndents(textInput.value);
+  textInput.value = formatParagraphIndents(state.text);
 });
 pairButton.addEventListener('click', async () => {
   const token = tokenInput.value.trim();
@@ -197,31 +283,102 @@ pairButton.addEventListener('click', async () => {
     pairButton.disabled = false;
   }
 });
-button.addEventListener('click', async () => {
+
+async function translateCurrentText() {
+  state.text = stripParagraphIndents(textInput.value);
   if (!state.token || !state.text.trim()) {
     result.textContent = 'Add a pairing token and text first.';
     return;
   }
   button.disabled = true;
-  status.textContent = 'WORKING';
-  result.textContent = '';
+  copyButton.disabled = true;
+  status.textContent = 'TRANSLATING';
+  result.innerHTML =
+    '<span class="loading-state" role="status"><span class="loading-dots" aria-hidden="true"><i></i><i></i><i></i></span> Translating...</span>';
   try {
-    const translation = await translate(
-      state.token,
-      state.text.trim(),
-      sourceInput.value,
-      targetInput.value,
+    let totalLatency = 0;
+    const translatedText = await translateParagraphs(
+      splitParagraphs(state.text),
+      async (paragraph) => {
+        const translation = await translate(
+          state.token,
+          paragraph,
+          sourceInput.value,
+          targetInput.value,
+        );
+        totalLatency += translation.latency_ms;
+        return translation.text;
+      },
     );
-    result.textContent = translation.text;
-    status.textContent = `${translation.latency_ms} MS`;
+    renderResult(translatedText);
+    status.textContent = `${totalLatency} MS`;
   } catch (error) {
     result.textContent =
       error instanceof Error ? error.message : 'Translation failed';
     status.textContent = 'ERROR';
   } finally {
     button.disabled = false;
+    copyButton.disabled = false;
   }
+}
+
+button.addEventListener('click', () => void translateCurrentText());
+
+clearButton.addEventListener('click', () => {
+  state.text = '';
+  textInput.value = '';
+  result.textContent = '';
+  status.textContent = state.token ? 'READY' : 'PAIRING REQUIRED';
 });
+
+originalToggle.addEventListener('click', () => {
+  state.originalTextExpanded = !state.originalTextExpanded;
+  applyOriginalTextState();
+  void chrome.storage.local.set({
+    [ORIGINAL_TEXT_EXPANDED_KEY]: state.originalTextExpanded,
+  });
+});
+
+let splitDrag:
+  | { startY: number; startSourceHeight: number; availableHeight: number }
+  | undefined;
+
+splitter.addEventListener('pointerdown', (event) => {
+  if (!document.body.classList.contains('embedded')) return;
+  const sourceArea = textInput.closest<HTMLElement>('.grow');
+  const resultArea = result.closest<HTMLElement>('.grow');
+  if (!sourceArea || !resultArea) return;
+  splitDrag = {
+    startY: event.clientY,
+    startSourceHeight: sourceArea.getBoundingClientRect().height,
+    availableHeight:
+      sourceArea.getBoundingClientRect().height +
+      resultArea.getBoundingClientRect().height,
+  };
+  splitter.setPointerCapture(event.pointerId);
+  event.preventDefault();
+});
+
+splitter.addEventListener('pointermove', (event) => {
+  if (!splitDrag) return;
+  const next = clampTextSplit(
+    (splitDrag.startSourceHeight + event.clientY - splitDrag.startY) /
+      splitDrag.availableHeight,
+  );
+  state.textSplit = next;
+  applyTextSplit();
+  event.preventDefault();
+});
+
+function finishSplitDrag(event: PointerEvent) {
+  if (!splitDrag) return;
+  splitDrag = undefined;
+  splitter.releasePointerCapture(event.pointerId);
+  void chrome.storage.local.set({ [TEXT_SPLIT_KEY]: state.textSplit });
+}
+
+splitter.addEventListener('pointerup', finishSplitDrag);
+splitter.addEventListener('pointercancel', finishSplitDrag);
 
 // Inside the page overlay (an iframe) the Clipboard API is usually blocked by the host
 // page's permissions policy and logs a violation, so only the standalone popup uses it.
@@ -245,7 +402,7 @@ async function copyText(text: string) {
 }
 
 copyButton.addEventListener('click', async () => {
-  const text = result.textContent?.trim() ?? '';
+  const text = getResultText();
   if (!text) return;
   await copyText(text);
   const original = copyButton.textContent;
@@ -260,10 +417,10 @@ document
   ?.addEventListener('click', async () => {
     await chrome.storage.local.set({
       detachState: {
-        text: textInput.value,
+        text: stripParagraphIndents(textInput.value),
         source: sourceInput.value,
         target: targetInput.value,
-        result: result.textContent ?? '',
+        result: getResultText(),
       },
     });
     await chrome.windows.create({
