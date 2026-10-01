@@ -2,7 +2,7 @@ pub mod chat;
 pub mod hunyuan_mt;
 pub mod translategemma;
 
-use crate::domain::{RuntimeError, TranslationModelAdapter, TranslationRequest};
+use crate::domain::{RuntimeError, TranslationModelAdapter, TranslationRequest, TranslationStyle};
 
 /// Prompt/template family of a model, derived from its id or file name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +51,36 @@ pub(crate) fn language_name(code: &str) -> &str {
         "ko" => "Korean",
         "th" => "Thai",
         other => other,
+    }
+}
+
+pub(crate) fn style_instruction(style: TranslationStyle) -> Option<&'static str> {
+    match style {
+        TranslationStyle::Neutral => None,
+        TranslationStyle::Literary => Some(
+            "Use polished literary prose while preserving the author's tone, imagery, dialogue, paragraphing, and meaning. Do not add, omit, or embellish content.",
+        ),
+        TranslationStyle::Technical => Some(
+            "Use precise, concise technical language and consistent terminology. Preserve identifiers, units, numbers, code, and formatting exactly. Do not omit technical detail.",
+        ),
+        TranslationStyle::Conversational => Some(
+            "Use natural conversational language appropriate to the source register. Preserve meaning and formality; do not invent slang or add content.",
+        ),
+    }
+}
+
+pub(crate) fn chinese_style_instruction(style: TranslationStyle) -> Option<&'static str> {
+    match style {
+        TranslationStyle::Neutral => None,
+        TranslationStyle::Literary => Some(
+            "使用自然流畅的文学语言，保留原文的语气、意象、对话、段落和含义。不要添加、删减或改写原文没有的内容。",
+        ),
+        TranslationStyle::Technical => Some(
+            "使用准确、简洁的技术语言和一致的术语。准确保留标识符、单位、数字、代码和格式，不要省略技术细节。",
+        ),
+        TranslationStyle::Conversational => Some(
+            "使用自然的日常口语，保持原文的语气和正式程度，不要编造俚语或添加内容。",
+        ),
     }
 }
 
