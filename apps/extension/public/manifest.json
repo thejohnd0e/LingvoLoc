@@ -15,6 +15,13 @@
     "service_worker": "assets/background.js",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["assets/selectionTracker.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "action": {
     "default_title": "Translate with LingvoLoc",
     "default_icon": {
