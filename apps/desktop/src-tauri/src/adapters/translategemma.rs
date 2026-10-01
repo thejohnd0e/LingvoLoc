@@ -21,7 +21,7 @@ impl TranslationModelAdapter for TranslateGemmaAdapter {
             messages: vec![ChatMessage {
                 role: "user".into(),
                 content: format!(
-                    "Translate the following text from {} ({}) to {} ({}). Return only the translation in the target language. Do not answer in English unless English is the target language.\n{}",
+                    "Translate the following text from {} ({}) to {} ({}). Return only the translation in the target language. Preserve every paragraph break and line break from the input. Do not answer in English unless English is the target language.\n{}",
                     language_name(&request.source_language),
                     request.source_language,
                     language_name(&request.target_language),
