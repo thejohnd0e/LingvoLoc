@@ -41,6 +41,7 @@ import {
   loadTextScale,
   saveSettings,
   type Settings,
+  type TranslationStyle,
 } from '../lib/settings';
 import { errorDetail } from '../lib/errors';
 import { targetForDetectedLanguage } from '../lib/languagePair';
@@ -64,6 +65,7 @@ const defaultSettings: Settings = {
   targetLanguage: 'en',
   primaryLanguage: 'en',
   secondaryLanguage: 'ru',
+  translationStyle: 'neutral',
 };
 
 const enabledDictionariesKey = 'lingvoloc.enabled-dictionaries';
@@ -299,6 +301,7 @@ export default function App() {
         source_language: sourceLanguage,
         target_language: targetLanguage,
         text: input,
+        translation_style: settings.translationStyle,
       });
       setTranslation(result.text);
       setTiming(formatTiming(result));
@@ -733,6 +736,7 @@ export default function App() {
           source_language: sourceLanguage,
           target_language: targetLanguage,
           text: word,
+          translation_style: 'neutral',
         });
         if (requestId !== lexicalRequestId.current) return;
         setTranslationHighlight(result.text.trim());
@@ -754,6 +758,7 @@ export default function App() {
           source_language: selectedLanguage,
           target_language: sourceLanguage,
           text: word,
+          translation_style: 'neutral',
         });
         if (requestId !== lexicalRequestId.current) return;
         const candidate = result.text.trim();
@@ -1070,6 +1075,23 @@ export default function App() {
             </select>
           </label>
         </div>
+        <label>
+          Style
+          <select
+            aria-label="Translation style"
+            value={settings.translationStyle}
+            onChange={(event) =>
+              updateSettings({
+                translationStyle: event.target.value as TranslationStyle,
+              })
+            }
+          >
+            <option value="neutral">Neutral</option>
+            <option value="literary">Literary</option>
+            <option value="technical">Technical</option>
+            <option value="conversational">Conversational</option>
+          </select>
+        </label>
         <div className="model-field">
           <span className="model-label">Model</span>
           <div className="model-row">
@@ -1134,6 +1156,7 @@ export default function App() {
           settings.sourceLanguage === 'auto' ? 'auto' : settings.targetLanguage
         }
         modelId={settings.modelId}
+        translationStyle={settings.translationStyle}
       />
       {settingsOpen && (
         <Modal title="Settings" onClose={() => setSettingsOpen(false)}>

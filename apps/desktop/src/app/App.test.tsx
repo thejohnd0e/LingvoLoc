@@ -36,8 +36,10 @@ vi.mock('../lib/commands', () => ({
   clearHistory: vi.fn().mockResolvedValue(undefined),
   setHistoryFavorite: vi.fn().mockResolvedValue(undefined),
   exportHistory: vi.fn().mockResolvedValue('history.csv'),
+  detectLanguage: vi.fn().mockResolvedValue({ code: 'en', confidence: 1 }),
   updateSettings: vi.fn().mockResolvedValue(undefined),
   translate: vi.fn(),
+  translateWord: vi.fn(),
   analyzeTxt: vi.fn(),
   analyzeDocx: vi.fn(),
   analyzeEpub: vi.fn(),
@@ -77,6 +79,7 @@ const epubView = (state = 'ready', translatedBlocks = 0) => ({
     parser_version: 'epub-v1',
     source_language: 'ru',
     target_language: 'en',
+    translation_style: 'neutral' as const,
     runtime_snapshot: 'runtime',
     configuration_version: 'epub-v1',
     state,
@@ -156,6 +159,90 @@ describe('translation workspace', () => {
     ).toBeInTheDocument();
   });
 
+  it('sends the saved translation style and neutral word alignment requests', async () => {
+    localStorage.setItem(
+      'lingvoloc.settings',
+      JSON.stringify({ translationStyle: 'technical', modelId: 'model' }),
+    );
+    vi.mocked(commands.translate).mockResolvedValue({
+      text: 'Привет',
+      model_id: 'model',
+      adapter_id: 'translategemma',
+      latency_ms: 10,
+      completion_tokens: null,
+    });
+    vi.mocked(commands.detectLanguage).mockResolvedValue({
+      code: 'en',
+      confidence: 1,
+    });
+    vi.mocked(commands.translateWord).mockResolvedValue({
+      text: 'Привет',
+      model_id: 'model',
+      adapter_id: 'translategemma',
+      latency_ms: 10,
+      completion_tokens: null,
+    });
+    render(<App />);
+    fireEvent.change(
+      screen.getByPlaceholderText('Write something to translate…'),
+      {
+        target: { value: 'Hello' },
+      },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Translate/ }));
+    await waitFor(() => expect(commands.translate).toHaveBeenCalled());
+    expect(commands.translate).toHaveBeenCalledWith(
+      expect.objectContaining({ translation_style: 'technical' }),
+    );
+  });
+
+  it('uses neutral style when aligning a selected source word', async () => {
+    vi.mocked(commands.lookupLexicon).mockResolvedValue([]);
+    vi.mocked(commands.detectLanguage).mockResolvedValue({
+      code: 'en',
+      confidence: 1,
+    });
+    vi.mocked(commands.translate).mockResolvedValue({
+      text: 'Привет',
+      model_id: 'model',
+      adapter_id: 'translategemma',
+      latency_ms: 10,
+      completion_tokens: null,
+    });
+    render(<App />);
+    const input = screen.getByPlaceholderText(
+      'Write something to translate…',
+    ) as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: 'Hello' } });
+    input.focus();
+    Object.defineProperty(input, 'selectionStart', {
+      configurable: true,
+      value: 0,
+    });
+    Object.defineProperty(input, 'selectionEnd', {
+      configurable: true,
+      value: 5,
+    });
+    fireEvent.doubleClick(input);
+
+    await waitFor(() =>
+      expect(commands.lookupLexicon).toHaveBeenCalledWith(
+        'Hello',
+        undefined,
+        [],
+        '',
+      ),
+    );
+    await waitFor(() =>
+      expect(commands.translateWord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: 'Hello',
+          translation_style: 'neutral',
+        }),
+      ),
+    );
+  });
+
   it('switches between text and file modes and remembers the choice', () => {
     render(<App />);
     expect(
@@ -230,6 +317,21 @@ describe('translation workspace', () => {
     expect(targetSelect).toBeDisabled();
   });
 
+  it('persists the global translation style and keeps it visible in Files mode', () => {
+    render(<App />);
+    const selector = screen.getByLabelText('Translation style');
+    expect(selector).toHaveValue('neutral');
+    fireEvent.change(selector, { target: { value: 'technical' } });
+    expect(commands.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ translationStyle: 'technical' }),
+    );
+    expect(
+      JSON.parse(localStorage.getItem('lingvoloc.settings')!).translationStyle,
+    ).toBe('technical');
+    fireEvent.click(screen.getByRole('tab', { name: /Files/ }));
+    expect(screen.getByLabelText('Translation style')).toBeVisible();
+  });
+
   it.each(documentCases)(
     'preserves $label picker, job dispatch, and output behavior',
     async ({
@@ -263,7 +365,7 @@ describe('translation workspace', () => {
       );
       fireEvent.click(screen.getByRole('button', { name: /choose/i }));
       await screen.findByRole('button', { name: 'Start translation' });
-      expect(analyze).toHaveBeenCalledWith(sourcePath, 'ru', 'en');
+      expect(analyze).toHaveBeenCalledWith(sourcePath, 'ru', 'en', 'neutral');
       expect(dialogMocks.open).toHaveBeenCalledWith(
         expect.objectContaining({
           filters: [
@@ -359,6 +461,7 @@ describe('translation workspace', () => {
       sourcePath,
       'ru',
       'en',
+      'neutral',
       '1-6',
     );
     expect(screen.getByText('Pages: 1-6')).toBeTruthy();
@@ -451,6 +554,7 @@ describe('translation workspace', () => {
         'C:\\books\\story.epub',
         'ru',
         'en',
+        'neutral',
       ),
     );
     expect(dialogMocks.open).toHaveBeenCalledWith(

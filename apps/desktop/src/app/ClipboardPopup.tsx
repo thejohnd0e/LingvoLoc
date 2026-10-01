@@ -30,6 +30,7 @@ const defaultSettings: Settings = {
   targetLanguage: 'en',
   primaryLanguage: 'en',
   secondaryLanguage: 'ru',
+  translationStyle: 'neutral',
 };
 
 export default function ClipboardPopup() {
@@ -78,6 +79,7 @@ export default function ClipboardPopup() {
           source_language: sourceLanguage,
           target_language: targetLanguage,
           text,
+          translation_style: settings.translationStyle,
         });
         setResult(translated);
         await writeClipboard(translated.text);
