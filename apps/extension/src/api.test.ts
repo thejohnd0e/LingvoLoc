@@ -34,6 +34,12 @@ describe('local API client', () => {
         }),
       }),
     );
+    const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string);
+    expect(body).toEqual({
+      text: 'Hello',
+      sourceLanguage: 'en',
+      targetLanguage: 'ru',
+    });
   });
 
   it('surfaces the desktop API error message', async () => {
