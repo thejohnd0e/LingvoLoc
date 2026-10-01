@@ -174,7 +174,7 @@ Format modules (`documents/`): `txt.rs`, `docx.rs` (quick-xml, package-preservin
 2. **Placement** (`slots.rs`, `reflow.rs`). Export repeats the same analysis on the hash-checked source. Every translated paragraph gets a _slot_ that starts at its source position and may grow only into free space: down to the nearest paragraph, rule, panel edge, image, or page margin; right up to neighbouring columns, cells, vertical rules, and panel padding. Panels drawn as tiles of same-coloured strips are merged. Paragraphs stacked in one column with nothing between them form a _run_ that is laid out together: the run is packed to see what fits, then free space moves items back towards their source positions. Search order: scale (1.0 down to 0.55) with paragraph gaps kept until the font is below 0.88, then tighter gaps and leading. Centred and right-aligned source text keeps its alignment, list markers follow their item, similar single-paragraph cells share one scale (not below 0.6), and a panel running to the page edge is treated as cut by a page break and does not grow.
 3. **Output** (`mod.rs::export_with`, `fonts.rs`). Original text objects of translated paragraphs are removed (never covered with white boxes), the translation is drawn with embedded Noto fonts copying the original colour, and everything else on the page is kept. Page-range output keeps only the selected pages (`<name>.translated.<lang>.pN-M.pdf`).
 
-Developer loop without the UI: build `cargo build --release --example pdf_try` in `apps/desktop/src-tauri`, then run `pdf_try.exe <pdf> <out.pdf> "" "1-8"` with `LINGVOLOC_PDFIUM`, optionally with `PDF_JOB_DB` and `PDF_JOB_ID` to use real translations of a finished job (without them a fake Cyrillic translation is used). Render pages with `tools/pdf-feasibility/examples/render.rs`. Layout rules and history are in `STATUS.md` (PDF Handoff) and `PDF_solution.md`.
+Developer loop without the UI: build `cargo build --release --example pdf_try` in `apps/desktop/src-tauri`, then run `pdf_try.exe <pdf> <out.pdf> "" "1-8"` with `LINGVOLOC_PDFIUM`, optionally with `PDF_JOB_DB` and `PDF_JOB_ID` to use real translations of a finished job (without them a fake Cyrillic translation is used). Render pages with `tools/pdf-feasibility/examples/render.rs`. Layout rules are implemented in `apps/desktop/src-tauri/src/documents/pdf/`.
 
 ## Development
 
@@ -195,12 +195,7 @@ The release version is duplicated in the root, desktop, and extension `package.j
 
 ## Project documentation
 
-- `AGENTS.md`: shared instructions for coding agents.
-- `STATUS.md`: current state, known issues, and next step.
-- `DECISIONS.md`: technical decisions and their rationale.
-- `TODO.md`: pending work.
 - `docs/IMPLEMENTATION_PLAN.md`, `docs/FILE_TRANSLATION_PLAN.md`: implementation plans.
 - `docs/LOCAL_API.md`: the authenticated loopback API.
 - `docs/BROWSER_EXTENSION.md`: extension details.
-- `PDF_solution.md`: the PDF layout engine plan and design contract.
 - Third-party notices: PDFium and Noto fonts (`apps/desktop/src-tauri/resources/`), WordNet (`docs/WORDNET_NOTICE.txt`).

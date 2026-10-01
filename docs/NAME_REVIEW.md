@@ -23,6 +23,6 @@ Status: closed by the project owner on 2026-10-01; the official registers were n
 ## Recommended next steps
 
 1. Search the official registers for `LINGVOLOC`, `LINGVO` and `LINGVO*` in classes 9, 42 and 41: USPTO (https://tmsearch.uspto.gov), EUIPO TMview (https://www.tmdn.org/tmview), WIPO Global Brand Database (https://branddb.wipo.int), Rospatent (https://www1.fips.ru).
-2. If ABBYY (or ECTACO) holds an active registration for "Lingvo" in these classes, either talk to a trademark attorney or rename the product while it is still young. A rename touches the user-visible name only; keep the legacy identifiers listed in `STATUS.md` (`com.lingoloc.desktop`, `lingoloc.sqlite`, `lingoloc.settings`).
+2. If ABBYY (or ECTACO) holds an active registration for "Lingvo" in these classes, either talk to a trademark attorney or rename the product while it is still young. A rename touches the user-visible name only; keep the legacy identifiers (`com.lingoloc.desktop`, `lingoloc.sqlite`, `lingoloc.settings`).
 3. Independently of the outcome, consider registering `lingvoloc.com` (and `.app`) to hold the name, and do not describe the product as affiliated with ABBYY Lingvo.
-4. Record the decision in `DECISIONS.md`.
+4. Record the decision in the project documentation.

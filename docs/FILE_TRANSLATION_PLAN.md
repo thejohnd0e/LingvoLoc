@@ -24,7 +24,7 @@ The primary constraint is preserving existing functionality. Implement file tran
 
 ## Agent execution rules
 
-1. Read `AGENTS.md`, `STATUS.md`, `DECISIONS.md`, and `TODO.md` before implementation.
+1. Inspect the current code, tests, and repository state before implementation.
 2. Inspect Git status and the current code. Preserve unrelated or user-authored changes.
 3. Do not combine this work with dictionary improvements or broad refactoring of history, settings, runtime, or the main UI.
 4. Preserve existing IPC/HTTP contracts and compatibility of `Settings`, `TranslationRequest`, and `TranslationResult`. Any necessary additive change requires compatibility tests and safe defaults.
@@ -433,7 +433,7 @@ At the end of an implementation phase report:
 5. Exact next action and relevant files.
 6. Whether the phase's acceptance criteria are met.
 
-Update `STATUS.md` and `TODO.md` accurately; record architectural decisions in `DECISIONS.md`. Do not mark a feature complete based on mocks alone when its acceptance requires actual document viewers or native runtime smoke tests.
+Record implementation status, architectural decisions, and remaining limitations in the relevant project documentation. Do not mark a feature complete based on mocks alone when its acceptance requires actual document viewers or native runtime smoke tests.
 
 ### Suggested implementation prompt
 
@@ -453,7 +453,7 @@ If the user explicitly requests multiple agents, one can implement and another r
 - [x] Phase 7 EPUB: implementation complete for bounded spine XHTML paragraphs, headings, list items, and table cells; validator/reader smoke validation remains open.
 - [x] Phase 7 FB2: separate `fb2-v1` implementation supports section headings, body/epigraph/note paragraphs, safe XML-preserving export, and diagnostics; independent reader/validator validation remains open.
 - [ ] Phase 7 validation: open deterministic translated EPUB and FB2 fixtures in independent readers or validators; DOCX Word/LibreOffice validation also remains open.
-- [~] Phase 8: technical PDF layout preservation (first increment implemented; see STATUS.md for limits).
+- [~] Phase 8: technical PDF layout preservation (first increment implemented; see the PDF modules and fixtures for limits).
 - [ ] Phase 9: PDF to DOCX/EPUB.
 - [ ] Phase 10: separately scoped OCR and quality improvements.
 
