@@ -6,5 +6,6 @@ apps/desktop/src-tauri/data/lexical/*.json
 package-lock.json
 .playwright-mcp
 .omo
+.superpowers
 DIC/*.zip
 LingvoLoc-portable/
