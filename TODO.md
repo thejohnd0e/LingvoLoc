@@ -17,11 +17,12 @@
 ## PDF
 
 - [x] Phase 8 first increment: analysis, in-place layout-preserving export, job commands, Files panel support, unit and PDFium integration tests.
-- [ ] (In progress, user tests by hand) Review real-model PDF output page by page and fix layout problems they report; see `STATUS.md` PDF Handoff.
-- [ ] Even paragraph spacing (reflow vertically inside a page) and a second line for tight single-line list items.
-- [ ] Paragraphs split across a page break are two blocks; consider joining them.
-- [ ] Multi-column reading order, tables and figure captions; bundled OFL Cyrillic font instead of the Windows fonts.
-- [ ] Verify the installer ships `pdfium/pdfium.dll` (run `scripts/fetch-pdfium.ps1`, then `npm run desktop:build`) bundle `resources/pdfium/licenses/` (the glob only copies files) and review PDFium third-party notices.
+- [x] Review real-model PDF output page by page and fix layout problems: done, accepted by the user on 2026-10-01 (released in `3.1.1`).
+- [x] Even paragraph spacing (reflow vertically inside a page) and a second line for tight single-line list items.
+- [x] Conservatively join paragraphs split across adjacent selected pages and render one translation across both source frames.
+- [x] Multi-column reading order, tables and figure captions; bundled OFL Cyrillic fonts instead of Windows fonts.
+- [x] Verify the staged bundle ships `pdfium/pdfium.dll`, recursive PDFium notices, and Noto notices with `npm run desktop:verify-bundle`.
+- [x] Build the NSIS installer and verify staged PDFium/Noto resources locally (`LingvoLoc_2.2.5_x64-setup.exe`); clean-machine installation, real-model QA, and visual renderer inspection remain open.
 - [ ] (Optional, requested) Phase 9: export a PDF translation as a reading-friendly EPUB (and DOCX) from the same blocks.
 
 ## Next
@@ -43,7 +44,7 @@
 - [x] Drag-and-drop of files onto the window and the multi-file queue were verified by the user on real books (2026-09-30).
 - [x] Progress polling uses `get_document_progress` (counters and state only, no blocks) instead of `get_document_job`.
 
-- [ ] Next release: bump the version (root, desktop, extension `package.json`, `manifest.json`, `tauri.conf.json`, `Cargo.toml`, lock files), run `npm run check`, `npm run desktop:build`, `npm run extension:package`, then tag and `gh release create` (see the `v2.2.5` release for the notes format). Include the unreleased items listed in `STATUS.md`.
+- [x] (Done for `3.1.1`; repeat for the next release) Bump the version (root, desktop, extension `package.json`, `manifest.json`, `tauri.conf.json`, `Cargo.toml`, lock files), run `npm run check`, `npm run desktop:build`, `npm run extension:package`, then tag and `gh release create` (see the `v2.2.5` release for the notes format). Keep `README.md` and `README.ru.md` in sync.
 
 ## Models
 

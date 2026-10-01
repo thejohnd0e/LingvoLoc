@@ -10,6 +10,9 @@
 mod engine;
 mod fonts;
 pub mod layout;
+mod reflow;
+mod regions;
+mod slots;
 
 use pdfium_render::prelude::*;
 
@@ -18,8 +21,9 @@ use crate::domain::RuntimeError;
 
 use fonts::FontSet;
 use layout::{Background, Fragment, Kind, Paragraph, Rect};
+use regions::PageRegions;
 
-pub const PARSER_VERSION: &str = "pdf-v1";
+pub const PARSER_VERSION: &str = "pdf-v2";
 
 /// Pages chosen by the user, e.g. `5-12, 20, 30-` (1-based, inclusive, `N-` runs
 /// to the last page). No selection means the whole book.
@@ -124,16 +128,29 @@ pub struct Exported {
 }
 
 const MAX_PAGES: usize = 3000;
-const UNIFORM_FLOOR: f32 = 0.8;
 
+#[derive(Debug, Clone)]
 struct PageModel {
+    page_height: f32,
     fragments: Vec<Fragment>,
     paragraphs: Vec<Paragraph>,
-    backgrounds: Vec<Background>,
-    /// Thin horizontal lines (underlines, table borders).
-    rules: Vec<Rect>,
-    width: f32,
+    regions: PageRegions,
     supported: bool,
+}
+
+#[derive(Debug, Clone)]
+struct LogicalSegment {
+    page: usize,
+    paragraph: usize,
+    source_length: usize,
+}
+
+#[derive(Debug, Clone)]
+struct LogicalBlock {
+    id: String,
+    block_type: BlockType,
+    source_text: String,
+    segments: Vec<LogicalSegment>,
 }
 
 fn pdfium_error(context: &str, error: PdfiumError) -> RuntimeError {
@@ -162,6 +179,8 @@ fn read_page(page: &PdfPage) -> PageModel {
     let mut fragments = Vec::new();
     let mut backgrounds = Vec::new();
     let mut rules = Vec::new();
+    let mut vertical_rules = Vec::new();
+    let mut images = Vec::new();
     for (index, object) in page.objects().iter().enumerate() {
         let Ok(bounds) = object.bounds() else {
             continue;
@@ -201,9 +220,14 @@ fn read_page(page: &PdfPage) -> PageModel {
                 serif: font.is_serif() || (name.contains("serif") && !name.contains("sans")),
                 color: object.fill_color().map(color_of).unwrap_or([0, 0, 0, 255]),
             });
+        } else if object.as_image_object().is_some() {
+            images.push(bounds);
         } else if let Some(path) = object.as_path_object() {
             if bounds.height() <= 3.0 && bounds.width() >= 20.0 {
                 rules.push(bounds);
+            }
+            if bounds.width() <= 3.0 && bounds.height() >= 12.0 {
+                vertical_rules.push(bounds);
             }
             let filled = path
                 .fill_mode()
@@ -223,14 +247,55 @@ fn read_page(page: &PdfPage) -> PageModel {
     let lines = layout::build_lines(&fragments);
     let paragraphs = layout::build_paragraphs(lines, &backgrounds, body);
     backgrounds.retain(|background| background.bounds.height() <= layout::MAX_PANEL_HEIGHT);
+    let page_bounds = Rect {
+        left: 0.0,
+        bottom: 0.0,
+        right: width,
+        top: page.height().value,
+    };
+    let mut regions =
+        regions::detect_regions(&paragraphs, &backgrounds, &rules, &images, page_bounds);
+    // Panels are often drawn as one strip per line; for placement they are one.
+    let mut obstacles = merged_backgrounds(&backgrounds);
+    obstacles.extend(rules.iter().copied());
+    obstacles.extend(images.iter().copied());
+    obstacles.extend(vertical_rules);
+    regions.obstacles = obstacles;
     PageModel {
+        page_height: page.height().value,
         fragments,
         paragraphs,
-        backgrounds,
-        rules,
-        width,
+        regions,
         supported: !rotated,
     }
+}
+
+/// Joins vertically touching fills of the same colour and width.
+fn merged_backgrounds(backgrounds: &[Background]) -> Vec<Rect> {
+    let mut sorted: Vec<Background> = backgrounds.to_vec();
+    sorted.sort_by(|a, b| {
+        b.bounds
+            .top
+            .partial_cmp(&a.bounds.top)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let mut merged: Vec<Background> = Vec::new();
+    for background in sorted {
+        let joined = merged.iter_mut().find(|existing| {
+            existing.color == background.color
+                && (existing.bounds.left - background.bounds.left).abs() <= 1.0
+                && (existing.bounds.right - background.bounds.right).abs() <= 1.0
+                && (existing.bounds.bottom - background.bounds.top).abs() <= 1.5
+        });
+        match joined {
+            Some(existing) => existing.bounds.bottom = background.bounds.bottom,
+            None => merged.push(background),
+        }
+    }
+    merged
+        .into_iter()
+        .map(|background| background.bounds)
+        .collect()
 }
 
 fn block_id(page: usize, index: usize) -> String {
@@ -239,6 +304,160 @@ fn block_id(page: usize, index: usize) -> String {
 
 fn translatable(paragraph: &Paragraph) -> bool {
     matches!(paragraph.kind, Kind::Heading | Kind::Body)
+}
+
+fn ordered_translatable(paragraphs: &[Paragraph], regions: &PageRegions) -> Vec<usize> {
+    regions
+        .reading_order
+        .iter()
+        .copied()
+        .filter(|&index| translatable(&paragraphs[index]))
+        .collect()
+}
+
+fn lane_for(regions: &PageRegions, paragraph: usize) -> usize {
+    regions
+        .flows
+        .iter()
+        .find(|flow| flow.paragraph_indices.contains(&paragraph))
+        .map(|flow| flow.id.lane)
+        .unwrap_or(0)
+}
+
+fn block_type_for(regions: &PageRegions, paragraph: usize, kind: Kind) -> BlockType {
+    if kind == Kind::Heading {
+        return BlockType::Heading;
+    }
+    match regions
+        .flows
+        .iter()
+        .find(|flow| flow.paragraph_indices.contains(&paragraph))
+        .map(|flow| flow.kind)
+    {
+        Some(regions::RegionKind::Caption) => BlockType::Caption,
+        Some(regions::RegionKind::TableCell) => BlockType::TableCell,
+        _ => BlockType::Paragraph,
+    }
+}
+
+fn collect_logical_blocks(models: &[(usize, PageModel)]) -> Vec<LogicalBlock> {
+    let mut blocks: Vec<LogicalBlock> = Vec::new();
+    let mut previous: Option<(usize, Paragraph, usize, f32)> = None;
+    for &(number, ref model) in models {
+        if !model.supported || model.fragments.iter().all(|f| f.text.trim().is_empty()) {
+            previous = None;
+            continue;
+        }
+        for (index, paragraph_index) in ordered_translatable(&model.paragraphs, &model.regions)
+            .into_iter()
+            .enumerate()
+        {
+            let paragraph = &model.paragraphs[paragraph_index];
+            let lane = lane_for(&model.regions, paragraph_index);
+            let joined = index == 0
+                && previous.as_ref().is_some_and(
+                    |(page, previous, previous_lane, previous_height)| {
+                        *page + 1 == number
+                            && regions::can_join_cross_page(
+                                previous,
+                                paragraph,
+                                *previous_lane,
+                                lane,
+                                *previous_height,
+                                model.page_height,
+                            )
+                    },
+                );
+            if joined {
+                if let Some(previous_block) = blocks.last_mut() {
+                    previous_block.source_text =
+                        regions::join_cross_page_text(&previous_block.source_text, &paragraph.text);
+                    previous_block.segments.push(LogicalSegment {
+                        page: number,
+                        paragraph: paragraph_index,
+                        source_length: paragraph.text.chars().count(),
+                    });
+                }
+            } else {
+                blocks.push(LogicalBlock {
+                    id: block_id(number, index),
+                    block_type: block_type_for(&model.regions, paragraph_index, paragraph.kind),
+                    source_text: paragraph.text.clone(),
+                    segments: vec![LogicalSegment {
+                        page: number,
+                        paragraph: paragraph_index,
+                        source_length: paragraph.text.chars().count(),
+                    }],
+                });
+            }
+            previous = Some((number, paragraph.clone(), lane, model.page_height));
+        }
+    }
+    blocks
+}
+
+fn split_translation(text: &str, source_lengths: &[usize]) -> Vec<String> {
+    if source_lengths.len() <= 1 {
+        return vec![text.to_string()];
+    }
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let total_source = source_lengths.iter().sum::<usize>().max(1);
+    let mut remaining = words.as_slice();
+    let mut result = Vec::with_capacity(source_lengths.len());
+    for (index, source_length) in source_lengths.iter().enumerate() {
+        if index + 1 == source_lengths.len() {
+            result.push(remaining.join(" "));
+            break;
+        }
+        let target = ((words.len() * *source_length) as f32 / total_source as f32).round() as usize;
+        let take = target.clamp(
+            1,
+            remaining
+                .len()
+                .saturating_sub(source_lengths.len() - index - 1),
+        );
+        let (part, rest) = remaining.split_at(take);
+        result.push(part.join(" "));
+        remaining = rest;
+    }
+    result
+}
+
+fn segment_translations(
+    logical_blocks: &[LogicalBlock],
+    blocks: &[DocumentBlock],
+) -> std::collections::HashMap<(usize, usize), (String, String)> {
+    let translations: std::collections::HashMap<&str, &str> = blocks
+        .iter()
+        .filter_map(|block| {
+            block
+                .translated_text
+                .as_deref()
+                .map(|text| (block.id.as_str(), text))
+        })
+        .collect();
+    let mut result = std::collections::HashMap::new();
+    for logical in logical_blocks {
+        let Some(translation) = translations.get(logical.id.as_str()) else {
+            continue;
+        };
+        let lengths: Vec<usize> = logical
+            .segments
+            .iter()
+            .map(|segment| segment.source_length)
+            .collect();
+        for (segment, text) in logical
+            .segments
+            .iter()
+            .zip(split_translation(translation, &lengths))
+        {
+            result.insert(
+                (segment.page, segment.paragraph),
+                (logical.id.clone(), text),
+            );
+        }
+    }
+    result
 }
 
 pub fn analyze(source: &[u8], pages: Option<&PageSelection>) -> Result<Analysis, RuntimeError> {
@@ -265,44 +484,35 @@ fn analyze_with(
         Some(selection) => selection.pages(count)?,
         None => (0..count).collect(),
     };
-    let mut blocks = Vec::new();
     let mut diagnostics = Vec::new();
     let mut rotated = Vec::new();
     let mut without_text = Vec::new();
-    for number in selected {
+    let mut models = Vec::new();
+    for &number in &selected {
         let page = pages
             .get(number as PdfPageIndex)
             .map_err(|error| pdfium_error("read PDF page", error))?;
         let model = read_page(&page);
+        diagnostics.extend(model.regions.diagnostics.iter().cloned());
         if !model.supported {
             rotated.push(number + 1);
-            continue;
-        }
-        if model.fragments.iter().all(|f| f.text.trim().is_empty()) {
+        } else if model.fragments.iter().all(|f| f.text.trim().is_empty()) {
             without_text.push(number + 1);
-            continue;
         }
-        let mut index = 0;
-        for paragraph in &model.paragraphs {
-            match paragraph.kind {
-                Kind::Skip(_) => {}
-                Kind::Heading | Kind::Body => {
-                    blocks.push(DocumentBlock {
-                        id: block_id(number, index),
-                        ordinal: blocks.len() as i64,
-                        block_type: if paragraph.kind == Kind::Heading {
-                            BlockType::Heading
-                        } else {
-                            BlockType::Paragraph
-                        },
-                        source_text: paragraph.text.clone(),
-                        translated_text: None,
-                    });
-                    index += 1;
-                }
-            }
-        }
+        models.push((number, model));
     }
+    let logical_blocks = collect_logical_blocks(&models);
+    let blocks: Vec<DocumentBlock> = logical_blocks
+        .iter()
+        .enumerate()
+        .map(|(ordinal, block)| DocumentBlock {
+            id: block.id.clone(),
+            ordinal: ordinal as i64,
+            block_type: block.block_type,
+            source_text: block.source_text.clone(),
+            translated_text: None,
+        })
+        .collect();
     if !without_text.is_empty() {
         diagnostics.push(format!(
             "Pages without extractable text stay unchanged (scanned or image-only): {}",
@@ -334,151 +544,6 @@ fn page_list(pages: &[usize]) -> String {
     }
 }
 
-/// Vertical room below a paragraph: up to the next paragraph that overlaps it
-/// horizontally, the bottom of its background panel, or the page text margin.
-fn bottom_limit(
-    index: usize,
-    paragraphs: &[Paragraph],
-    backgrounds: &[Background],
-    rules: &[Rect],
-    page_bottom: f32,
-) -> f32 {
-    let paragraph = &paragraphs[index];
-    let mut limit = page_bottom;
-    for (other_index, other) in paragraphs.iter().enumerate() {
-        if other_index != index
-            && other.lines[0].baseline < paragraph.lines[paragraph.lines.len() - 1].baseline - 0.1
-            && other.bounds.overlaps_horizontally(&paragraph.bounds)
-        {
-            limit = limit.max(other.bounds.top + paragraph.lines[0].size * 0.2);
-        }
-    }
-    // A panel or table cell that starts below the paragraph is an obstacle.
-    for background in backgrounds {
-        if background.bounds.top <= paragraph.bounds.bottom + 1.0
-            && background.bounds.overlaps_horizontally(&paragraph.bounds)
-            && paragraph.container != Some(background.bounds)
-        {
-            limit = limit.max(background.bounds.top + 1.5);
-        }
-    }
-    for rule in rules {
-        if rule.top <= paragraph.bounds.bottom + 1.0
-            && rule.top >= paragraph.bounds.top - paragraph.bounds.height() * 2.0 - 40.0
-            && rule.overlaps_horizontally(&paragraph.bounds)
-            && rule.top < paragraph.lines[0].baseline
-        {
-            limit = limit.max(rule.top + 1.5);
-        }
-    }
-    if let Some(container) = paragraph.container {
-        let padding = (paragraph.bounds.left - container.left)
-            .clamp(2.0, 8.0)
-            .max(paragraph.lines[0].size * 0.3);
-        limit = limit.max(container.bottom + padding);
-    }
-    limit.min(paragraph.bounds.bottom)
-}
-
-/// How far the first baseline may move up: to the panel top, the paragraph or
-/// panel edge above it, whichever comes first.
-fn shift_room(
-    index: usize,
-    paragraphs: &[Paragraph],
-    backgrounds: &[Background],
-    rules: &[Rect],
-) -> f32 {
-    let paragraph = &paragraphs[index];
-    let first = &paragraph.lines[0];
-    let mut ceiling = paragraph.bounds.top + 30.0;
-    if let Some(container) = paragraph.container {
-        let padding = (paragraph.bounds.left - container.left).clamp(2.0, 8.0);
-        ceiling = ceiling.min(container.top - padding);
-    }
-    for (other_index, other) in paragraphs.iter().enumerate() {
-        if other_index != index
-            && other.lines[other.lines.len() - 1].baseline > first.baseline + 0.1
-            && other.bounds.overlaps_horizontally(&paragraph.bounds)
-        {
-            ceiling = ceiling.min(other.bounds.bottom - first.size * 0.1);
-        }
-    }
-    for background in backgrounds {
-        if background.bounds.bottom >= paragraph.bounds.top - 0.5
-            && background.bounds.overlaps_horizontally(&paragraph.bounds)
-            && paragraph.container != Some(background.bounds)
-        {
-            ceiling = ceiling.min(background.bounds.bottom - 3.0);
-        }
-    }
-    for rule in rules {
-        if rule.bottom >= paragraph.bounds.top - 0.5
-            && rule.bottom <= paragraph.bounds.top + 40.0
-            && rule.overlaps_horizontally(&paragraph.bounds)
-        {
-            ceiling = ceiling.min(rule.bottom - 1.5);
-        }
-    }
-    (ceiling - paragraph.bounds.top - first.size * 0.2).max(0.0)
-}
-
-/// How far the region may grow to the left (table cell, header): up to the
-/// left neighbour on the same rows or the panel edge; zero for plain text.
-fn left_slack(index: usize, paragraphs: &[Paragraph]) -> f32 {
-    let paragraph = &paragraphs[index];
-    let size = paragraph.lines[0].size;
-    let mut edge = None;
-    if let Some(container) = paragraph.container {
-        edge = Some(container.left + (paragraph.bounds.left - container.left).clamp(2.0, 8.0));
-    }
-    for (other_index, other) in paragraphs.iter().enumerate() {
-        if other_index != index
-            && other.bounds.right <= paragraph.bounds.left + 0.5
-            && other.bounds.bottom < paragraph.bounds.top
-            && other.bounds.top > paragraph.bounds.bottom
-        {
-            let limit = other.bounds.right + size * 0.5;
-            edge = Some(edge.map_or(limit, |current: f32| current.max(limit)));
-        }
-    }
-    edge.map_or(0.0, |edge| (paragraph.bounds.left - edge).max(0.0))
-}
-
-fn region(index: usize, paragraphs: &[Paragraph], page_right: f32, page_width: f32) -> (f32, f32) {
-    let paragraph = &paragraphs[index];
-    let lines = &paragraph.lines;
-    let size = lines[0].size;
-    // The leftmost line: a list item's first line starts left of its
-    // continuation, an indented first line starts right of the rest.
-    let left = if lines[0].item_start {
-        // Continuations of a list item wrap back to the margin, under the bullet.
-        lines[0].bounds.left
-    } else {
-        lines
-            .iter()
-            .map(|line| line.bounds.left)
-            .fold(f32::MAX, f32::min)
-    };
-    let mut allowed = match paragraph.container {
-        Some(container) => {
-            container.right - (paragraph.bounds.left - container.left).clamp(2.0, 8.0)
-        }
-        None => page_right.min(page_width - 20.0),
-    };
-    // A neighbour on the same rows (table cell, label column) bounds the width.
-    for (other_index, other) in paragraphs.iter().enumerate() {
-        if other_index != index
-            && other.bounds.left >= paragraph.bounds.right - 0.5
-            && other.bounds.bottom < paragraph.bounds.top
-            && other.bounds.top > paragraph.bounds.bottom
-        {
-            allowed = allowed.min(other.bounds.left - size * 0.5);
-        }
-    }
-    let right = paragraph.bounds.right.max(allowed);
-    (left, (right - left).max(size))
-}
-
 /// With a page selection the output holds only the selected pages, which keeps
 /// manual review fast; block ids keep the original page numbers.
 pub fn export(
@@ -507,220 +572,257 @@ fn export_with(
     let mut tokens = std::collections::HashMap::new();
     let mut diagnostics = Vec::new();
     let mut review_pages = Vec::new();
+    let mut models = Vec::new();
+    for &number in &selected {
+        let page = document
+            .pages()
+            .get(number as PdfPageIndex)
+            .map_err(|error| pdfium_error("read PDF page", error))?;
+        models.push((number, read_page(&page)));
+    }
+    let logical_blocks = collect_logical_blocks(&models);
+    let segment_texts = segment_translations(&logical_blocks, blocks);
 
     for &number in &selected {
         let mut page = document
             .pages()
             .get(number as PdfPageIndex)
             .map_err(|error| pdfium_error("read PDF page", error))?;
-        let model = read_page(&page);
+        let model = models
+            .iter()
+            .find(|(page_number, _)| *page_number == number)
+            .map(|(_, model)| model)
+            .expect("selected page model exists");
         if !model.supported {
             continue;
         }
         // Regenerating the content stream after every object is very slow.
         page.set_content_regeneration_strategy(PdfPageContentRegenerationStrategy::Manual);
-        let page_right = model
-            .paragraphs
-            .iter()
-            .map(|paragraph| paragraph.bounds.right)
-            .fold(0.0_f32, f32::max);
-        let page_bottom = model
-            .paragraphs
-            .iter()
-            .map(|paragraph| paragraph.bounds.bottom)
-            .fold(f32::MAX, f32::min)
-            .min(60.0)
-            - 4.0;
-
         struct Job {
             objects: Vec<usize>,
-            text: String,
-            left: f32,
-            width: f32,
-            limit: f32,
-            baseline: f32,
-            size: f32,
-            pitch: f32,
-            room: f32,
-            slack: f32,
-            /// Original paragraph box, for neighbour checks.
-            top: f32,
-            box_left: f32,
-            box_right: f32,
-            lines: usize,
-            placement: Option<layout::Placement>,
+            lines: Vec<reflow::PlannedLine>,
             serif: bool,
             bold: bool,
             italic: bool,
             color: [u8; 4],
+            /// Source object, text, x, baseline: list markers that follow their item.
+            markers: Vec<(usize, String, f32, f32)>,
+            marker_size: f32,
         }
         let mut jobs = Vec::new();
-        let mut index = 0;
-        for (position, paragraph) in model.paragraphs.iter().enumerate() {
-            if !translatable(paragraph) {
+        let active: Vec<usize> = (0..model.paragraphs.len())
+            .filter(|&position| {
+                translatable(&model.paragraphs[position])
+                    && segment_texts
+                        .get(&(number, position))
+                        .is_some_and(|(_, text)| !text.trim().is_empty())
+            })
+            .collect();
+        /// Source objects, font traits and list markers of one translated block.
+        type PendingBlock = (
+            String,
+            Vec<usize>,
+            bool,
+            bool,
+            bool,
+            [u8; 4],
+            Vec<(usize, String, f32, f32)>,
+            f32,
+        );
+        struct PendingRun {
+            items: Vec<reflow::FlowItem>,
+            frame: reflow::FlowFrame,
+            blocks: Vec<PendingBlock>,
+        }
+        let mut pending: Vec<PendingRun> = Vec::new();
+        for run in slots::runs(&model.paragraphs, &model.regions.obstacles, &active) {
+            let mut items = Vec::new();
+            let mut objects_by_block = Vec::new();
+            for (slot_index, slot) in run.iter().enumerate() {
+                let paragraph = &model.paragraphs[slot.paragraph];
+                let (id, translation) = &segment_texts[&(number, slot.paragraph)];
+                let first = &paragraph.lines[0];
+                let pitch = if paragraph.lines.len() > 1 {
+                    (first.baseline - paragraph.lines[paragraph.lines.len() - 1].baseline)
+                        / (paragraph.lines.len() - 1) as f32
+                } else {
+                    first.size * 1.2
+                };
+                let gap_after = run
+                    .get(slot_index + 1)
+                    .map(|next| {
+                        (paragraph.bounds.bottom - model.paragraphs[next.paragraph].bounds.top)
+                            .max(0.0)
+                    })
+                    .unwrap_or(0.0);
+                let objects: Vec<usize> = paragraph
+                    .lines
+                    .iter()
+                    .flat_map(|line| line.fragments.iter())
+                    .map(|&fragment| model.fragments[fragment].object)
+                    .collect();
+                let markers: Vec<(usize, String, f32, f32)> = if first.item_start {
+                    model
+                        .fragments
+                        .iter()
+                        .filter(|fragment| {
+                            layout::is_marker(&fragment.text)
+                                && (fragment.baseline - first.baseline).abs() <= 0.3 * first.size
+                                && fragment.bounds.right <= first.bounds.left + 1.0
+                                && first.bounds.left - fragment.bounds.right < 2.5 * first.size
+                        })
+                        .map(|fragment| {
+                            (
+                                fragment.object,
+                                fragment.text.trim().to_string(),
+                                fragment.bounds.left,
+                                fragment.baseline,
+                            )
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                objects_by_block.push((
+                    id.clone(),
+                    objects,
+                    first.serif,
+                    first.bold,
+                    first.italic,
+                    first.color,
+                    markers,
+                    first.size,
+                ));
+                items.push(reflow::FlowItem {
+                    block_id: id.clone(),
+                    text: translation.clone(),
+                    block_type: if paragraph.kind == Kind::Heading {
+                        BlockType::Heading
+                    } else {
+                        BlockType::Paragraph
+                    },
+                    style: reflow::TextStyle {
+                        size: first.size,
+                        pitch,
+                        bold: first.bold,
+                        italic: first.italic,
+                        serif: first.serif,
+                        color: first.color,
+                    },
+                    original_bounds: paragraph.bounds,
+                    original_lines: paragraph.lines.len(),
+                    preferred_gap_after: gap_after,
+                    left: slot.left,
+                    right: slot.right,
+                    first_baseline: first.baseline,
+                    center: slot.center,
+                    right_aligned: slot.right_aligned,
+                });
+            }
+            let frame = reflow::FlowFrame {
+                page: number,
+                bounds: Rect {
+                    left: run[0].left,
+                    bottom: run[0].bottom,
+                    right: run[0].right,
+                    top: run[0].top,
+                },
+            };
+            pending.push(PendingRun {
+                items,
+                frame,
+                blocks: objects_by_block,
+            });
+        }
+        let mut plans: Vec<reflow::FlowPlan> = pending
+            .iter()
+            .map(|run| {
+                reflow::place_flow(
+                    &run.items,
+                    &[run.frame],
+                    &fonts.measure(run.items[0].style.serif),
+                    1.0,
+                )
+            })
+            .collect();
+        // Cells and rows of one table or list share a font size when they can.
+        let mut groups: std::collections::HashMap<(i32, bool, bool, bool), Vec<usize>> =
+            std::collections::HashMap::new();
+        for (index, run) in pending.iter().enumerate() {
+            let style = run.items[0].style;
+            if run.items.len() == 1 && run.frame.bounds.height() <= style.size * 8.0 {
+                groups
+                    .entry((
+                        (style.size * 2.0).round() as i32,
+                        style.bold,
+                        style.italic,
+                        style.serif,
+                    ))
+                    .or_default()
+                    .push(index);
+            }
+        }
+        for members in groups.values().filter(|members| members.len() >= 3) {
+            let shared = members
+                .iter()
+                .map(|&index| plans[index].scale)
+                .fold(1.0_f32, f32::min);
+            if shared < 0.6 || shared >= 1.0 {
                 continue;
             }
-            let id = block_id(number, index);
-            index += 1;
-            let Some(translation) = blocks
-                .iter()
-                .find(|block| block.id == id)
-                .and_then(|block| block.translated_text.as_deref())
-                .filter(|text| !text.trim().is_empty())
-            else {
-                continue;
-            };
-            let first = &paragraph.lines[0];
-            let pitch = if paragraph.lines.len() > 1 {
-                (first.baseline - paragraph.lines[paragraph.lines.len() - 1].baseline)
-                    / (paragraph.lines.len() - 1) as f32
-            } else {
-                first.size * 1.2
-            };
-            let (left, width) = region(position, &model.paragraphs, page_right, model.width);
-            let limit = bottom_limit(
-                position,
-                &model.paragraphs,
-                &model.backgrounds,
-                &model.rules,
-                page_bottom,
-            );
-            let objects = paragraph
-                .lines
-                .iter()
-                .flat_map(|line| line.fragments.iter())
-                .map(|&fragment| model.fragments[fragment].object)
-                .collect();
-            jobs.push(Job {
-                objects,
-                text: translation.to_string(),
-                left,
-                width,
-                limit,
-                baseline: first.baseline,
-                size: first.size,
-                pitch,
-                room: shift_room(
-                    position,
-                    &model.paragraphs,
-                    &model.backgrounds,
-                    &model.rules,
-                ),
-                slack: left_slack(position, &model.paragraphs),
-                top: paragraph.bounds.top,
-                box_left: paragraph.bounds.left,
-                box_right: paragraph.bounds.right,
-                lines: paragraph.lines.len(),
-                placement: None,
-                serif: first.serif,
-                bold: first.bold,
-                italic: first.italic,
-                color: first.color,
-            });
+            for &index in members {
+                if plans[index].scale > shared + 1e-4 {
+                    let run = &pending[index];
+                    plans[index] = reflow::place_flow(
+                        &run.items,
+                        &[run.frame],
+                        &fonts.measure(run.items[0].style.serif),
+                        shared,
+                    );
+                }
+            }
+        }
+        for (run, plan) in pending.into_iter().zip(plans) {
+            if plan.scale < layout::REVIEW_SCALE || !plan.overflow_blocks.is_empty() {
+                review_pages.push(number + 1);
+            }
+            for (id, mut objects, serif, bold, italic, color, markers, marker_size) in run.blocks {
+                let lines: Vec<reflow::PlannedLine> = plan
+                    .lines
+                    .iter()
+                    .filter(|line| line.block_id == id)
+                    .cloned()
+                    .collect();
+                let first_baseline = lines
+                    .first()
+                    .map(|line: &reflow::PlannedLine| line.baseline);
+                let markers = match first_baseline {
+                    Some(baseline) => markers
+                        .into_iter()
+                        .filter(|marker| (marker.3 - baseline).abs() > 0.5)
+                        .map(|marker| (marker.0, marker.1, marker.2, baseline))
+                        .collect(),
+                    None => Vec::new(),
+                };
+                objects.extend(
+                    markers
+                        .iter()
+                        .map(|marker: &(usize, String, f32, f32)| marker.0),
+                );
+                jobs.push(Job {
+                    objects,
+                    lines,
+                    serif,
+                    bold,
+                    italic,
+                    color,
+                    markers,
+                    marker_size,
+                });
+            }
         }
         if jobs.is_empty() {
             continue;
-        }
-
-        // Fit each paragraph, then give paragraphs of the same original size the
-        // same scale so neighbouring text does not differ in size.
-        // Top to bottom: a paragraph may move up only into space that the
-        // (already placed) paragraphs above it have not taken.
-        let place_all = |jobs: &mut [Job], caps: &dyn Fn(&Job) -> f32| {
-            for index in 0..jobs.len() {
-                let mut room = jobs[index].room;
-                for earlier in &jobs[..index] {
-                    let job = &jobs[index];
-                    if earlier.box_right > job.box_left && job.box_right > earlier.box_left {
-                        if let Some(placed) = earlier.placement.as_ref() {
-                            if let Some(last) = placed.lines.last() {
-                                let bottom = last.baseline - placed.size * 0.3;
-                                room = room.min(bottom - job.top - job.size * 0.15);
-                            }
-                        }
-                    }
-                }
-                let job = &jobs[index];
-                let placement = layout::place(
-                    &job.text,
-                    job.left,
-                    job.width,
-                    job.baseline,
-                    job.limit,
-                    job.size,
-                    job.pitch,
-                    job.bold,
-                    job.italic,
-                    caps(job),
-                    room.max(0.0),
-                    job.slack,
-                    job.lines,
-                    &fonts.measure(job.serif),
-                );
-                jobs[index].placement = Some(placement);
-            }
-        };
-        // One line-spacing ratio per group of same-sized text on the page.
-        let ratio_of = |job: &Job| job.pitch / job.size;
-        let mut ratios: std::collections::HashMap<(i32, bool), Vec<f32>> =
-            std::collections::HashMap::new();
-        for job in jobs.iter().filter(|job| job.lines > 1) {
-            ratios
-                .entry(((job.size * 2.0).round() as i32, job.bold))
-                .or_default()
-                .push(ratio_of(job));
-        }
-        let page_ratio = {
-            let mut all: Vec<f32> = ratios.values().flatten().copied().collect();
-            all.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-            all.get(all.len() / 2).copied().unwrap_or(1.25)
-        };
-        let ratio_by_group: std::collections::HashMap<(i32, bool), f32> = ratios
-            .into_iter()
-            .map(|(key, mut values)| {
-                values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-                (key, values[values.len() / 2])
-            })
-            .collect();
-        for job in &mut jobs {
-            let ratio = ratio_by_group
-                .get(&((job.size * 2.0).round() as i32, job.bold))
-                .copied()
-                .unwrap_or(page_ratio);
-            job.pitch = ratio * job.size;
-        }
-        place_all(&mut jobs, &|_| 1.0);
-        let mut groups: std::collections::HashMap<(i32, bool), Vec<f32>> =
-            std::collections::HashMap::new();
-        for job in &jobs {
-            if let Some(placement) = job.placement.as_ref().filter(|p| !p.overflow) {
-                groups
-                    .entry(((job.size * 2.0).round() as i32, job.bold))
-                    .or_default()
-                    .push(placement.scale);
-            }
-        }
-        // The smallest scale in the group, but not below UNIFORM_FLOOR: a single
-        // very long paragraph must not shrink the whole page.
-        let medians: std::collections::HashMap<(i32, bool), f32> = groups
-            .into_iter()
-            .map(|(key, scales)| {
-                let smallest = scales.into_iter().fold(1.0_f32, f32::min);
-                (key, smallest.max(UNIFORM_FLOOR))
-            })
-            .collect();
-        place_all(&mut jobs, &|job| {
-            medians
-                .get(&((job.size * 2.0).round() as i32, job.bold))
-                .copied()
-                .unwrap_or(1.0)
-        });
-        if jobs.iter().any(|job| {
-            job.placement
-                .as_ref()
-                .is_some_and(layout::Placement::needs_review)
-        }) {
-            review_pages.push(number + 1);
         }
 
         let mut remove: Vec<usize> = jobs.iter().flat_map(|job| job.objects.clone()).collect();
@@ -745,15 +847,18 @@ fn export_with(
                     token
                 }
             };
-            let placement = job.placement.as_ref().expect("placed above");
-            for line in &placement.lines {
-                let mut text = PdfPageTextObject::new(
-                    &document,
-                    &line.text,
-                    token,
-                    PdfPoints::new(placement.size),
-                )
-                .map_err(|error| pdfium_error("create translated text", error))?;
+            let marker_lines = job
+                .markers
+                .iter()
+                .map(|(_, text, x, baseline)| (text.as_str(), *x, *baseline, job.marker_size));
+            let text_lines = job
+                .lines
+                .iter()
+                .map(|line| (line.text.as_str(), line.x, line.baseline, line.size));
+            for (line_text, x, baseline, size) in marker_lines.chain(text_lines) {
+                let mut text =
+                    PdfPageTextObject::new(&document, line_text, token, PdfPoints::new(size))
+                        .map_err(|error| pdfium_error("create translated text", error))?;
                 text.set_fill_color(PdfColor::new(
                     job.color[0],
                     job.color[1],
@@ -761,7 +866,7 @@ fn export_with(
                     job.color[3],
                 ))
                 .map_err(|error| pdfium_error("colour translated text", error))?;
-                text.translate(PdfPoints::new(line.x), PdfPoints::new(line.baseline))
+                text.translate(PdfPoints::new(x), PdfPoints::new(baseline))
                     .map_err(|error| pdfium_error("position translated text", error))?;
                 page.objects_mut()
                     .add_text_object(text)
@@ -845,7 +950,7 @@ mod tests {
             return;
         };
         if FontSet::load().is_err() {
-            eprintln!("skipped: Windows fonts are not available");
+            eprintln!("skipped: bundled fonts are not available");
             return;
         }
         let analysis = analyze(&source, None).expect("analysis");
@@ -882,12 +987,19 @@ mod tests {
                 .pages()
                 .get(0)
                 .map_err(|error| pdfium_error("page", error))?;
-            // PDFium reports the embedded font's space as U+00A0.
-            let text = page
-                .text()
-                .map_err(|error| pdfium_error("text", error))?
-                .all()
-                .replace('\u{a0}', " ");
+            // PDFium's CID TrueType path currently reports embedded spaces as U+00A0.
+            let page_text = page.text().map_err(|error| pdfium_error("text", error))?;
+            let chars: Vec<u32> = page_text
+                .chars()
+                .iter()
+                .map(|character| character.unicode_value())
+                .collect();
+            let text: String = chars
+                .iter()
+                .filter_map(|value| char::from_u32(*value))
+                .collect();
+            assert!(text.contains(' '));
+            assert!(!text.contains('\u{a0}'));
             Ok(text)
         })
         .expect("read output");
@@ -919,6 +1031,13 @@ mod tests {
     }
 
     #[test]
+    fn split_translation_keeps_all_words_across_joined_segments() {
+        let parts = split_translation("one two three four five six", &[2, 4]);
+        assert_eq!(parts, vec!["one two", "three four five six"]);
+        assert_eq!(parts.join(" "), "one two three four five six");
+    }
+
+    #[test]
     fn overflow_is_reported_for_review() {
         let Some(source) = fixture() else {
             return;
@@ -933,5 +1052,43 @@ mod tests {
             .diagnostics
             .iter()
             .any(|line| line.contains("review pages: 1")));
+    }
+
+    #[test]
+    fn authored_fixture_has_stable_complex_region_analysis() {
+        let source = include_bytes!("../../../../../../docs/fixtures/pdf/technical-fixture.pdf");
+        let first = match analyze(source, None) {
+            Ok(analysis) => analysis,
+            Err(error) if error.to_string().contains("PDFium") => {
+                eprintln!("skipped: pdfium.dll is not available: {error}");
+                return;
+            }
+            Err(error) => panic!("fixture analysis failed: {error}"),
+        };
+        let second = analyze(source, None).expect("repeat fixture analysis");
+        let first_blocks: Vec<_> = first
+            .blocks
+            .iter()
+            .map(|block| {
+                (
+                    block.id.clone(),
+                    block.source_text.clone(),
+                    block.block_type,
+                )
+            })
+            .collect();
+        let second_blocks: Vec<_> = second
+            .blocks
+            .iter()
+            .map(|block| {
+                (
+                    block.id.clone(),
+                    block.source_text.clone(),
+                    block.block_type,
+                )
+            })
+            .collect();
+        assert_eq!(first_blocks, second_blocks);
+        assert!(first_blocks.len() > 10);
     }
 }

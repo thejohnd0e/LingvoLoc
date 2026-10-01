@@ -218,7 +218,7 @@ pub fn build_lines(fragments: &[Fragment]) -> Vec<Line> {
 }
 
 /// A lone bullet or list number; it stays on the page untouched.
-fn is_marker(text: &str) -> bool {
+pub fn is_marker(text: &str) -> bool {
     let text = text.trim();
     let mut chars = text.chars();
     match (chars.next(), chars.next()) {

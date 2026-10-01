@@ -37,6 +37,7 @@ import {
   formatDuration,
   formatEta,
   groupDiagnostics,
+  groupPdfDiagnostics,
 } from './documentProgress';
 
 const storedJobKey = 'lingvoloc.document-job-id';
@@ -182,6 +183,7 @@ export default function DocumentsPanel({
   const [pdfPages, setPdfPages] = useState('');
   /** File being analyzed right now, for the wait indicator. */
   const [analyzing, setAnalyzing] = useState<string | null>(null);
+  const [stalePdf, setStalePdf] = useState(false);
   const dropHandler = useRef<(paths: string[]) => void>(() => undefined);
 
   async function refreshRecent() {
@@ -237,6 +239,7 @@ export default function DocumentsPanel({
       return;
     }
     setBusy(true);
+    setStalePdf(false);
     setAnalyzing(fileName(supported[0]));
     const failures: string[] = [];
     let created = 0;
@@ -340,6 +343,7 @@ export default function DocumentsPanel({
       clearedJobIds.current.delete(jobId);
       localStorage.setItem(storedJobKey, jobId);
       setJob(snapshot);
+      setStalePdf(false);
       setOutputPath('');
       setMessage('');
     } catch (reason) {
@@ -493,7 +497,14 @@ export default function DocumentsPanel({
       }
     } catch (reason) {
       if (clearedJobIds.current.has(jobId)) return null;
-      setMessage(`${label} failed · ${errorDetail(reason)}`);
+      const detail = errorDetail(reason);
+      if (
+        target.job.format === 'pdf' &&
+        /PDF layout analysis changed/i.test(detail)
+      ) {
+        setStalePdf(true);
+      }
+      setMessage(`${label} failed · ${detail}`);
       try {
         const snapshot = await getDocumentJob(jobId);
         setJob(snapshot);
@@ -570,6 +581,10 @@ export default function DocumentsPanel({
 
   const state = job?.job.state;
   const canStart = state === 'ready' && Boolean(modelId);
+  const pagesChanged =
+    job?.job.format === 'pdf' &&
+    normalizePages(pdfPages) !==
+      normalizePages(jobPages(job.job.configuration_version));
   const canResume =
     state === 'paused' || state === 'interrupted' || state === 'failed';
   const translationFinished =
@@ -616,7 +631,10 @@ export default function DocumentsPanel({
       item.job.state,
     ),
   ).length;
-  const groupedDiagnostics = groupDiagnostics(job?.diagnostics ?? []);
+  const groupedDiagnostics =
+    job?.job.format === 'pdf'
+      ? groupPdfDiagnostics(job.diagnostics)
+      : groupDiagnostics(job?.diagnostics ?? []);
   const visibleDiagnostics = groupedDiagnostics.slice(0, 8);
   const hiddenDiagnostics = groupedDiagnostics.slice(8);
   const eta =
@@ -740,6 +758,19 @@ export default function DocumentsPanel({
               {job.job.error}
             </p>
           )}
+          {stalePdf && job.job.format === 'pdf' && (
+            <button
+              className="quiet"
+              type="button"
+              onClick={() => {
+                setStalePdf(false);
+                void removeJob(job.job.id);
+              }}
+              disabled={busy || queueRunning}
+            >
+              Remove stale PDF job, then add the file again
+            </button>
+          )}
           {job.diagnostics.length > 0 && (
             <>
               <ul aria-label="Document diagnostics">
@@ -767,15 +798,25 @@ export default function DocumentsPanel({
                 className="translate"
                 type="button"
                 disabled={busy || controlBusy}
-                onClick={() =>
+                onClick={() => {
+                  if (pagesChanged) {
+                    // The range field only applies when the file is analyzed;
+                    // never translate a different range than the one shown.
+                    void reanalyzeWithPages().then(() =>
+                      setMessage(
+                        `Pages changed to “${pdfPages.trim() || 'all'}”: the file was analyzed again. Press Start translation.`,
+                      ),
+                    );
+                    return;
+                  }
                   void updateJob(
                     () =>
                       documentFormats[documentFormat(job.job.format)].start(
                         job.job.id,
                       ),
                     'Translating…',
-                  )
-                }
+                  );
+                }}
               >
                 Start translation
               </button>

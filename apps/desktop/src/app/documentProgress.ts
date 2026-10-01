@@ -58,3 +58,24 @@ export function groupDiagnostics(diagnostics: string[]): string[] {
   }
   return lines;
 }
+
+/** Groups PDF layout warnings by page while leaving unrelated format diagnostics intact. */
+export function groupPdfDiagnostics(diagnostics: string[]): string[] {
+  const pageCounts = new Map<string, number>();
+  const other: string[] = [];
+  for (const diagnostic of diagnostics) {
+    const match = diagnostic.match(/(?:page|pages)\s*:?\s*(\d+(?:[,-]\d+)*)/i);
+    if (match && /review|overflow|fit|layout|shrink/i.test(diagnostic)) {
+      const key = diagnostic
+        .replace(match[0], `page ${match[1]}`)
+        .replace(/block\s+pdf#p\d{4}-\d{3}/gi, 'blocks');
+      pageCounts.set(key, (pageCounts.get(key) ?? 0) + 1);
+    } else {
+      other.push(diagnostic);
+    }
+  }
+  const grouped = [...pageCounts].map(([text, count]) =>
+    count > 1 ? `${text} (×${count})` : text,
+  );
+  return [...grouped, ...groupDiagnostics(other)];
+}

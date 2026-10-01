@@ -25,6 +25,15 @@ fn validate_source_path(source: &Path) -> Result<(), RuntimeError> {
     Ok(())
 }
 
+fn validate_parser_version(job: &DocumentJob) -> Result<(), RuntimeError> {
+    if job.parser_version != format::PARSER_VERSION {
+        return Err(RuntimeError::InvalidInput(
+            "PDF layout analysis changed; remove this job and add the PDF again".into(),
+        ));
+    }
+    Ok(())
+}
+
 fn validate_export(
     job: &DocumentJob,
     source: &[u8],
@@ -33,6 +42,7 @@ fn validate_export(
     if job.format != "pdf" {
         return Err(RuntimeError::InvalidInput("document job is not PDF".into()));
     }
+    validate_parser_version(job)?;
     if !DocumentJobStore::source_is_current(job, source) {
         return Err(RuntimeError::InvalidInput(
             "document source changed; analyze it again".into(),
@@ -51,13 +61,14 @@ fn validate_export(
     Ok(())
 }
 
-fn validate_output_target(source: &Path, target: &Path) -> Result<(), RuntimeError> {
+/// `replace` is true for a path confirmed in the save dialog.
+fn validate_output_target(source: &Path, target: &Path, replace: bool) -> Result<(), RuntimeError> {
     if super::same_path(source, target) {
         return Err(RuntimeError::InvalidInput(
             "output must be different from the source".into(),
         ));
     }
-    if target.exists() {
+    if !replace && target.exists() {
         return Err(RuntimeError::InvalidInput(
             "output already exists; choose another path".into(),
         ));
@@ -160,6 +171,7 @@ pub fn start_pdf_job(
     if job.format != "pdf" {
         return Err(RuntimeError::InvalidInput("document job is not PDF".into()));
     }
+    validate_parser_version(&job)?;
     if job.state != JobState::Ready {
         return Err(RuntimeError::InvalidInput(format!(
             "document job is {:?}, not ready",
@@ -183,10 +195,14 @@ pub fn resume_pdf_job(
         .map_err(|_| RuntimeError::Connection("settings lock is poisoned".into()))?
         .clone();
     let current_snapshot = snapshot(&current, &current.model_id);
-    let configuration = store
+    let job = store
         .get(&job_id)?
-        .ok_or_else(|| RuntimeError::InvalidInput("document job not found".into()))?
-        .configuration_version;
+        .ok_or_else(|| RuntimeError::InvalidInput("document job not found".into()))?;
+    if job.format != "pdf" {
+        return Err(RuntimeError::InvalidInput("document job is not PDF".into()));
+    }
+    validate_parser_version(&job)?;
+    let configuration = job.configuration_version;
     store.resume(&job_id, &current_snapshot, &configuration)?;
     run_job(&mut store, &state, &job_id).map(|(job, _)| job)
 }
@@ -206,6 +222,9 @@ pub fn export_pdf_job(
         .map_err(|error| RuntimeError::Connection(format!("read PDF source: {error}")))?;
     let blocks = store.blocks(&job_id)?;
     validate_export(&job, &source, &blocks)?;
+    let explicit = output_path
+        .as_ref()
+        .is_some_and(|path| !path.trim().is_empty());
     let target = output_path
         .filter(|path| !path.trim().is_empty())
         .map(PathBuf::from)
@@ -216,7 +235,7 @@ pub fn export_pdf_job(
                 _ => target,
             }
         });
-    validate_output_target(source_path, &target)?;
+    validate_output_target(source_path, &target, explicit)?;
     let selection = format::selection_from_configuration(&job.configuration_version)?;
     let exported = format::export(&source, &blocks, selection.as_ref())?;
     let output = exported.bytes;
@@ -269,8 +288,23 @@ mod tests {
         assert!(validate_export(&job, b"changed", &translated).is_err());
         assert!(validate_export(&job, b"source", &[pdf_block(None)]).is_err());
         assert!(validate_export(&pdf_job(JobState::Ready), b"source", &translated).is_err());
-        assert!(validate_output_target(Path::new("book.pdf"), Path::new("book.pdf")).is_err());
-        assert!(validate_output_target(Path::new("book.pdf"), Path::new("out.pdf")).is_ok());
+        assert!(
+            validate_output_target(Path::new("book.pdf"), Path::new("book.pdf"), false).is_err()
+        );
+        assert!(validate_output_target(Path::new("book.pdf"), Path::new("out.pdf"), false).is_ok());
+    }
+
+    #[test]
+    fn rejects_jobs_from_an_older_pdf_layout_version() {
+        let mut job = pdf_job(JobState::Translating);
+        job.parser_version = "pdf-v1".into();
+
+        let error = validate_parser_version(&job).expect_err("stale PDF job must be rejected");
+
+        assert!(error
+            .to_string()
+            .contains("PDF layout analysis changed; remove this job and add the PDF again"));
+        assert!(validate_parser_version(&pdf_job(JobState::Translating)).is_ok());
     }
 
     #[test]

@@ -42,3 +42,10 @@ DIC/
 
 # PDFium runtime fetched by scripts/fetch-pdfium.ps1
 apps/desktop/src-tauri/resources/pdfium/
+
+# Local portable build
+LingvoLoc-portable/
+
+# Local test material and agent state (copyrighted books, tooling)
+example_books/
+.omo/

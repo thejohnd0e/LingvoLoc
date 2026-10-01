@@ -1,6 +1,7 @@
 """Generate the self-authored PDF used by the Phase 1 feasibility spike."""
 
 from io import BytesIO
+from pathlib import Path
 
 from fontTools.ttLib import TTFont
 from pypdf import PdfWriter
@@ -11,12 +12,14 @@ from pypdf.generic import (
     NumberObject,
     StreamObject,
     TextStringObject,
+    DecodedStreamObject,
 )
 
 
-OUTPUT = "technical-fixture.pdf"
-TRANSLATED_OUTPUT = "translated-fixture.pdf"
-FONT_PATH = "C:/Windows/Fonts/arial.ttf"
+FIXTURE_DIR = Path(__file__).resolve().parent
+OUTPUT = FIXTURE_DIR / "technical-fixture.pdf"
+TRANSLATED_OUTPUT = FIXTURE_DIR / "translated-fixture.pdf"
+FONT_PATH = Path(__file__).resolve().parents[3] / "apps/desktop/src-tauri/resources/fonts/NotoSans-Regular.ttf"
 
 
 class EmbeddedFont:
@@ -49,7 +52,7 @@ class EmbeddedFont:
         descriptor = DictionaryObject(
             {
                 NameObject("/Type"): NameObject("/FontDescriptor"),
-                NameObject("/FontName"): NameObject("/Arial"),
+                NameObject("/FontName"): NameObject("/NotoSans-Regular"),
                 NameObject("/Flags"): NumberObject(32),
                 NameObject("/FontBBox"): ArrayObject(
                     [NumberObject(value) for value in (-665, -325, 2000, 2069)]
@@ -68,7 +71,7 @@ class EmbeddedFont:
             {
                 NameObject("/Type"): NameObject("/Font"),
                 NameObject("/Subtype"): NameObject("/CIDFontType2"),
-                NameObject("/BaseFont"): NameObject("/Arial"),
+                NameObject("/BaseFont"): NameObject("/NotoSans-Regular"),
                 NameObject("/CIDSystemInfo"): DictionaryObject(
                     {
                         NameObject("/Registry"): TextStringObject("Adobe"),
@@ -88,7 +91,7 @@ class EmbeddedFont:
             "12 dict begin",
             "begincmap",
             "/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def",
-            "/CMapName /ArialUnicode def",
+            "/CMapName /NotoSansUnicode def",
             "/CMapType 2 def",
             "1 begincodespacerange",
             "<0000> <FFFF>",
@@ -120,7 +123,7 @@ class EmbeddedFont:
                 {
                     NameObject("/Type"): NameObject("/Font"),
                     NameObject("/Subtype"): NameObject("/Type0"),
-                    NameObject("/BaseFont"): NameObject("/Arial"),
+                    NameObject("/BaseFont"): NameObject("/NotoSans-Regular"),
                     NameObject("/Encoding"): NameObject("/Identity-H"),
                     NameObject("/DescendantFonts"): ArrayObject([cid_font_ref]),
                     NameObject("/ToUnicode"): to_unicode_ref,
@@ -159,6 +162,7 @@ def page_content(font, page_number, translated=False):
         text(font, 310, 660, right_lines[0][0], 10),
         text(font, 310, 644, right_lines[0][1], 10),
         "0.2 0.4 0.7 RG 2 w 42 565 m 170 565 l 210 525 l 340 525 l S\n",
+        "q 42 525 128 40 cm /Im1 Do Q\n",
         text(font, 42, 500, "Рисунок 1. Векторный путь сигнала" if translated else "Figure 1. Vector signal path", 9),
         "0.95 0.95 0.95 rg 42 430 280 45 re f\n",
         "0 g 1 w 42 430 280 45 re S\n",
@@ -174,9 +178,30 @@ def page_content(font, page_number, translated=False):
     return "".join(parts).encode("ascii")
 
 
-def add_page(writer, font, content):
+def add_image(writer):
+    image = DecodedStreamObject()
+    image.set_data(bytes([40, 110, 180, 90, 170, 220, 190, 70, 140, 210, 220, 80]))
+    image.update(
+        {
+            NameObject("/Type"): NameObject("/XObject"),
+            NameObject("/Subtype"): NameObject("/Image"),
+            NameObject("/Width"): NumberObject(2),
+            NameObject("/Height"): NumberObject(2),
+            NameObject("/ColorSpace"): NameObject("/DeviceRGB"),
+            NameObject("/BitsPerComponent"): NumberObject(8),
+        }
+    )
+    return writer._add_object(image)
+
+
+def add_page(writer, font, content, image_ref):
     page = writer.add_blank_page(width=595, height=842)
-    resources = DictionaryObject({NameObject("/Font"): DictionaryObject({NameObject("/F1"): font.font_ref})})
+    resources = DictionaryObject(
+        {
+            NameObject("/Font"): DictionaryObject({NameObject("/F1"): font.font_ref}),
+            NameObject("/XObject"): DictionaryObject({NameObject("/Im1"): image_ref}),
+        }
+    )
     page[NameObject("/Resources")] = resources
     stream = StreamObject()
     stream._data = content
@@ -190,8 +215,9 @@ def write_document(output_path, translated=False):
         page_content(embedded_font, number, translated) for number in (1, 2)
     ]
     embedded_font.add_objects(writer)
+    image_ref = add_image(writer)
     for content in page_contents:
-        add_page(writer, embedded_font, content)
+        add_page(writer, embedded_font, content, image_ref)
     with open(output_path, "wb") as output:
         writer.write(output)
 

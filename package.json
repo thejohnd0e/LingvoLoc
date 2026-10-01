@@ -1,7 +1,7 @@
 {
   "name": "lingvoloc",
   "private": true,
-  "version": "2.2.5",
+  "version": "3.1.1",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -15,6 +15,7 @@
     "extension:typecheck": "npm run typecheck --workspace @lingvoloc/extension",
     "extension:test": "npm run test --workspace @lingvoloc/extension",
     "extension:package": "pwsh -File scripts/package-extension.ps1",
+    "desktop:verify-bundle": "pwsh -File scripts/verify-desktop-bundle.ps1",
     "lexical:index": "node scripts/build-lexical-index.mjs",
     "test": "npm run test --workspace @lingvoloc/desktop",
     "lint": "npm run lint --workspace @lingvoloc/desktop",

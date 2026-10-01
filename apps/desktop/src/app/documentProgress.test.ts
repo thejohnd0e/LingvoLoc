@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { formatDuration, groupDiagnostics } from './documentProgress';
+import {
+  formatDuration,
+  groupDiagnostics,
+  groupPdfDiagnostics,
+} from './documentProgress';
 
 describe('documentProgress', () => {
   it('collapses repeated diagnostics with a count', () => {
@@ -24,5 +28,18 @@ describe('documentProgress', () => {
     expect(formatDuration(46_000)).toBe('46s');
     expect(formatDuration(166_000)).toBe('2m 46s');
     expect(formatDuration(3_725_000)).toBe('1h 2m 5s');
+  });
+
+  it('groups PDF layout warnings by page', () => {
+    expect(
+      groupPdfDiagnostics([
+        'Translated PDF page 2 block pdf#p0002-001 did not fit',
+        'Translated PDF page 2 block pdf#p0002-002 did not fit',
+        'Pages without extractable text stay unchanged: 4',
+      ]),
+    ).toEqual([
+      'Translated PDF page 2 blocks did not fit (×2)',
+      'Pages without extractable text stay unchanged: 4',
+    ]);
   });
 });

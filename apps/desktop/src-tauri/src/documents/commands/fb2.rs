@@ -51,13 +51,14 @@ fn validate_export(
     Ok(())
 }
 
-fn validate_output_target(source: &Path, target: &Path) -> Result<(), RuntimeError> {
+/// `replace` is true for a path confirmed in the save dialog.
+fn validate_output_target(source: &Path, target: &Path, replace: bool) -> Result<(), RuntimeError> {
     if super::same_path(source, target) {
         return Err(RuntimeError::InvalidInput(
             "output must be different from the source".into(),
         ));
     }
-    if target.exists() {
+    if !replace && target.exists() {
         return Err(RuntimeError::InvalidInput(
             "output already exists; choose another path".into(),
         ));
@@ -190,11 +191,14 @@ pub fn export_fb2_job(
         .map_err(|error| RuntimeError::Connection(format!("read FB2 source: {error}")))?;
     let blocks = store.blocks(&job_id)?;
     validate_export(&job, &source, &blocks)?;
+    let explicit = output_path
+        .as_ref()
+        .is_some_and(|path| !path.trim().is_empty());
     let target = output_path
         .filter(|path| !path.trim().is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| default_output_path(source_path, &job.target_language, "fb2"));
-    validate_output_target(source_path, &target)?;
+    validate_output_target(source_path, &target, explicit)?;
     let output = format::export(&source, &blocks)?;
     let parent = target.parent().unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(parent)
@@ -243,8 +247,10 @@ mod tests {
         assert!(validate_export(&job, b"changed", &translated).is_err());
         assert!(validate_export(&job, b"source", &[fb2_block(None)]).is_err());
         assert!(validate_export(&fb2_job(JobState::Ready), b"source", &translated).is_err());
-        assert!(validate_output_target(Path::new("book.fb2"), Path::new("book.fb2")).is_err());
-        assert!(validate_output_target(Path::new("book.fb2"), Path::new("out.fb2")).is_ok());
+        assert!(
+            validate_output_target(Path::new("book.fb2"), Path::new("book.fb2"), false).is_err()
+        );
+        assert!(validate_output_target(Path::new("book.fb2"), Path::new("out.fb2"), false).is_ok());
     }
 
     #[test]

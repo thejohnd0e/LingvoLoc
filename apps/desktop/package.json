@@ -1,7 +1,7 @@
 {
   "name": "@lingvoloc/desktop",
   "private": true,
-  "version": "2.2.5",
+  "version": "3.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",

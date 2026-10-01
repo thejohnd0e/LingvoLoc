@@ -391,11 +391,7 @@ fn validate_epub_export(
                 "output must be different from the source".into(),
             ));
         }
-        if target.exists() {
-            return Err(RuntimeError::InvalidInput(
-                "output already exists; choose another path".into(),
-            ));
-        }
+        // A path picked in the save dialog was confirmed for replacement there.
     }
     Ok(())
 }
@@ -730,6 +726,9 @@ pub fn export_txt_job(
     let blocks = store.blocks(&job_id)?;
     let output = txt::export(&blocks)?;
     let source = Path::new(&job.source_path);
+    let explicit = output_path
+        .as_ref()
+        .is_some_and(|path| !path.trim().is_empty());
     let target = output_path
         .filter(|path| !path.trim().is_empty())
         .map(PathBuf::from)
@@ -739,7 +738,7 @@ pub fn export_txt_job(
             "output must be different from the source".into(),
         ));
     }
-    if target.exists() {
+    if !explicit && target.exists() {
         return Err(RuntimeError::InvalidInput(
             "output already exists; choose another path".into(),
         ));
@@ -806,6 +805,9 @@ pub fn export_docx_job(
         ));
     }
     let output = docx::export(&source, &blocks)?;
+    let explicit = output_path
+        .as_ref()
+        .is_some_and(|path| !path.trim().is_empty());
     let target = output_path
         .filter(|path| !path.trim().is_empty())
         .map(PathBuf::from)
@@ -815,7 +817,7 @@ pub fn export_docx_job(
             "output must be different from the source".into(),
         ));
     }
-    if target.exists() {
+    if !explicit && target.exists() {
         return Err(RuntimeError::InvalidInput(
             "output already exists; choose another path".into(),
         ));
@@ -866,11 +868,19 @@ pub fn export_epub_job(
     let source = fs::read(source_path)
         .map_err(|error| RuntimeError::Connection(format!("read EPUB source: {error}")))?;
     let blocks = store.blocks(&job_id)?;
+    let explicit = output_path
+        .as_ref()
+        .is_some_and(|path| !path.trim().is_empty());
     let target = output_path
         .filter(|path| !path.trim().is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| default_output_path(source_path, &job.target_language, "epub"));
     validate_epub_export(&job, &source, &blocks, Some(&target))?;
+    if !explicit && target.exists() {
+        return Err(RuntimeError::InvalidInput(
+            "output already exists; choose another path".into(),
+        ));
+    }
     let output = epub::export(&source, &blocks)?;
     let parent = target.parent().unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(parent)
@@ -998,9 +1008,7 @@ mod tests {
         fs::create_dir_all(&directory).unwrap();
         let existing = directory.join("existing.epub");
         fs::write(&existing, b"already here").unwrap();
-        let collision =
-            validate_epub_export(&job, b"source", &blocks, Some(&existing)).unwrap_err();
-        assert!(collision.to_string().contains("already exists"));
+        assert!(validate_epub_export(&job, b"source", &blocks, Some(&existing)).is_ok());
         let _ = fs::remove_dir_all(directory);
     }
 

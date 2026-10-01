@@ -41,6 +41,10 @@
 - **Decision:** Code, page numbers and short all-caps labels are not translated. Code is recognised by a dark panel with coloured text or by code tokens, because real books often set code in the body font.
 - **Reason:** Translating code corrupts it; the heuristic is deliberately conservative and unrecognised code is translated rather than dropped.
 - **Decision:** PDFium can be bound once per process, so one instance lives behind a mutex (`pdf/engine.rs`).
+- **Decision:** Region detection must not construct a flow with zero paragraphs when a page's candidate columns contain only non-body regions; emit the existing ambiguity diagnostic and skip the empty fallback instead of panicking.
+- **Reason:** Full real books can contain panel/table-heavy pages that trigger column geometry before body classification. A native panic leaves the Files UI stuck in `Analyzing`, while an empty reading flow is safely represented by the page's existing non-translatable regions.
+- **Decision:** PDF placement is slot-based (`pdf/slots.rs`): each translated paragraph keeps its source position and grows only into free space; chained paragraphs in one column are re-flowed together, never across obstacles.
+- **Reason:** A page-wide flow stacked paragraphs over tables, panels and TOC rows (user screenshots 2026-10-01); anchoring to the source and respecting obstacles removes the overlaps without changing block ids.
 - **Decision:** A reading-friendly EPUB output for PDFs is optional and comes after layout preservation (user request 2026-09-30).
 
 ## Standalone Runtime
@@ -260,6 +264,15 @@
 - **Reason:** One coordinator slot and one SQLite writer per job; never overwriting outputs is an existing safety rule.
 - **Decision:** Same source and target language is rejected natively; a `.translated.<lang>` file name only produces a note, never a refusal; the Documents panel sends `auto` as the target when the source is `auto`.
 - **Reason:** A file name says nothing about content, and a stale stored target caused `en -> en` jobs.
+
+## Export Overwrite And READMEs
+
+- **Decision:** An output path picked in the save dialog may replace an existing file (the dialog already asked for confirmation); automatic outputs (queue, default names) never overwrite. Writes still go through a same-directory temporary file and rename, and the source file can never be the target.
+- **Reason:** The old check refused confirmed overwrites and the failure was easy to miss in the status line, so users believed the old file had been replaced.
+- **Decision:** For a PDF, "Start translation" re-analyzes the file first when the page-range field differs from the job's range, then waits for a second press.
+- **Reason:** The range is only read when a file is analyzed; a changed field silently translated the whole book.
+- **Decision:** `README.md` (English) and `README.ru.md` (Russian) are maintained side by side: user guide first, technical description at the end.
+- **Reason:** End users need a plain description at the top; contributors need the architecture in one predictable place.
 
 ## Repository Name, Release Version And Dictionary Colours
 

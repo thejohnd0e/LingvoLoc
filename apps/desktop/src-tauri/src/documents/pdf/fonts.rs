@@ -1,46 +1,34 @@
 //! Cyrillic-capable fonts for translated text and their metrics.
 //!
-//! Fonts are read from the Windows font folder (Times New Roman for serif
-//! source text, Arial for sans-serif). Bundling an OFL font instead is a
-//! follow-up; the lookup order below already lets a bundled copy win.
-
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::path::PathBuf;
+//! The export path uses bundled Noto Sans and Noto Serif faces so it does not
+//! depend on the fonts installed on the host machine.
 
 use crate::domain::RuntimeError;
+use std::cell::RefCell;
+use std::collections::HashMap;
 
 use super::layout::Measure;
 
 type Key = (bool, bool, bool);
 
 pub struct FontSet {
-    data: HashMap<Key, Vec<u8>>,
+    data: HashMap<Key, &'static [u8]>,
 }
 
-fn folders() -> Vec<PathBuf> {
-    let mut folders = Vec::new();
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            folders.push(dir.join("fonts"));
-            folders.push(dir.join("resources").join("fonts"));
-        }
-    }
-    let windows = std::env::var_os("WINDIR").unwrap_or_else(|| "C:\\Windows".into());
-    folders.push(PathBuf::from(windows).join("Fonts"));
-    folders
-}
-
-fn file_name(serif: bool, bold: bool, italic: bool) -> &'static str {
+fn font_bytes(serif: bool, bold: bool, italic: bool) -> &'static [u8] {
     match (serif, bold, italic) {
-        (true, false, false) => "times.ttf",
-        (true, true, false) => "timesbd.ttf",
-        (true, false, true) => "timesi.ttf",
-        (true, true, true) => "timesbi.ttf",
-        (false, false, false) => "arial.ttf",
-        (false, true, false) => "arialbd.ttf",
-        (false, false, true) => "ariali.ttf",
-        (false, true, true) => "arialbi.ttf",
+        (true, false, false) => include_bytes!("../../../resources/fonts/NotoSerif-Regular.ttf"),
+        (true, true, false) => include_bytes!("../../../resources/fonts/NotoSerif-Bold.ttf"),
+        (true, false, true) => include_bytes!("../../../resources/fonts/NotoSerif-Italic.ttf"),
+        (true, true, true) => {
+            include_bytes!("../../../resources/fonts/NotoSerif-BoldItalic.ttf")
+        }
+        (false, false, false) => include_bytes!("../../../resources/fonts/NotoSans-Regular.ttf"),
+        (false, true, false) => include_bytes!("../../../resources/fonts/NotoSans-Bold.ttf"),
+        (false, false, true) => include_bytes!("../../../resources/fonts/NotoSans-Italic.ttf"),
+        (false, true, true) => {
+            include_bytes!("../../../resources/fonts/NotoSans-BoldItalic.ttf")
+        }
     }
 }
 
@@ -50,16 +38,7 @@ impl FontSet {
         for serif in [true, false] {
             for bold in [false, true] {
                 for italic in [false, true] {
-                    let name = file_name(serif, bold, italic);
-                    let bytes = folders()
-                        .into_iter()
-                        .find_map(|folder| std::fs::read(folder.join(name)).ok())
-                        .ok_or_else(|| {
-                            RuntimeError::InvalidInput(format!(
-                                "font {name} was not found; PDF export needs Times New Roman and Arial"
-                            ))
-                        })?;
-                    data.insert((serif, bold, italic), bytes);
+                    data.insert((serif, bold, italic), font_bytes(serif, bold, italic));
                 }
             }
         }
@@ -67,7 +46,7 @@ impl FontSet {
     }
 
     pub fn bytes(&self, serif: bool, bold: bool, italic: bool) -> &[u8] {
-        &self.data[&(serif, bold, italic)]
+        self.data[&(serif, bold, italic)]
     }
 
     pub fn measure(&self, serif: bool) -> Metrics<'_> {
@@ -112,5 +91,26 @@ impl Measure for Metrics<'_> {
             .map(|character| self.advance(character, bold, italic))
             .sum::<f32>()
             * size
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FontSet;
+
+    #[test]
+    fn bundled_fonts_cover_latin_and_cyrillic() {
+        let fonts = FontSet::load().expect("bundled fonts");
+        for serif in [true, false] {
+            for bold in [false, true] {
+                for italic in [false, true] {
+                    let face = ttf_parser::Face::parse(fonts.bytes(serif, bold, italic), 0)
+                        .expect("valid TTF");
+                    assert!(face.glyph_index('A').is_some());
+                    assert!(face.glyph_index('Я').is_some());
+                    assert!(face.glyph_index('ё').is_some());
+                }
+            }
+        }
     }
 }
