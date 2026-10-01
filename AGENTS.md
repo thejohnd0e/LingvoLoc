@@ -5,7 +5,7 @@
 - This is a Windows-first LingvoLoc app using npm workspaces, React/Vite/strict TypeScript, Tauri 2, and Rust.
 - `apps/desktop/src` is the frontend; `apps/desktop/src-tauri/src` contains native commands, LM Studio runtime, adapters, history, detection, and lexical services.
 - `apps/extension` is a separate Chromium MV3 client. It uses the authenticated loopback API at `127.0.0.1:47831`; it does not run a model or own translation data.
-- `CLAUDE.md` intentionally points to this file; keep shared agent guidance here rather than duplicating it.
+- Keep shared agent guidance in this file rather than duplicating it in tool-specific files.
 
 ## Commands
 

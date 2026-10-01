@@ -82,7 +82,7 @@
 
 ## Agent Documentation Structure
 
-- **Decision:** Use `AGENTS.md` as the authoritative shared instruction file. Keep `CLAUDE.md` as a pointer to it.
+- **Decision:** Use `AGENTS.md` as the authoritative shared instruction file rather than duplicating guidance in tool-specific files.
 - **Reason:** All coding agents receive the same guidance without duplicated instructions drifting apart.
 
 ## Product Name
