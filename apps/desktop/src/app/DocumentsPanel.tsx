@@ -31,6 +31,7 @@ import {
   type DocumentJobSummary,
   type DocumentJobView,
 } from '../lib/commands';
+import type { TranslationStyle } from '../lib/settings';
 import { errorDetail } from '../lib/errors';
 import Spinner from './Spinner';
 import {
@@ -78,6 +79,7 @@ const documentFormats: Record<
       sourcePath: string,
       sourceLanguage: string,
       targetLanguage: string,
+      translationStyle?: TranslationStyle,
       pages?: string,
     ) => Promise<DocumentJobView>;
     start: (jobId: string) => Promise<DocumentJobView>;
@@ -143,6 +145,7 @@ function documentFormat(value: string): DocumentFormat {
 interface DocumentsPanelProps {
   sourceLanguage: string;
   targetLanguage: string;
+  translationStyle?: TranslationStyle;
   modelId: string;
   hidden?: boolean;
   /** Percent while a job is translating, otherwise null. */
@@ -157,6 +160,7 @@ const generatedTranslation =
 export default function DocumentsPanel({
   sourceLanguage,
   targetLanguage,
+  translationStyle = 'neutral',
   modelId,
   hidden = false,
   onActivity,
@@ -259,9 +263,15 @@ export default function DocumentsPanel({
                 path,
                 sourceLanguage,
                 targetLanguage,
+                translationStyle,
                 pdfPages,
               )
-            : await format.analyze(path, sourceLanguage, targetLanguage);
+            : await format.analyze(
+                path,
+                sourceLanguage,
+                targetLanguage,
+                translationStyle,
+              );
         clearedJobIds.current.delete(next.job.id);
         created += 1;
         first ??= next;
