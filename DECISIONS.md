@@ -112,8 +112,8 @@
 
 ## Repository Visibility
 
-- **Decision:** Keep the GitHub repository private and use the MIT license.
-- **Reason:** MIT permits reuse and distribution with minimal conditions while the project remains private during development.
+- **Decision:** Use the MIT license. The repository was private during development and was made public on 2026-10-01 with release `v3.1.1` (user request); the formal trademark and domain review of the name is still open.
+- **Reason:** MIT permits reuse and distribution with minimal conditions.
 
 ## History Retention
 
