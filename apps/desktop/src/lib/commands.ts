@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Settings } from './settings';
+import type { Settings, TranslationStyle } from './settings';
 
 const STATE_RETRY_DELAY_MS = 100;
 const STATE_RETRY_ATTEMPTS = 8;
@@ -84,6 +84,7 @@ export interface TranslationRequest {
   source_language: string;
   target_language: string;
   text: string;
+  translation_style: TranslationStyle;
 }
 
 export const getRuntimeStatus = () =>
@@ -207,6 +208,7 @@ export interface DocumentJob {
   parser_version: string;
   source_language: string;
   target_language: string;
+  translation_style: TranslationStyle;
   runtime_snapshot: string;
   configuration_version: string;
   state: string;
@@ -238,52 +240,62 @@ export const analyzeTxt = (
   sourcePath: string,
   sourceLanguage: string,
   targetLanguage: string,
+  translationStyle: TranslationStyle = 'neutral',
 ) =>
   invokeNative<DocumentJobView>('analyze_txt', {
     sourcePath,
     sourceLanguage,
     targetLanguage,
+    translationStyle,
   });
 export const analyzeDocx = (
   sourcePath: string,
   sourceLanguage: string,
   targetLanguage: string,
+  translationStyle: TranslationStyle = 'neutral',
 ) =>
   invokeNative<DocumentJobView>('analyze_docx', {
     sourcePath,
     sourceLanguage,
     targetLanguage,
+    translationStyle,
   });
 export const analyzeEpub = (
   sourcePath: string,
   sourceLanguage: string,
   targetLanguage: string,
+  translationStyle: TranslationStyle = 'neutral',
 ) =>
   invokeNative<DocumentJobView>('analyze_epub', {
     sourcePath,
     sourceLanguage,
     targetLanguage,
+    translationStyle,
   });
 export const analyzeFb2 = (
   sourcePath: string,
   sourceLanguage: string,
   targetLanguage: string,
+  translationStyle: TranslationStyle = 'neutral',
 ) =>
   invokeNative<DocumentJobView>('analyze_fb2', {
     sourcePath,
     sourceLanguage,
     targetLanguage,
+    translationStyle,
   });
 export const analyzePdf = (
   sourcePath: string,
   sourceLanguage: string,
   targetLanguage: string,
+  translationStyle: TranslationStyle = 'neutral',
   pages?: string,
 ) =>
   invokeNative<DocumentJobView>('analyze_pdf', {
     sourcePath,
     sourceLanguage,
     targetLanguage,
+    translationStyle,
     pages: pages?.trim() || null,
   });
 export const startTxtJob = (jobId: string) =>

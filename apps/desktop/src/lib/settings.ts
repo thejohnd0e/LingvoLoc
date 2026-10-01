@@ -1,4 +1,13 @@
 export type RuntimeMode = 'lmStudio' | 'standalone';
+export type TranslationStyle =
+  'neutral' | 'literary' | 'technical' | 'conversational';
+
+const translationStyles: readonly TranslationStyle[] = [
+  'neutral',
+  'literary',
+  'technical',
+  'conversational',
+];
 
 export interface Settings {
   runtimeMode: RuntimeMode;
@@ -11,6 +20,7 @@ export interface Settings {
   targetLanguage: string;
   primaryLanguage: string;
   secondaryLanguage: string;
+  translationStyle: TranslationStyle;
 }
 
 const storageKey = 'lingvoloc.settings';
@@ -31,7 +41,15 @@ export function loadSettings(fallback: Settings): Settings {
     const stored = JSON.parse(value) as Partial<Settings> & {
       languagePair?: string;
     };
-    const parsed = { ...fallback, ...stored };
+    const parsed = {
+      ...fallback,
+      ...stored,
+      translationStyle: translationStyles.includes(
+        stored.translationStyle as TranslationStyle,
+      )
+        ? (stored.translationStyle as TranslationStyle)
+        : 'neutral',
+    };
     if (stored.languagePair && !stored.primaryLanguage) {
       const [primaryLanguage, secondaryLanguage] =
         stored.languagePair.split('-');
@@ -41,7 +59,10 @@ export function loadSettings(fallback: Settings): Settings {
     }
     return parsed;
   } catch {
-    return fallback;
+    return {
+      ...fallback,
+      translationStyle: fallback.translationStyle ?? 'neutral',
+    };
   }
 }
 

@@ -18,6 +18,7 @@ const fallback: Settings = {
   targetLanguage: 'en',
   primaryLanguage: 'en',
   secondaryLanguage: 'ru',
+  translationStyle: 'neutral',
 };
 
 beforeEach(() => localStorage.clear());
@@ -32,6 +33,30 @@ describe('settings persistence', () => {
 
   it('keeps automatic detection as the default source language', () => {
     expect(loadSettings(fallback).sourceLanguage).toBe('auto');
+  });
+
+  it('defaults an old settings object to neutral translation style', () => {
+    localStorage.setItem(
+      'lingvoloc.settings',
+      JSON.stringify({ ...fallback, translationStyle: undefined }),
+    );
+    expect(loadSettings(fallback).translationStyle).toBe('neutral');
+  });
+
+  it.each(['neutral', 'literary', 'technical', 'conversational'] as const)(
+    'persists the %s translation style',
+    (translationStyle) => {
+      saveSettings({ ...fallback, translationStyle });
+      expect(loadSettings(fallback).translationStyle).toBe(translationStyle);
+    },
+  );
+
+  it('falls back to neutral for an invalid stored translation style', () => {
+    localStorage.setItem(
+      'lingvoloc.settings',
+      JSON.stringify({ ...fallback, translationStyle: 'custom' }),
+    );
+    expect(loadSettings(fallback).translationStyle).toBe('neutral');
   });
 
   it('persists and clamps the text scale', () => {

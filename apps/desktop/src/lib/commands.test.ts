@@ -69,6 +69,7 @@ describe('document command wrappers', () => {
         sourcePath: `C:\\books\\story.${entry.format}`,
         sourceLanguage: 'ru',
         targetLanguage: 'en',
+        translationStyle: 'neutral',
       });
 
       await entry.start('job-1');
