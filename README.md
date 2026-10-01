@@ -14,7 +14,9 @@
 
 LingvoLoc is a Windows app for **private translation on your own computer**. You choose a translation model, and everything - text, documents, dictionary lookups - is processed locally. Nothing is sent to the internet, no account or subscription is needed, and it works offline once a model is downloaded.
 
-![LingvoLoc main window](docs/screenshot.png)
+![LingvoLoc Text mode](docs/screenshot-text.png)
+
+![LingvoLoc Files mode](docs/screenshot-files.png)
 
 ## What LingvoLoc can do
 
