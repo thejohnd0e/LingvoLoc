@@ -1,3 +1,4 @@
+use crate::domain::TranslationStyle;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -99,6 +100,7 @@ pub struct DocumentJob {
     pub parser_version: String,
     pub source_language: String,
     pub target_language: String,
+    pub translation_style: TranslationStyle,
     pub runtime_snapshot: String,
     pub configuration_version: String,
     pub state: JobState,

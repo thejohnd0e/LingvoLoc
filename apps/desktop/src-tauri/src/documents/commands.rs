@@ -6,7 +6,7 @@ use super::{
     translate_job, DocumentBlock, DocumentJob, DocumentJobStore, JobState, SegmentationLimits,
     WorkerReport,
 };
-use crate::domain::RuntimeError;
+use crate::domain::{RuntimeError, TranslationStyle};
 use crate::services::inference_coordinator::snapshot;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -193,6 +193,7 @@ pub fn analyze_txt(
     source_path: String,
     source_language: String,
     target_language: String,
+    translation_style: TranslationStyle,
 ) -> Result<DocumentJobView, RuntimeError> {
     let source = Path::new(source_path.trim());
     if source
@@ -246,6 +247,7 @@ pub fn analyze_txt(
         parser_version: PARSER_VERSION.into(),
         source_language,
         target_language,
+        translation_style,
         runtime_snapshot: snapshot(&current, &current.model_id),
         configuration_version: CONFIGURATION_VERSION.into(),
         state: JobState::Queued,
@@ -422,6 +424,7 @@ pub fn analyze_docx(
     source_path: String,
     source_language: String,
     target_language: String,
+    translation_style: TranslationStyle,
 ) -> Result<DocumentJobView, RuntimeError> {
     let source = Path::new(source_path.trim());
     if source
@@ -468,6 +471,7 @@ pub fn analyze_docx(
         parser_version: docx::PARSER_VERSION.into(),
         source_language,
         target_language,
+        translation_style,
         runtime_snapshot: snapshot(&current, &current.model_id),
         configuration_version: docx::PARSER_VERSION.into(),
         state: JobState::Queued,
@@ -491,6 +495,7 @@ pub fn analyze_epub(
     source_path: String,
     source_language: String,
     target_language: String,
+    translation_style: TranslationStyle,
 ) -> Result<DocumentJobView, RuntimeError> {
     let source = Path::new(source_path.trim());
     validate_epub_source_path(source)?;
@@ -530,6 +535,7 @@ pub fn analyze_epub(
         parser_version: epub::PARSER_VERSION.into(),
         source_language,
         target_language,
+        translation_style,
         runtime_snapshot: snapshot(&current, &current.model_id),
         configuration_version: epub::PARSER_VERSION.into(),
         state: JobState::Queued,
@@ -923,7 +929,7 @@ pub(super) fn same_path(left: &Path, right: &Path) -> bool {
 mod tests {
     use super::*;
     use crate::documents::epub;
-    use crate::domain::{RuntimeMode, Settings};
+    use crate::domain::{RuntimeMode, Settings, TranslationStyle};
 
     fn settings() -> Settings {
         Settings {
@@ -937,6 +943,7 @@ mod tests {
             target_language: "en".into(),
             primary_language: "en".into(),
             secondary_language: "ru".into(),
+            translation_style: TranslationStyle::Neutral,
         }
     }
 
@@ -1075,6 +1082,7 @@ mod tests {
             target_language: "ru".into(),
             runtime_snapshot: "snapshot".into(),
             configuration_version: epub::PARSER_VERSION.into(),
+            translation_style: TranslationStyle::Neutral,
             state,
             error: None,
         }

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::documents::fb2 as format;
 use crate::documents::{DocumentBlock, DocumentJob, DocumentJobStore, JobState};
-use crate::domain::RuntimeError;
+use crate::domain::{RuntimeError, TranslationStyle};
 use crate::services::inference_coordinator::snapshot;
 use tauri::AppHandle;
 
@@ -81,6 +81,7 @@ pub fn analyze_fb2(
     source_path: String,
     source_language: String,
     target_language: String,
+    translation_style: TranslationStyle,
 ) -> Result<DocumentJobView, RuntimeError> {
     let source = Path::new(source_path.trim());
     validate_source_path(source)?;
@@ -120,6 +121,7 @@ pub fn analyze_fb2(
         parser_version: format::PARSER_VERSION.into(),
         source_language,
         target_language,
+        translation_style,
         runtime_snapshot: snapshot(&current, &current.model_id),
         configuration_version: format::PARSER_VERSION.into(),
         state: JobState::Queued,
@@ -273,6 +275,7 @@ mod tests {
             target_language: "ru".into(),
             runtime_snapshot: "snapshot".into(),
             configuration_version: format::PARSER_VERSION.into(),
+            translation_style: TranslationStyle::Neutral,
             state,
             error: None,
         }

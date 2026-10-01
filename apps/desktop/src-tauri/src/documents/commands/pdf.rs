@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::documents::pdf as format;
 use crate::documents::{DocumentBlock, DocumentJob, DocumentJobStore, JobState};
-use crate::domain::RuntimeError;
+use crate::domain::{RuntimeError, TranslationStyle};
 use crate::services::inference_coordinator::snapshot;
 use tauri::AppHandle;
 
@@ -102,6 +102,7 @@ pub fn analyze_pdf(
     source_language: String,
     target_language: String,
     pages: Option<String>,
+    translation_style: TranslationStyle,
 ) -> Result<DocumentJobView, RuntimeError> {
     let selection = format::PageSelection::parse(pages.as_deref().unwrap_or_default())?;
     let source = Path::new(source_path.trim());
@@ -142,6 +143,7 @@ pub fn analyze_pdf(
         parser_version: format::PARSER_VERSION.into(),
         source_language,
         target_language,
+        translation_style,
         runtime_snapshot: snapshot(&current, &current.model_id),
         configuration_version: format::configuration_version(selection.as_ref()),
         state: JobState::Queued,
@@ -335,6 +337,7 @@ mod tests {
             target_language: "ru".into(),
             runtime_snapshot: "snapshot".into(),
             configuration_version: format::PARSER_VERSION.into(),
+            translation_style: TranslationStyle::Neutral,
             state,
             error: None,
         }
