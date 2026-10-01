@@ -77,7 +77,7 @@
 - The queue exports each result to `<name>.translated.<lang>.<ext>` next to its source; if that file already exists the export fails and the queue stops at that job (existing outputs are never overwritten).
 - FB2/EPUB/DOCX "may cross inline formatting boundaries" is one summary line in the UI (a lower bound when the native list of 100 diagnostics is truncated); the job still finishes as `completed_with_warnings`.
 - Interactive text requests wait for the current document block to finish (no mid-block preemption); very large blocks can delay them by several seconds.
-- Trademark and domain review: a preliminary screening is done (`docs/NAME_REVIEW.md`); the exact name and `lingvoloc.com/.net/.app/.dev` are free, but ABBYY's "Lingvo" trademark is a likeness risk and the official registers (USPTO, EUIPO, WIPO, Rospatent) were not searched. A formal review is still open, and the repository is already public.
+- Trademark and domain review: closed by the user on 2026-10-01 (preliminary screening in `docs/NAME_REVIEW.md`: the exact name and `lingvoloc.com/.net/.app/.dev` are free, ABBYY's "Lingvo" mark is a known likeness risk, the official registers were not searched).
 - Locally rebuilt installers do not update an installed copy automatically; install the new NSIS artifact manually.
 
 ## Next Recommended Step

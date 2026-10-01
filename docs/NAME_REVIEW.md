@@ -2,6 +2,8 @@
 
 Preliminary screening done on 2026-10-01 with web search, registry (RDAP) lookups and package-registry queries. It is **not legal advice and not a formal trademark clearance**: the official trademark registers (USPTO, EUIPO, WIPO Global Brand Database, Rospatent) are interactive sites that could not be queried from this environment, so they still have to be searched by a person or a trademark attorney.
 
+Status: closed by the project owner on 2026-10-01; the official registers were not searched.
+
 ## Result
 
 | Check                           | Result                                                                                                                                                                         |

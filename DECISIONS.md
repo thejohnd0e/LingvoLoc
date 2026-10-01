@@ -88,7 +88,7 @@
 ## Product Name
 
 - **Decision:** Rename the product to LingvoLoc.
-- **Reason:** It communicates language plus local processing, has no exact match in the preliminary web search, and avoids the direct `LingoLoc` conflict. A preliminary screening (2026-10-01, `docs/NAME_REVIEW.md`) found the exact name and the main domains free but a likeness risk with ABBYY's "Lingvo" mark; the formal register search is still open.
+- **Reason:** It communicates language plus local processing, has no exact match in the preliminary web search, and avoids the direct `LingoLoc` conflict. A preliminary screening (2026-10-01, `docs/NAME_REVIEW.md`) found the exact name and the main domains free but a likeness risk with ABBYY's "Lingvo" mark; the user considered the review done on 2026-10-01 without a register search.
 
 ## Initial Scope
 

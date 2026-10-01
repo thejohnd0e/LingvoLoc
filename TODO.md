@@ -54,4 +54,4 @@
 
 ## Before Public Release
 
-- [ ] Complete the formal trademark review for the `LingvoLoc` name: a preliminary screening is in `docs/NAME_REVIEW.md` (name unused, `lingvoloc.com/.net/.app/.dev` unregistered, but ABBYY's "Lingvo" mark is a likeness risk); the official registers still have to be searched by a person or attorney.
+- [x] Trademark and domain review of the `LingvoLoc` name: closed by the user on 2026-10-01 (preliminary screening in `docs/NAME_REVIEW.md`; the official registers were not searched).
