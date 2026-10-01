@@ -108,6 +108,8 @@ LingvoLoc translates **text PDFs in place**: the original text is removed and th
 
 The status pill in the header shows the runtime and the selected model. LingvoLoc saves your endpoint, model, language selections, two independently chosen main languages, and text-size settings. Automatic source detection is on by default; successful translations are copied to the clipboard when Windows allows it. Double-click a word in the source or the result to highlight its counterpart in the other text and open a dictionary lookup.
 
+The **Style** selector applies one of four translation presets globally: **Neutral**, **Literary**, **Technical**, or **Conversational**. The choice is used for Text, Files, clipboard translation, and the browser extension. Word translation used for dictionary highlighting and reverse alignment always stays neutral. A document job keeps the style selected when it was analyzed, even if you change the global setting while it is paused or running; analyze the file again to use another style. The result still depends on the selected model, so presets do not guarantee terminology or a particular quality level.
+
 The clipboard popup (`Ctrl+Shift+T`) has its own text-size setting, can be resized, and fits its height to its content.
 
 ## Dictionaries
