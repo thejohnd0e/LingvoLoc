@@ -17,7 +17,7 @@ For a distributable artifact, run:
 npm run extension:package
 ```
 
-This creates `apps/extension/LingvoLoc-extension-3.1.2.zip`.
+This creates `apps/extension/LingvoLoc-extension-3.1.3.zip`.
 
 ## Pairing
 
@@ -25,7 +25,7 @@ This creates `apps/extension/LingvoLoc-extension-3.1.2.zip`.
 2. Open **Settings** in the desktop app and press `Copy token` in the **Browser extension** section.
 3. Open the LingvoLoc extension window and paste the token into `Pairing token`.
 4. Click `Pair extension` and wait for the `PAIRED` status.
-5. Select text on a page and click the extension button, or use the selection context menu. The toolbar button opens the same in-page LingvoLoc window with the selected text filled in; it waits for you to press **Translate locally**. The context-menu action opens the window and starts translation automatically using the saved target language. On pages where extensions cannot inject content (for example `chrome://` pages) a separate browser window opens instead.
+5. Select text on a page and click the extension button, or use the selection context menu. The toolbar button opens the same in-page LingvoLoc window with the selected text filled in; it waits for you to press **Translate**. The context-menu action opens the window and starts translation automatically using the saved target language. On pages where extensions cannot inject content (for example `chrome://` pages) a separate browser window opens instead.
 
 Use the `−` and `+` controls in the popup header to adjust text size from 12px to 24px. The selected size is saved for the next popup.
 
