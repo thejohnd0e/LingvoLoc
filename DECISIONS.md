@@ -274,6 +274,11 @@
 - **Decision:** `README.md` (English) and `README.ru.md` (Russian) are maintained side by side: user guide first, technical description at the end.
 - **Reason:** End users need a plain description at the top; contributors need the architecture in one predictable place.
 
+## Tauri Permissions
+
+- **Decision:** Window capabilities must list the command permission together with its scope: `opener:allow-open-url` (command) next to `opener:allow-default-urls` (http/https/mailto/tel scope), and `opener:allow-open-path` for files.
+- **Reason:** With only the scope the plugin rejected `openUrl` silently and the header GitHub link did nothing (fixed in `3.1.2`).
+
 ## Repository Name, Release Version And Dictionary Colours
 
 - **Decision:** The GitHub repository is named `LingvoLoc` like the product; `LingoLoc` was the name we deliberately avoided. Internal identifiers (`com.lingoloc.desktop`, `lingoloc.sqlite`, `lingoloc.settings`) keep the old spelling.
