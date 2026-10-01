@@ -27,6 +27,16 @@ LingvoLoc is a Windows app for **private translation on your own computer**. You
 - **Use the model you prefer.** LingvoLoc runs `.gguf` models (TranslateGemma, Gemma 3, Hunyuan-MT, Qwen and others) through its own built-in llama.cpp, or connects to LM Studio.
 - **Stay in the background.** Closing the window hides LingvoLoc in the tray; it can start with Windows.
 
+## System requirements
+
+- **Windows 10 or 11, 64-bit.** The installer adds the WebView2 runtime if it is missing (an internet connection is needed for that one step).
+- **Disk space:** under 100 MB for the app, 0.2-1 GB for llama.cpp (downloaded from Settings), and 4-9 GB per translation model (`.gguf` file; see the table below).
+- **Memory:** the model must fit in video memory (GPU) or in RAM (CPU). Count the file size plus 1-2 GB. A 12 GB video card runs the recommended 12B models comfortably (tested on an RTX 3060 12 GB); 6-8 GB cards fit TranslateGemma 4B or smaller quantizations of the 12B models; without a GPU, 16 GB of RAM or more is advisable and translation is several times slower.
+- **Graphics card (optional but strongly recommended):** NVIDIA (CUDA 12 build), any other GPU with Vulkan support (AMD, Intel), or no GPU at all (CPU build). LingvoLoc picks the build automatically.
+- **Internet:** only to download llama.cpp, models, and the installer itself. Translation works offline.
+- **Browser extension:** Chrome, Edge, or another Chromium-based browser (Manifest V3).
+- **PDF:** text PDFs of up to 3000 pages per file; scanned (image-only) PDFs are not supported.
+
 ## Install
 
 Download the latest `LingvoLoc_x.y.z_x64-setup.exe` from the [Releases](../../releases) page and run it. The installer checks for the components LingvoLoc needs (for example the WebView2 runtime) and installs anything that is missing. You can install for the current user or for all users.
