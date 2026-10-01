@@ -18,4 +18,7 @@ jobs:
           toolchain: stable
           components: rustfmt, clippy
       - run: npm ci
+      - name: Fetch PDFium runtime
+        shell: pwsh
+        run: ./scripts/fetch-pdfium.ps1
       - run: npm run check
