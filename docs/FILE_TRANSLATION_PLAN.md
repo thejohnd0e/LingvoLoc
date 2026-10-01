@@ -24,13 +24,13 @@ The primary constraint is preserving existing functionality. Implement file tran
 
 ## Agent execution rules
 
-1. Read `AGENTS.md`, `CLAUDE.md`, `STATUS.md`, `DECISIONS.md`, and `TODO.md` before implementation.
+1. Read `AGENTS.md`, `STATUS.md`, `DECISIONS.md`, and `TODO.md` before implementation.
 2. Inspect Git status and the current code. Preserve unrelated or user-authored changes.
 3. Do not combine this work with dictionary improvements or broad refactoring of history, settings, runtime, or the main UI.
 4. Preserve existing IPC/HTTP contracts and compatibility of `Settings`, `TranslationRequest`, and `TranslationResult`. Any necessary additive change requires compatibility tests and safe defaults.
 5. Keep document-specific settings separate where practical. Do not change existing translation prompts globally to accommodate documents.
 6. Keep the extension a thin client. File translation initially belongs to the desktop app; no extension API expansion is required.
-7. Do not repackage the published `LingvoLoc-extension-2.1.1.zip`. Version changes, commits, and releases require separate instructions.
+7. Do not overwrite published release assets. Version changes, commits, and releases require separate instructions.
 8. Run focused tests during development and the integration gates before declaring a phase complete. Fix failures before proceeding.
 9. Record implementation status, checks actually run, limitations, and the precise next action in handoff documentation after each implementation phase.
 10. Do not promise perfect layout or semantic completeness. Report unsupported content and uncertain results explicitly.
