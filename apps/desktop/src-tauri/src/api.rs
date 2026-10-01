@@ -18,6 +18,21 @@ struct TranslateBody {
     target_language: String,
 }
 
+fn build_translation_request(
+    settings: &Settings,
+    body: TranslateBody,
+    source_language: String,
+) -> TranslationRequest {
+    TranslationRequest {
+        model_id: settings.model_id.clone(),
+        adapter_id: settings.adapter_id.clone(),
+        source_language,
+        target_language: body.target_language,
+        text: body.text,
+        translation_style: settings.translation_style,
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct LanguagePair {
@@ -139,15 +154,9 @@ fn translate(request: &HttpRequest, state: &AppState) -> (u16, String) {
             Err(error) => return error_response(error),
         }
     } else {
-        body.source_language
+        body.source_language.clone()
     };
-    let request = TranslationRequest {
-        model_id: settings.model_id.clone(),
-        adapter_id: settings.adapter_id.clone(),
-        source_language,
-        target_language: body.target_language,
-        text: body.text,
-    };
+    let request = build_translation_request(&settings, body, source_language);
     let snapshot = crate::services::inference_coordinator::snapshot(&settings, &request.model_id);
     match state.inference.run_interactive(&snapshot, || {
         translation::translate(&settings, request.clone())
@@ -311,7 +320,8 @@ fn write_response(stream: &mut TcpStream, status: u16, body: String, origin: Opt
 
 #[cfg(test)]
 mod tests {
-    use super::{allowed_origin, read_request};
+    use super::{allowed_origin, build_translation_request, read_request, TranslateBody};
+    use crate::domain::{RuntimeMode, Settings, TranslationStyle};
     use std::io::Write;
     use std::net::{TcpListener, TcpStream};
     use std::thread;
@@ -340,5 +350,33 @@ mod tests {
         assert_eq!(request.method, "POST");
         assert_eq!(request.path, "/api/v1/translate");
         assert_eq!(request.body, b"{}");
+    }
+
+    #[test]
+    fn builds_extension_request_with_desktop_style() {
+        let settings = Settings {
+            runtime_mode: RuntimeMode::Standalone,
+            models_directory: String::new(),
+            llama_server_path: String::new(),
+            endpoint: "local".into(),
+            model_id: "model".into(),
+            adapter_id: "adapter".into(),
+            source_language: "auto".into(),
+            target_language: "en".into(),
+            primary_language: "en".into(),
+            secondary_language: "ru".into(),
+            translation_style: TranslationStyle::Conversational,
+        };
+        let request = build_translation_request(
+            &settings,
+            TranslateBody {
+                text: "Hello".into(),
+                source_language: "en".into(),
+                target_language: "ru".into(),
+            },
+            "en".into(),
+        );
+        assert_eq!(request.translation_style, TranslationStyle::Conversational);
+        assert_eq!(request.text, "Hello");
     }
 }

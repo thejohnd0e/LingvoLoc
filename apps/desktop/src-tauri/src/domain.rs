@@ -21,6 +21,8 @@ pub struct TranslationRequest {
     pub source_language: String,
     pub target_language: String,
     pub text: String,
+    #[serde(default)]
+    pub translation_style: TranslationStyle,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -47,6 +49,16 @@ pub enum RuntimeMode {
     Standalone,
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum TranslationStyle {
+    #[default]
+    Neutral,
+    Literary,
+    Technical,
+    Conversational,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
@@ -63,6 +75,8 @@ pub struct Settings {
     pub target_language: String,
     pub primary_language: String,
     pub secondary_language: String,
+    #[serde(default)]
+    pub translation_style: TranslationStyle,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -134,7 +148,7 @@ pub trait TranslationModelAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::{RuntimeMode, Settings};
+    use super::{RuntimeMode, Settings, TranslationStyle};
 
     #[test]
     fn settings_use_frontend_camel_case_contract() {
@@ -153,6 +167,7 @@ mod tests {
         assert_eq!(settings.model_id, "translategemma-4b-it@q8_0");
         assert_eq!(settings.secondary_language, "ru");
         assert_eq!(settings.runtime_mode, RuntimeMode::Standalone);
+        assert_eq!(settings.translation_style, TranslationStyle::Neutral);
     }
 
     #[test]
@@ -173,5 +188,22 @@ mod tests {
         )
         .expect("standalone settings should deserialize");
         assert_eq!(settings.runtime_mode, RuntimeMode::Standalone);
+    }
+
+    #[test]
+    fn translation_styles_round_trip_in_camel_case() {
+        for (json, expected) in [
+            ("neutral", TranslationStyle::Neutral),
+            ("literary", TranslationStyle::Literary),
+            ("technical", TranslationStyle::Technical),
+            ("conversational", TranslationStyle::Conversational),
+        ] {
+            let value = serde_json::to_string(&expected).expect("style should serialize");
+            assert_eq!(value, format!("\"{json}\""));
+            assert_eq!(
+                serde_json::from_str::<TranslationStyle>(&value).unwrap(),
+                expected
+            );
+        }
     }
 }

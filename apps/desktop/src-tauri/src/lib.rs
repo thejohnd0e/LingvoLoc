@@ -8,7 +8,7 @@ mod trace;
 
 use domain::{
     DetectedLanguage, LocalModel, RuntimeError, RuntimeMode, RuntimeStatus, Settings,
-    TranslationRequest, TranslationResult,
+    TranslationRequest, TranslationResult, TranslationStyle,
 };
 use services::{
     history::{HistoryEntry, HistoryStore},
@@ -45,6 +45,7 @@ impl AppState {
                 target_language: "en".into(),
                 primary_language: "en".into(),
                 secondary_language: "ru".into(),
+                translation_style: TranslationStyle::Neutral,
             }),
             history: Mutex::new(history),
             inference: services::inference_coordinator::InferenceCoordinator::default(),
@@ -323,10 +324,37 @@ fn translate_word(
             "a model must be selected".into(),
         ));
     }
+    let request = neutral_word_request(request);
     let snapshot = services::inference_coordinator::snapshot(&current, &request.model_id);
     state
         .inference
         .run_interactive(&snapshot, || translation::translate(&current, request))
+}
+
+fn neutral_word_request(mut request: TranslationRequest) -> TranslationRequest {
+    request.translation_style = TranslationStyle::Neutral;
+    request
+}
+
+#[cfg(test)]
+mod translation_style_tests {
+    use super::*;
+
+    #[test]
+    fn neutral_word_request_forces_neutral_style() {
+        let request = TranslationRequest {
+            model_id: "model".into(),
+            adapter_id: "adapter".into(),
+            source_language: "en".into(),
+            target_language: "ru".into(),
+            text: "word".into(),
+            translation_style: TranslationStyle::Conversational,
+        };
+        assert_eq!(
+            neutral_word_request(request).translation_style,
+            TranslationStyle::Neutral
+        );
+    }
 }
 
 fn translate_clipboard(app: &tauri::AppHandle) {
