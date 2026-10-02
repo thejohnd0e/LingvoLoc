@@ -169,7 +169,9 @@ describe('translation workspace', () => {
       model_id: 'model',
       adapter_id: 'translategemma',
       latency_ms: 10,
+      prompt_tokens: null,
       completion_tokens: null,
+      total_tokens: null,
     });
     vi.mocked(commands.detectLanguage).mockResolvedValue({
       code: 'en',
@@ -180,7 +182,9 @@ describe('translation workspace', () => {
       model_id: 'model',
       adapter_id: 'translategemma',
       latency_ms: 10,
+      prompt_tokens: null,
       completion_tokens: null,
+      total_tokens: null,
     });
     render(<App />);
     fireEvent.change(
@@ -207,7 +211,9 @@ describe('translation workspace', () => {
       model_id: 'model',
       adapter_id: 'translategemma',
       latency_ms: 10,
+      prompt_tokens: null,
       completion_tokens: null,
+      total_tokens: null,
     });
     render(<App />);
     const input = screen.getByPlaceholderText(

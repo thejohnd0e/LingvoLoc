@@ -36,7 +36,9 @@ describe('clipboard popup translation', () => {
       model_id: 'model',
       adapter_id: 'adapter',
       latency_ms: 10,
+      prompt_tokens: null,
       completion_tokens: null,
+      total_tokens: null,
     });
     commandMocks.writeClipboard.mockResolvedValue(undefined);
     localStorage.setItem(
