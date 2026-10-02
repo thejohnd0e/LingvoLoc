@@ -80,7 +80,7 @@ Recommendations:
 - **Maximum speed on short text:** TranslateGemma 4B Q8_0.
 - Avoid "abliterated" fine-tunes: they drop trailing paragraphs of long texts.
 
-Exact provider usage is shown alongside response time when available: `214 in · 118 out · 332 total`. If the provider does not report usage, LingvoLoc says `token usage unavailable` rather than estimating tokens. Usage is for the current request only; it is not persisted or aggregated.
+Exact provider usage is shown alongside response time when available: `214 in · 118 out · 332 total`. DeepL reports billed characters instead. If the provider does not report usage, LingvoLoc says `token usage unavailable` rather than estimating tokens. Cloud usage is aggregated for the current app session in Settings; keys are stored in Windows Credential Manager and never in settings files.
 
 ## Translating files
 
@@ -120,9 +120,10 @@ In **Settings → Dictionaries** choose the folder that contains your StarDict d
 
 ## Settings
 
-The **Settings** window (gear icon) has three sections:
+The **Settings** window (gear icon) has runtime, cloud provider, dictionary, and browser extension sections:
 
 - **Model runtime**: Standalone or LM Studio mode, models folder, GPU support, and llama.cpp.
+- **Cloud provider**: OpenAI, Anthropic, Gemini, DeepL, or OpenAI-compatible mode, model/endpoint settings, secure API-key storage, explicit network consent, and session usage.
 - **Dictionaries**: the StarDict folder and the dictionaries to search.
 - **Browser extension**: **Copy token** copies the pairing token for the browser extension.
 
