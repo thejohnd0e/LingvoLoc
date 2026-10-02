@@ -13,7 +13,7 @@ use crate::domain::RuntimeError;
 
 pub use crate::services::inference_coordinator::InferenceCoordinator;
 pub use domain::{
-    BlockType, DocumentBlock, DocumentJob, JobState, JobTransitionError, RequestTokenCounts,
+    BlockType, DocumentBlock, DocumentJob, JobState, JobTransitionError, RequestUsage,
 };
 pub use segmentation::{segment_block, SegmentationLimits};
 pub use store::DocumentJobStore;

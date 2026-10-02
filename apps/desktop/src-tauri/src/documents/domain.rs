@@ -25,10 +25,12 @@ pub struct DocumentBlock {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RequestTokenCounts {
+pub struct RequestUsage {
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
+    pub billed_characters: Option<u64>,
+    pub provider_id: Option<crate::domain::ProviderId>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

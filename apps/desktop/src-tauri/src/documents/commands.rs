@@ -37,7 +37,7 @@ pub struct DocumentJobSummary {
     pub job: DocumentJob,
     pub total_blocks: usize,
     pub translated_blocks: usize,
-    pub last_request_usage: Option<crate::documents::RequestTokenCounts>,
+    pub last_request_usage: Option<crate::documents::RequestUsage>,
 }
 
 #[tauri::command(async)]

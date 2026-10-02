@@ -1,6 +1,7 @@
 use super::segmentation::{segment_block, SegmentationLimits};
 use super::{DocumentJobStore, JobState};
-use crate::documents::RequestTokenCounts;
+use crate::documents::RequestUsage;
+use crate::domain::RuntimeMode;
 use crate::domain::{RuntimeError, Settings, TranslationRequest};
 use crate::services::inference_coordinator::InferenceCoordinator;
 use std::fs::OpenOptions;
@@ -142,7 +143,26 @@ where
             });
             let translated_result = coordinator.run_background(snapshot, || {
                 trace_document(job_id, segment.ordinal, "coordinator_acquired", "");
-                translator(&request)
+                let first = translator(&request);
+                if let Err(error) = &first {
+                    if retryable_cloud_error(settings.runtime_mode, error) {
+                        trace_document(
+                            job_id,
+                            segment.ordinal,
+                            "request_retry",
+                            "reason=transient_provider_error",
+                        );
+                        if let RuntimeError::RateLimited {
+                            retry_after: Some(delay),
+                            ..
+                        } = error
+                        {
+                            std::thread::sleep((*delay).min(std::time::Duration::from_secs(30)));
+                        }
+                        return translator(&request);
+                    }
+                }
+                first
             });
             drop(finished);
             let _ = watcher.join();
@@ -195,6 +215,19 @@ where
     Ok(report)
 }
 
+fn retryable_cloud_error(mode: RuntimeMode, error: &RuntimeError) -> bool {
+    if matches!(mode, RuntimeMode::Standalone | RuntimeMode::LmStudio) {
+        return false;
+    }
+    match error {
+        RuntimeError::RateLimited { .. } => true,
+        RuntimeError::Connection(detail) => ["HTTP 502", "HTTP 503", "HTTP 504"]
+            .iter()
+            .any(|marker| detail.contains(marker)),
+        _ => false,
+    }
+}
+
 fn record_error(store: &mut DocumentJobStore, job_id: &str, error: &RuntimeError) {
     let detail = error.to_string();
     if matches!(error, RuntimeError::InvalidInput(message) if message.starts_with("document paused:"))
@@ -217,7 +250,7 @@ pub fn translate_job(
     settings: &Settings,
     snapshot: &str,
     limits: SegmentationLimits,
-    usage_store: &std::sync::Mutex<std::collections::HashMap<String, RequestTokenCounts>>,
+    usage_store: &std::sync::Mutex<std::collections::HashMap<String, RequestUsage>>,
 ) -> Result<WorkerReport, RuntimeError> {
     translate_job_with(
         store,
@@ -231,10 +264,12 @@ pub fn translate_job(
                 if let Ok(mut usage) = usage_store.lock() {
                     usage.insert(
                         job_id.to_string(),
-                        RequestTokenCounts {
+                        RequestUsage {
                             input_tokens: result.prompt_tokens,
                             output_tokens: result.completion_tokens,
                             total_tokens: result.total_tokens,
+                            billed_characters: result.billed_characters,
+                            provider_id: result.provider_id,
                         },
                     );
                 }
@@ -267,6 +302,29 @@ mod tests {
             translation_style: TranslationStyle::Neutral,
             cloud: Default::default(),
         }
+    }
+
+    #[test]
+    fn retries_only_transient_cloud_errors() {
+        assert!(retryable_cloud_error(
+            RuntimeMode::OpenAi,
+            &RuntimeError::RateLimited {
+                detail: "busy".into(),
+                retry_after: None
+            }
+        ));
+        assert!(retryable_cloud_error(
+            RuntimeMode::Gemini,
+            &RuntimeError::Connection("provider returned HTTP 503".into())
+        ));
+        assert!(!retryable_cloud_error(
+            RuntimeMode::OpenAi,
+            &RuntimeError::Authentication("bad key".into())
+        ));
+        assert!(!retryable_cloud_error(
+            RuntimeMode::Standalone,
+            &RuntimeError::Connection("provider returned HTTP 503".into())
+        ));
     }
 
     fn store() -> DocumentJobStore {
