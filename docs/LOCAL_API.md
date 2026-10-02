@@ -30,3 +30,15 @@ Translation body:
 ```
 
 The API uses the model and adapter selected in the desktop application. Successful API translations are added to local history just like desktop translations.
+
+Successful translations include exact provider usage when available:
+
+```json
+{
+  "prompt_tokens": 214,
+  "completion_tokens": 118,
+  "total_tokens": 332
+}
+```
+
+When the provider omits usage, these fields are unavailable rather than estimated. Usage is not persisted and aggregate statistics are not exposed.

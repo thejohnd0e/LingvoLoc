@@ -20,7 +20,7 @@ LingvoLoc is a Windows app for **private translation on your own computer**. You
 
 ## What LingvoLoc can do
 
-- **Translate text.** Type or paste text, pick the languages (automatic source detection for 12 languages), and get a translation with the response time and speed. The result is copied to the clipboard.
+- **Translate text.** Type or paste text, pick the languages (automatic source detection for 12 languages), and get a translation with the response time, exact provider token usage, and speed. The result is copied to the clipboard.
 - **Translate whole documents.** Drop TXT, DOCX, EPUB, FB2 and **PDF** files on the window. Translation of a book keeps going in the background, survives restarts, and can be paused, resumed, or cancelled. Several files can be translated in a row.
 - **Translate PDF books and keep their layout.** Headings, columns, tables, tables of contents, coloured panels, lists and pictures stay where they are; only the text is replaced (details below).
 - **Translate from the clipboard.** Press `Ctrl+Shift+T` anywhere in Windows and a small window shows the translation of what you copied.
@@ -79,6 +79,8 @@ Recommendations:
 - **Russian and other European languages:** TranslateGemma 12B Q5_K_M, or Gemma 3 12B QAT Q4_0 if you want a smaller and faster model.
 - **Maximum speed on short text:** TranslateGemma 4B Q8_0.
 - Avoid "abliterated" fine-tunes: they drop trailing paragraphs of long texts.
+
+Exact provider usage is shown alongside response time when available: `214 in · 118 out · 332 total`. If the provider does not report usage, LingvoLoc says `token usage unavailable` rather than estimating tokens. Usage is for the current request only; it is not persisted or aggregated.
 
 ## Translating files
 
