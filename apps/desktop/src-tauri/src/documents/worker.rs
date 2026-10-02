@@ -265,6 +265,7 @@ mod tests {
             primary_language: "en".into(),
             secondary_language: "ru".into(),
             translation_style: TranslationStyle::Neutral,
+            cloud: Default::default(),
         }
     }
 
