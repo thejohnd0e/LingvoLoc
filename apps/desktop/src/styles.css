@@ -1213,3 +1213,40 @@ option.free-model {
   color: #7fe39a;
   font-weight: 600;
 }
+
+.cloud-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.cloud-field-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cloud-field-line > select,
+.cloud-field-line > input {
+  flex: 1;
+  min-width: 0;
+}
+.key-status {
+  font-size: 0.85em;
+  color: #8fa7a8;
+}
+.key-status-ok {
+  color: #7fe39a;
+}
+.consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #c4d2d1;
+}
+.consent-row input {
+  margin-top: 3px;
+}
+.usage-entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}

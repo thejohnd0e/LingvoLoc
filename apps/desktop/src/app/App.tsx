@@ -1646,122 +1646,140 @@ export default function App() {
                   />
                 </label>
               )}
-              <label className="runtime-row">
-                <b>Model</b>
-                {cloudModelOptions.length > 0 ? (
-                  <select
-                    aria-label="Cloud model"
-                    value={selectedCloudModel}
-                    onChange={(event) => {
-                      const provider = settings.runtimeMode;
-                      if (provider === 'deepL' || !isCloudProvider(provider))
-                        return;
-                      updateSettings({
-                        cloud: {
-                          ...settings.cloud,
-                          [provider]: {
-                            ...settings.cloud[provider],
-                            modelId: event.target.value,
-                          },
-                        },
-                      });
-                    }}
-                  >
-                    {cloudModelOptions.map((model) => (
-                      <ModelOption key={model.id} id={model.id} />
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    aria-label="Cloud model"
-                    value={
-                      settings.runtimeMode === 'deepL'
-                        ? 'deepL'
-                        : selectedCloudModel
-                    }
-                    disabled={settings.runtimeMode === 'deepL'}
-                    placeholder="Model id"
-                    onChange={(event) => {
-                      const provider = settings.runtimeMode;
-                      if (provider === 'deepL' || !isCloudProvider(provider))
-                        return;
-                      updateSettings({
-                        cloud: {
-                          ...settings.cloud,
-                          [provider]: {
-                            ...settings.cloud[provider],
-                            modelId: event.target.value,
-                          },
-                        },
-                      });
-                    }}
-                  />
-                )}
-                {settings.runtimeMode !== 'deepL' && (
-                  <button
-                    className="quiet"
-                    type="button"
-                    aria-label="Refresh cloud models"
-                    disabled={refreshing || !credentialStatus?.configured}
-                    onClick={() => void refreshCloudModels()}
-                  >
-                    Refresh models
-                  </button>
-                )}
-              </label>
-              {cloudModelsMessage && (
-                <p className="runtime-note" role="status">
-                  {cloudModelsMessage}
-                </p>
-              )}
               <div className="runtime-row">
-                <div>
-                  <b>
-                    {cloudProviders.find(
-                      (provider) => provider.id === settings.runtimeMode,
-                    )?.label ?? 'Provider'}{' '}
-                    API key
-                  </b>
-                  <span className="runtime-note">
-                    {credentialStatus?.configured
-                      ? `Configured (${credentialStatus.hint ?? 'stored securely'})`
-                      : 'Not configured'}
-                  </span>
-                </div>
-                <div className="runtime-buttons">
-                  <input
-                    aria-label="Provider API key"
-                    type="password"
-                    value={
-                      credentialInput ||
-                      (credentialStatus?.configured && !credentialFocused
-                        ? '••••••••••••••••'
-                        : '')
-                    }
-                    placeholder="Enter key"
-                    onFocus={() => setCredentialFocused(true)}
-                    onBlur={() => setCredentialFocused(false)}
-                    onChange={(event) => setCredentialInput(event.target.value)}
-                  />
-                  <button
-                    className="quiet"
-                    type="button"
-                    onClick={() => void saveCloudKey()}
-                  >
-                    Save key
-                  </button>
-                  {credentialStatus?.configured && (
-                    <button
-                      className="quiet"
-                      type="button"
-                      onClick={() => void removeCloudKey()}
-                    >
-                      Remove
-                    </button>
+                <b>Model</b>
+                <div className="cloud-field">
+                  <div className="cloud-field-line">
+                    {cloudModelOptions.length > 0 ? (
+                      <select
+                        aria-label="Cloud model"
+                        value={selectedCloudModel}
+                        onChange={(event) => {
+                          const provider = settings.runtimeMode;
+                          if (
+                            provider === 'deepL' ||
+                            !isCloudProvider(provider)
+                          )
+                            return;
+                          updateSettings({
+                            cloud: {
+                              ...settings.cloud,
+                              [provider]: {
+                                ...settings.cloud[provider],
+                                modelId: event.target.value,
+                              },
+                            },
+                          });
+                        }}
+                      >
+                        {cloudModelOptions.map((model) => (
+                          <ModelOption key={model.id} id={model.id} />
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        aria-label="Cloud model"
+                        value={
+                          settings.runtimeMode === 'deepL'
+                            ? 'deepL'
+                            : selectedCloudModel
+                        }
+                        disabled={settings.runtimeMode === 'deepL'}
+                        placeholder="Model id"
+                        onChange={(event) => {
+                          const provider = settings.runtimeMode;
+                          if (
+                            provider === 'deepL' ||
+                            !isCloudProvider(provider)
+                          )
+                            return;
+                          updateSettings({
+                            cloud: {
+                              ...settings.cloud,
+                              [provider]: {
+                                ...settings.cloud[provider],
+                                modelId: event.target.value,
+                              },
+                            },
+                          });
+                        }}
+                      />
+                    )}
+                    {settings.runtimeMode !== 'deepL' && (
+                      <button
+                        className="quiet"
+                        type="button"
+                        aria-label="Refresh cloud models"
+                        disabled={refreshing || !credentialStatus?.configured}
+                        onClick={() => void refreshCloudModels()}
+                      >
+                        Refresh models
+                      </button>
+                    )}
+                  </div>
+                  {cloudModelsMessage && (
+                    <p className="runtime-note" role="status">
+                      {cloudModelsMessage}
+                    </p>
                   )}
                 </div>
               </div>
-              <label>
+              <div className="runtime-row">
+                <b>
+                  {cloudProviders.find(
+                    (provider) => provider.id === settings.runtimeMode,
+                  )?.label ?? 'Provider'}{' '}
+                  API key
+                </b>
+                <div className="cloud-field">
+                  <div className="cloud-field-line">
+                    <input
+                      aria-label="Provider API key"
+                      type="password"
+                      value={
+                        credentialInput ||
+                        (credentialStatus?.configured && !credentialFocused
+                          ? '••••••••••••••••'
+                          : '')
+                      }
+                      placeholder="Enter key"
+                      onFocus={() => setCredentialFocused(true)}
+                      onBlur={() => setCredentialFocused(false)}
+                      onChange={(event) =>
+                        setCredentialInput(event.target.value)
+                      }
+                    />
+                    <button
+                      className="quiet"
+                      type="button"
+                      onClick={() => void saveCloudKey()}
+                    >
+                      Save key
+                    </button>
+                    {credentialStatus?.configured && (
+                      <button
+                        className="quiet"
+                        type="button"
+                        onClick={() => void removeCloudKey()}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <span
+                    className={
+                      credentialStatus?.configured
+                        ? 'key-status key-status-ok'
+                        : 'key-status'
+                    }
+                  >
+                    {credentialStatus?.configured
+                      ? '● Saved securely'
+                      : '○ Not set'}
+                  </span>
+                </div>
+              </div>
+              <label className="consent-row">
                 <input
                   type="checkbox"
                   checked={settings.cloud.consentAccepted}
@@ -1773,36 +1791,38 @@ export default function App() {
                       },
                     })
                   }
-                />{' '}
-                I understand that cloud translation sends text to the selected
-                provider.
+                />
+                <span>
+                  I understand that cloud translation sends text to the selected
+                  provider.
+                </span>
               </label>
               <div className="runtime-row" aria-label="Session usage">
-                <div>
-                  <b>Session usage</b>
+                <b>Session usage</b>
+                <div className="cloud-field">
                   {usageBusy && (
                     <span className="runtime-note">Refreshing…</span>
                   )}
-                </div>
-                <div>
-                  {usageEntries.length === 0 ? (
+                  {!usageBusy && usageEntries.length === 0 && (
                     <span className="runtime-note">No requests yet.</span>
-                  ) : (
-                    usageEntries.map((entry) => (
-                      <div key={`${entry.providerId}-${entry.modelId}`}>
-                        {entry.totalTokens != null && (
-                          <span>{entry.totalTokens} tokens</span>
-                        )}
-                        {entry.billedCharacters != null && (
-                          <span>{entry.billedCharacters} characters</span>
-                        )}
-                        <span className="runtime-note">
-                          {entry.requests} requests · {entry.failedRequests}{' '}
-                          failed
-                        </span>
-                      </div>
-                    ))
                   )}
+                  {usageEntries.map((entry) => (
+                    <div
+                      className="usage-entry"
+                      key={`${entry.providerId}-${entry.modelId}`}
+                    >
+                      {entry.totalTokens != null && (
+                        <span>{entry.totalTokens} tokens</span>
+                      )}
+                      {entry.billedCharacters != null && (
+                        <span>{entry.billedCharacters} characters</span>
+                      )}
+                      <span className="runtime-note">
+                        {entry.requests} requests · {entry.failedRequests}{' '}
+                        failed
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </section>
