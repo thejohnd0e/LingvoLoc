@@ -123,7 +123,7 @@ In **Settings → Dictionaries** choose the folder that contains your StarDict d
 The **Settings** window (gear icon) has runtime, cloud provider, dictionary, and browser extension sections:
 
 - **Model runtime**: Standalone or LM Studio mode, models folder, GPU support, and llama.cpp.
-- **Cloud provider**: OpenAI, Anthropic, Gemini, DeepL, DeepSeek, OpenRouter, xAI Grok, or OpenAI-compatible mode (custom endpoint), model settings with models whose id contains `free` highlighted (★) in the lists, secure API-key storage, explicit network consent, an optional per-provider proxy (`http://`, `https://` or `socks5://`), and session usage.
+- **Cloud provider**: OpenAI, Anthropic, Gemini, DeepL, DeepSeek, OpenRouter, xAI Grok, ChatGPT Plus/Pro (browser sign-in, uses your plan allowance), or OpenAI-compatible mode (custom endpoint), model settings with models whose id contains `free` highlighted (★) in the lists, secure API-key storage, explicit network consent, an optional per-provider proxy (`http://`, `https://` or `socks5://`), and session usage.
 - **Dictionaries**: the StarDict folder and the dictionaries to search.
 - **Browser extension**: **Copy token** copies the pairing token for the browser extension.
 

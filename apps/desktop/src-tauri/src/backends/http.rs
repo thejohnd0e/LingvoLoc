@@ -179,6 +179,46 @@ impl HttpTransport {
         })
     }
 
+    /// Posts an `application/x-www-form-urlencoded` body and returns the JSON reply.
+    /// OAuth error replies are mapped to distinguishable errors.
+    pub fn post_form(
+        &self,
+        url: &str,
+        form: &[(&str, &str)],
+    ) -> Result<serde_json::Value, RuntimeError> {
+        let response = self
+            .client
+            .post(url)
+            .header(reqwest::header::ACCEPT, "application/json")
+            .form(form)
+            .send()
+            .map_err(map_request_error)?;
+        let status = response.status();
+        let mut body = Vec::new();
+        let _ = response
+            .take(self.timeouts.max_error_body as u64)
+            .read_to_end(&mut body);
+        if status.is_success() {
+            return serde_json::from_slice(&body).map_err(|_| {
+                RuntimeError::MalformedResponse("token response is not valid JSON".into())
+            });
+        }
+        let value: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
+        let code = value
+            .get("error")
+            .and_then(|error| error.as_str().or_else(|| error.get("code")?.as_str()))
+            .unwrap_or("unknown_error")
+            .to_string();
+        crate::trace::runtime_event(
+            "oauth_http_error",
+            &format!("status={} code={code}", status.as_u16()),
+        );
+        Err(RuntimeError::Authentication(format!(
+            "provider returned HTTP {} ({code})",
+            status.as_u16()
+        )))
+    }
+
     #[allow(dead_code)]
     pub fn stream_get<F>(
         &self,
@@ -393,11 +433,19 @@ pub fn read_sse_lines<R: BufRead, F: FnMut(&str) -> Result<(), RuntimeError>>(
 /// Extracts a short, single-line `error.message` from a JSON error body.
 pub fn provider_error_message(body: &[u8]) -> Option<String> {
     let value: serde_json::Value = serde_json::from_slice(body).ok()?;
+    let code = value
+        .pointer("/error/code")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string);
     let message = value
         .pointer("/error/message")
         .or_else(|| value.get("error"))
         .or_else(|| value.get("message"))?
         .as_str()?;
+    let message = match code {
+        Some(code) if !message.contains(&code) => format!("{message} ({code})"),
+        _ => message.to_string(),
+    };
     let cleaned: String = message
         .chars()
         .map(|c| if c.is_control() { ' ' } else { c })

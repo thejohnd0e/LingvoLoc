@@ -1,4 +1,5 @@
 pub mod autostart;
+pub mod chatgpt_auth;
 pub mod credentials;
 pub mod detection;
 pub mod history;

@@ -1,4 +1,5 @@
 pub mod anthropic;
+pub mod chatgpt;
 pub mod deepl;
 pub mod gemini;
 pub mod http;
@@ -67,6 +68,13 @@ pub fn for_settings_with_credentials(
             credentials.get(crate::domain::ProviderId::OpenRouter)
         }
         crate::domain::RuntimeMode::Xai => credentials.get(crate::domain::ProviderId::Xai),
+        crate::domain::RuntimeMode::ChatGpt => {
+            let token = crate::services::chatgpt_auth::access_token(
+                credentials,
+                &settings.cloud.chat_gpt.proxy_url,
+            )?;
+            return for_settings_with_key(settings, token);
+        }
         crate::domain::RuntimeMode::LmStudio | crate::domain::RuntimeMode::Standalone => {
             Ok(String::new())
         }
@@ -137,6 +145,10 @@ fn for_settings_with_key(
                 key,
             )?
             .with_proxy(&settings.cloud.xai.proxy_url)?,
+        )),
+        crate::domain::RuntimeMode::ChatGpt => Ok(Box::new(
+            chatgpt::ChatGptBackend::new(settings.cloud.chat_gpt.model_id.clone(), key)?
+                .with_proxy(&settings.cloud.chat_gpt.proxy_url)?,
         )),
     }
 }

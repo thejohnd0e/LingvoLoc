@@ -34,6 +34,8 @@ import {
   setHistoryFavorite,
   translate,
   cancelTranslation,
+  chatGptCancelSignIn,
+  chatGptSignIn,
   translateWord,
   writeClipboard,
   updateSettings as updateNativeSettings,
@@ -91,7 +93,14 @@ const cloudProviders: Array<{ id: ProviderId; label: string }> = [
   { id: 'deepSeek', label: 'DeepSeek' },
   { id: 'openRouter', label: 'OpenRouter' },
   { id: 'xai', label: 'xAI Grok' },
+  { id: 'chatGpt', label: 'ChatGPT (Plus/Pro sign-in)' },
 ];
+
+function credentialPrompt(mode: Settings['runtimeMode']): string {
+  return mode === 'chatGpt'
+    ? 'Sign in with ChatGPT to load models.'
+    : 'Save an API key to load models.';
+}
 
 function isFreeModel(id: string): boolean {
   return /free/i.test(id);
@@ -135,6 +144,8 @@ function runtimeModeLabel(mode: Settings['runtimeMode']): string {
       return 'OpenRouter';
     case 'xai':
       return 'xAI Grok';
+    case 'chatGpt':
+      return 'ChatGPT';
   }
 }
 
@@ -231,6 +242,7 @@ export default function App() {
     useState<CredentialStatus | null>(null);
   const [credentialInput, setCredentialInput] = useState('');
   const [credentialFocused, setCredentialFocused] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
   const translationRunRef = useRef(0);
   const [usageEntries, setUsageEntries] = useState<SessionUsageEntry[]>([]);
   const [usageBusy, setUsageBusy] = useState(false);
@@ -381,7 +393,7 @@ export default function App() {
     if (credentials?.configured) {
       void refreshCloudModels();
     } else if (settings.runtimeMode !== 'deepL') {
-      setCloudModelsMessage('Save an API key to load models.');
+      setCloudModelsMessage(credentialPrompt(settingsRef.current.runtimeMode));
     } else {
       setCloudModelsMessage('');
     }
@@ -445,14 +457,32 @@ export default function App() {
     }
   }
 
+  async function signInWithChatGpt() {
+    setSigningIn(true);
+    try {
+      const next = await chatGptSignIn();
+      setCredentialStatus(next);
+      setNotice('Signed in with ChatGPT.');
+      void refreshCloudModels('chatGpt');
+    } catch (reason) {
+      setNotice(`ChatGPT sign-in failed · ${errorDetail(reason)}`);
+    } finally {
+      setSigningIn(false);
+    }
+  }
+
   async function removeCloudKey() {
     if (!isCloudProvider(settings.runtimeMode)) return;
     await deleteProviderCredential(settings.runtimeMode);
     setCredentialStatus({ configured: false, hint: null });
     if (settings.runtimeMode !== 'deepL') {
-      setCloudModelsMessage('Save an API key to load models.');
+      setCloudModelsMessage(credentialPrompt(settingsRef.current.runtimeMode));
     }
-    setNotice('Provider key removed.');
+    setNotice(
+      settings.runtimeMode === 'chatGpt'
+        ? 'Signed out of ChatGPT.'
+        : 'Provider key removed.',
+    );
   }
 
   function cancelCurrentTranslation() {
@@ -595,7 +625,9 @@ export default function App() {
         }
       }
       if (!configured) {
-        setCloudModelsMessage('Save an API key to load models.');
+        setCloudModelsMessage(
+          credentialPrompt(settingsRef.current.runtimeMode),
+        );
         setStatus(`${runtimeLabel} · provider credential is not configured`);
         return;
       }
@@ -1727,61 +1759,122 @@ export default function App() {
                   )}
                 </div>
               </div>
-              <div className="runtime-row">
-                <b>
-                  {cloudProviders.find(
-                    (provider) => provider.id === settings.runtimeMode,
-                  )?.label ?? 'Provider'}{' '}
-                  API key
-                </b>
-                <div className="cloud-field">
-                  <div className="cloud-field-line">
-                    <input
-                      aria-label="Provider API key"
-                      type="password"
-                      value={
-                        credentialInput ||
-                        (credentialStatus?.configured && !credentialFocused
-                          ? '••••••••••••••••'
-                          : '')
+              {settings.runtimeMode === 'chatGpt' ? (
+                <div className="runtime-row">
+                  <b>Account</b>
+                  <div className="cloud-field">
+                    <div className="cloud-field-line">
+                      {signingIn ? (
+                        <>
+                          <span className="runtime-note">
+                            Waiting for the browser…
+                          </span>
+                          <button
+                            className="quiet"
+                            type="button"
+                            onClick={() => void chatGptCancelSignIn()}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            className="quiet"
+                            type="button"
+                            onClick={() => void signInWithChatGpt()}
+                          >
+                            {credentialStatus?.configured
+                              ? 'Sign in again'
+                              : 'Sign in with ChatGPT'}
+                          </button>
+                          {credentialStatus?.configured && (
+                            <button
+                              className="quiet"
+                              type="button"
+                              onClick={() => void removeCloudKey()}
+                            >
+                              Sign out
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <span
+                      className={
+                        credentialStatus?.configured
+                          ? 'key-status key-status-ok'
+                          : 'key-status'
                       }
-                      placeholder="Enter key"
-                      onFocus={() => setCredentialFocused(true)}
-                      onBlur={() => setCredentialFocused(false)}
-                      onChange={(event) =>
-                        setCredentialInput(event.target.value)
-                      }
-                    />
-                    <button
-                      className="quiet"
-                      type="button"
-                      onClick={() => void saveCloudKey()}
                     >
-                      Save key
-                    </button>
-                    {credentialStatus?.configured && (
+                      {credentialStatus?.configured
+                        ? `● Signed in${credentialStatus.hint ? ` as ${credentialStatus.hint}` : ''}`
+                        : '○ Not signed in'}
+                    </span>
+                    <span className="runtime-note">
+                      Uses your ChatGPT Plus/Pro allowance, for personal use.
+                      Set a weekly cap for LingvoLoc in ChatGPT under Settings →
+                      Usage.
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="runtime-row">
+                  <b>
+                    {cloudProviders.find(
+                      (provider) => provider.id === settings.runtimeMode,
+                    )?.label ?? 'Provider'}{' '}
+                    API key
+                  </b>
+                  <div className="cloud-field">
+                    <div className="cloud-field-line">
+                      <input
+                        aria-label="Provider API key"
+                        type="password"
+                        value={
+                          credentialInput ||
+                          (credentialStatus?.configured && !credentialFocused
+                            ? '••••••••••••••••'
+                            : '')
+                        }
+                        placeholder="Enter key"
+                        onFocus={() => setCredentialFocused(true)}
+                        onBlur={() => setCredentialFocused(false)}
+                        onChange={(event) =>
+                          setCredentialInput(event.target.value)
+                        }
+                      />
                       <button
                         className="quiet"
                         type="button"
-                        onClick={() => void removeCloudKey()}
+                        onClick={() => void saveCloudKey()}
                       >
-                        Remove
+                        Save key
                       </button>
-                    )}
+                      {credentialStatus?.configured && (
+                        <button
+                          className="quiet"
+                          type="button"
+                          onClick={() => void removeCloudKey()}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <span
+                      className={
+                        credentialStatus?.configured
+                          ? 'key-status key-status-ok'
+                          : 'key-status'
+                      }
+                    >
+                      {credentialStatus?.configured
+                        ? '● Saved securely'
+                        : '○ Not set'}
+                    </span>
                   </div>
-                  <span
-                    className={
-                      credentialStatus?.configured
-                        ? 'key-status key-status-ok'
-                        : 'key-status'
-                    }
-                  >
-                    {credentialStatus?.configured
-                      ? '● Saved securely'
-                      : '○ Not set'}
-                  </span>
                 </div>
-              </div>
+              )}
               {
                 <div className="runtime-row">
                   <b>Proxy</b>

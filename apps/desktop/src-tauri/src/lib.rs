@@ -115,6 +115,7 @@ fn settings_for_provider(
         domain::ProviderId::DeepSeek => domain::RuntimeMode::DeepSeek,
         domain::ProviderId::OpenRouter => domain::RuntimeMode::OpenRouter,
         domain::ProviderId::Xai => domain::RuntimeMode::Xai,
+        domain::ProviderId::ChatGpt => domain::RuntimeMode::ChatGpt,
         domain::ProviderId::LlamaCpp | domain::ProviderId::LmStudio => {
             return Err(RuntimeError::InvalidInput(
                 "provider has no cloud refresh command".into(),
@@ -250,6 +251,9 @@ fn get_provider_credential_status(
     state: tauri::State<'_, AppState>,
     provider_id: domain::ProviderId,
 ) -> Result<CredentialStatus, RuntimeError> {
+    if provider_id == domain::ProviderId::ChatGpt {
+        return services::chatgpt_auth::status(&state.credentials);
+    }
     state
         .credentials
         .status(provider_id)
@@ -273,10 +277,34 @@ fn delete_provider_credential(
     state: tauri::State<'_, AppState>,
     provider_id: domain::ProviderId,
 ) -> Result<(), RuntimeError> {
+    if provider_id == domain::ProviderId::ChatGpt {
+        let proxy = settings(&state)?.cloud.chat_gpt.proxy_url;
+        return services::chatgpt_auth::sign_out(&state.credentials, &proxy);
+    }
     state
         .credentials
         .delete(provider_id)
         .map_err(services::credentials::map_error)
+}
+
+/// Opens the browser sign-in for a ChatGPT Plus/Pro plan and waits for it to finish.
+#[tauri::command(async)]
+fn chatgpt_sign_in(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<CredentialStatus, RuntimeError> {
+    use tauri_plugin_opener::OpenerExt;
+    let proxy = settings(&state)?.cloud.chat_gpt.proxy_url;
+    services::chatgpt_auth::sign_in(&state.credentials, &proxy, |url| {
+        app.opener()
+            .open_url(url, None::<&str>)
+            .map_err(|error| error.to_string())
+    })
+}
+
+#[tauri::command]
+fn chatgpt_cancel_sign_in() {
+    services::chatgpt_auth::cancel_sign_in();
 }
 
 #[tauri::command(async)]
@@ -657,6 +685,8 @@ pub fn run() {
             get_session_usage,
             translate,
             cancel_translation,
+            chatgpt_sign_in,
+            chatgpt_cancel_sign_in,
             get_settings,
             get_api_token,
             write_clipboard,

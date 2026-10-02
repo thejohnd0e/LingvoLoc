@@ -66,7 +66,8 @@ export type ProviderId =
   | 'openAiCompatible'
   | 'deepSeek'
   | 'openRouter'
-  | 'xai';
+  | 'xai'
+  | 'chatGpt';
 
 export interface CredentialStatus {
   configured: boolean;
@@ -208,6 +209,12 @@ export const saveProviderCredential = (
   });
 export const deleteProviderCredential = (providerId: ProviderId) =>
   invokeNative<void>('delete_provider_credential', { providerId });
+export const chatGptSignIn = () =>
+  invokeNative<CredentialStatus>('chatgpt_sign_in');
+
+export const chatGptCancelSignIn = () =>
+  invokeNative<void>('chatgpt_cancel_sign_in');
+
 export const cancelTranslation = () =>
   invokeNative<number>('cancel_translation');
 

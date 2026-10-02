@@ -8,7 +8,8 @@ export type RuntimeMode =
   | 'openAiCompatible'
   | 'deepSeek'
   | 'openRouter'
-  | 'xai';
+  | 'xai'
+  | 'chatGpt';
 export type TranslationStyle =
   'neutral' | 'literary' | 'technical' | 'conversational';
 
@@ -40,6 +41,7 @@ export interface CloudSettings {
   deepSeek: CloudModelConfig;
   openRouter: CloudModelConfig;
   xai: CloudModelConfig;
+  chatGpt: CloudModelConfig;
 }
 
 const translationStyles: readonly TranslationStyle[] = [
@@ -110,6 +112,12 @@ export const defaultCloudSettings: CloudSettings = {
     modelsRefreshedAt: null,
   },
   xai: {
+    modelId: '',
+    proxyUrl: '',
+    availableModels: [],
+    modelsRefreshedAt: null,
+  },
+  chatGpt: {
     modelId: '',
     proxyUrl: '',
     availableModels: [],

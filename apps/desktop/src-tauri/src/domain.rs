@@ -63,6 +63,7 @@ pub enum RuntimeMode {
     DeepSeek,
     OpenRouter,
     Xai,
+    ChatGpt,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -78,6 +79,7 @@ pub enum ProviderId {
     DeepSeek,
     OpenRouter,
     Xai,
+    ChatGpt,
 }
 
 impl ProviderId {
@@ -93,6 +95,7 @@ impl ProviderId {
             Self::DeepSeek => "com.lingoloc.desktop.ai.deepseek",
             Self::OpenRouter => "com.lingoloc.desktop.ai.openrouter",
             Self::Xai => "com.lingoloc.desktop.ai.xai",
+            Self::ChatGpt => "com.lingoloc.desktop.ai.chatgpt",
         }
     }
 }
@@ -162,6 +165,8 @@ pub struct CloudSettings {
     pub open_router: CloudModelConfig,
     #[serde(default = "default_xai")]
     pub xai: CloudModelConfig,
+    #[serde(default = "default_chat_gpt")]
+    pub chat_gpt: CloudModelConfig,
 }
 
 fn default_deep_seek() -> CloudModelConfig {
@@ -173,6 +178,10 @@ fn default_open_router() -> CloudModelConfig {
 }
 
 fn default_xai() -> CloudModelConfig {
+    CloudModelConfig::new("")
+}
+
+fn default_chat_gpt() -> CloudModelConfig {
     CloudModelConfig::new("")
 }
 
@@ -193,6 +202,7 @@ impl Default for CloudSettings {
             deep_seek: default_deep_seek(),
             open_router: default_open_router(),
             xai: default_xai(),
+            chat_gpt: default_chat_gpt(),
         }
     }
 }
@@ -240,6 +250,7 @@ impl Settings {
             RuntimeMode::DeepSeek => self.cloud.deep_seek.model_id.as_str(),
             RuntimeMode::OpenRouter => self.cloud.open_router.model_id.as_str(),
             RuntimeMode::Xai => self.cloud.xai.model_id.as_str(),
+            RuntimeMode::ChatGpt => self.cloud.chat_gpt.model_id.as_str(),
             RuntimeMode::LmStudio | RuntimeMode::Standalone => self.model_id.as_str(),
         }
     }
@@ -417,6 +428,7 @@ mod tests {
             ("deepSeek", ProviderId::DeepSeek),
             ("openRouter", ProviderId::OpenRouter),
             ("xai", ProviderId::Xai),
+            ("chatGpt", ProviderId::ChatGpt),
         ] {
             assert_eq!(
                 serde_json::from_str::<ProviderId>(&format!("\"{json}\"")).unwrap(),

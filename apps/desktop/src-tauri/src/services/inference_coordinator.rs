@@ -175,6 +175,7 @@ pub fn snapshot(settings: &Settings, model_id: &str) -> String {
         RuntimeMode::DeepSeek => "deepSeek",
         RuntimeMode::OpenRouter => "openRouter",
         RuntimeMode::Xai => "xai",
+        RuntimeMode::ChatGpt => "chatGpt",
     };
     if !matches!(
         settings.runtime_mode,
@@ -195,6 +196,7 @@ pub fn snapshot(settings: &Settings, model_id: &str) -> String {
             RuntimeMode::DeepSeek => "deepseek",
             RuntimeMode::OpenRouter => "openrouter",
             RuntimeMode::Xai => "xai",
+            RuntimeMode::ChatGpt => "chatgpt",
             RuntimeMode::LmStudio | RuntimeMode::Standalone => unreachable!(),
         };
         return format!("{mode}|{endpoint_category}|{model_id}");
