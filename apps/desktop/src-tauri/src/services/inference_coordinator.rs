@@ -167,7 +167,18 @@ pub fn snapshot(settings: &Settings, model_id: &str) -> String {
     let mode = match settings.runtime_mode {
         RuntimeMode::LmStudio => "lmStudio",
         RuntimeMode::Standalone => "standalone",
+        RuntimeMode::OpenAi => "openAi",
+        RuntimeMode::Anthropic => "anthropic",
+        RuntimeMode::Gemini => "gemini",
+        RuntimeMode::DeepL => "deepL",
+        RuntimeMode::OpenAiCompatible => "openAiCompatible",
     };
+    if !matches!(
+        settings.runtime_mode,
+        RuntimeMode::LmStudio | RuntimeMode::Standalone
+    ) {
+        return format!("{mode}|{model_id}");
+    }
     format!(
         "{mode}|{model_id}|{}|{}|{}",
         settings.endpoint, settings.models_directory, settings.llama_server_path
@@ -347,5 +358,54 @@ mod tests {
         assert!(coordinator
             .run_background("model-a", || ok("stale"))
             .is_err());
+    }
+
+    #[test]
+    fn standalone_snapshot_format_remains_unchanged() {
+        let settings = Settings {
+            runtime_mode: RuntimeMode::Standalone,
+            endpoint: "http://127.0.0.1:1234/v1".into(),
+            models_directory: "D:/models".into(),
+            llama_server_path: "D:/llama/llama-server.exe".into(),
+            ..serde_json::from_str(
+                r#"{
+                    "endpoint": "",
+                    "modelId": "",
+                    "adapterId": "",
+                    "sourceLanguage": "auto",
+                    "targetLanguage": "ru",
+                    "primaryLanguage": "en",
+                    "secondaryLanguage": "ru"
+                }"#,
+            )
+            .unwrap()
+        };
+
+        assert_eq!(
+            snapshot(&settings, "model.gguf"),
+            "standalone|model.gguf|http://127.0.0.1:1234/v1|D:/models|D:/llama/llama-server.exe"
+        );
+    }
+
+    #[test]
+    fn cloud_snapshot_contains_provider_and_model_but_not_credentials() {
+        let mut settings: Settings = serde_json::from_str(
+            r#"{
+                "runtimeMode": "openAi",
+                "endpoint": "https://api.openai.com/v1",
+                "modelId": "gpt-4o-mini",
+                "adapterId": "openai",
+                "sourceLanguage": "auto",
+                "targetLanguage": "ru",
+                "primaryLanguage": "en",
+                "secondaryLanguage": "ru"
+            }"#,
+        )
+        .unwrap();
+        settings.cloud.open_ai.model_id = "gpt-4o-mini".into();
+
+        let value = snapshot(&settings, "gpt-4o-mini");
+        assert!(value.contains("openAi|gpt-4o-mini"));
+        assert!(!value.contains("sk-test-secret"));
     }
 }

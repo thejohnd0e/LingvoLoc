@@ -37,6 +37,10 @@ pub struct TranslationResult {
     pub completion_tokens: Option<u64>,
     #[serde(default)]
     pub total_tokens: Option<u64>,
+    #[serde(default)]
+    pub provider_id: Option<ProviderId>,
+    #[serde(default)]
+    pub billed_characters: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -51,6 +55,92 @@ pub enum RuntimeMode {
     LmStudio,
     #[default]
     Standalone,
+    OpenAi,
+    Anthropic,
+    Gemini,
+    DeepL,
+    OpenAiCompatible,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum ProviderId {
+    LlamaCpp,
+    LmStudio,
+    OpenAi,
+    Anthropic,
+    Gemini,
+    DeepL,
+    OpenAiCompatible,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BackendCapabilities {
+    pub model_list: bool,
+    pub custom_model_id: bool,
+    pub token_usage: bool,
+    pub billed_characters: bool,
+    pub translation_styles: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudModelConfig {
+    pub model_id: String,
+    #[serde(default)]
+    pub available_models: Vec<LocalModel>,
+    #[serde(default)]
+    pub models_refreshed_at: Option<u64>,
+}
+
+impl CloudModelConfig {
+    fn new(model_id: &str) -> Self {
+        Self {
+            model_id: model_id.into(),
+            available_models: Vec::new(),
+            models_refreshed_at: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DeepLSettings {
+    #[serde(default)]
+    pub plan: String,
+    #[serde(default)]
+    pub available_languages: Vec<String>,
+    #[serde(default)]
+    pub languages_refreshed_at: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudSettings {
+    #[serde(default)]
+    pub consent_accepted: bool,
+    pub open_ai: CloudModelConfig,
+    pub anthropic: CloudModelConfig,
+    pub gemini: CloudModelConfig,
+    pub deep_l: DeepLSettings,
+    pub open_ai_compatible: CloudModelConfig,
+}
+
+impl Default for CloudSettings {
+    fn default() -> Self {
+        Self {
+            consent_accepted: false,
+            open_ai: CloudModelConfig::new("gpt-4o-mini"),
+            anthropic: CloudModelConfig::new("claude-3-5-haiku-latest"),
+            gemini: CloudModelConfig::new("gemini-2.0-flash"),
+            deep_l: DeepLSettings {
+                plan: "free".into(),
+                available_languages: Vec::new(),
+                languages_refreshed_at: None,
+            },
+            open_ai_compatible: CloudModelConfig::new(""),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -81,6 +171,8 @@ pub struct Settings {
     pub secondary_language: String,
     #[serde(default)]
     pub translation_style: TranslationStyle,
+    #[serde(default)]
+    pub cloud: CloudSettings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -88,9 +180,20 @@ pub enum RuntimeError {
     InvalidInput(String),
     Connection(String),
     Timeout(String),
-    Http { status: u16, detail: String },
+    Http {
+        status: u16,
+        detail: String,
+    },
     MalformedResponse(String),
     UnsupportedAdapter(String),
+    Authentication(String),
+    Quota(String),
+    RateLimited {
+        detail: String,
+        retry_after: Option<std::time::Duration>,
+    },
+    ContentRejected(String),
+    Cancelled,
 }
 
 impl std::fmt::Display for RuntimeError {
@@ -108,6 +211,17 @@ impl std::fmt::Display for RuntimeError {
             Self::UnsupportedAdapter(adapter) => {
                 write!(formatter, "unsupported adapter: {adapter}")
             }
+            Self::Authentication(detail) => {
+                write!(formatter, "provider authentication failed: {detail}")
+            }
+            Self::Quota(detail) => write!(formatter, "provider quota exceeded: {detail}"),
+            Self::RateLimited { detail, .. } => {
+                write!(formatter, "provider rate limited the request: {detail}")
+            }
+            Self::ContentRejected(detail) => {
+                write!(formatter, "provider rejected the content: {detail}")
+            }
+            Self::Cancelled => write!(formatter, "translation request cancelled"),
         }
     }
 }
@@ -158,7 +272,7 @@ pub trait TranslationModelAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::{RuntimeMode, Settings, TranslationStyle};
+    use super::{ProviderId, RuntimeMode, Settings, TranslationStyle};
 
     #[test]
     fn settings_use_frontend_camel_case_contract() {
@@ -198,6 +312,44 @@ mod tests {
         )
         .expect("standalone settings should deserialize");
         assert_eq!(settings.runtime_mode, RuntimeMode::Standalone);
+    }
+
+    #[test]
+    fn old_settings_get_default_cloud_configuration() {
+        let settings: Settings = serde_json::from_str(
+            r#"{
+                "endpoint": "http://127.0.0.1:1234/v1",
+                "modelId": "a.gguf",
+                "adapterId": "translategemma",
+                "sourceLanguage": "auto",
+                "targetLanguage": "ru",
+                "primaryLanguage": "en",
+                "secondaryLanguage": "ru"
+            }"#,
+        )
+        .expect("old settings should deserialize with cloud defaults");
+
+        assert_eq!(settings.runtime_mode, RuntimeMode::Standalone);
+        assert!(!settings.cloud.consent_accepted);
+        assert_eq!(settings.cloud.open_ai.model_id, "gpt-4o-mini");
+    }
+
+    #[test]
+    fn provider_ids_round_trip_in_camel_case() {
+        for (json, expected) in [
+            ("llamaCpp", ProviderId::LlamaCpp),
+            ("lmStudio", ProviderId::LmStudio),
+            ("openAi", ProviderId::OpenAi),
+            ("anthropic", ProviderId::Anthropic),
+            ("gemini", ProviderId::Gemini),
+            ("deepL", ProviderId::DeepL),
+            ("openAiCompatible", ProviderId::OpenAiCompatible),
+        ] {
+            assert_eq!(
+                serde_json::from_str::<ProviderId>(&format!("\"{json}\"")).unwrap(),
+                expected
+            );
+        }
     }
 
     #[test]
