@@ -11,6 +11,7 @@ use domain::{
     TranslationRequest, TranslationResult, TranslationStyle,
 };
 use services::{
+    credentials::{CredentialStatus, CredentialStore},
     history::{HistoryEntry, HistoryStore},
     translation,
 };
@@ -30,6 +31,7 @@ pub struct AppState {
     pub(crate) inference: services::inference_coordinator::InferenceCoordinator,
     pub(crate) pending_clipboard: Mutex<Option<String>>,
     pub(crate) api_token: String,
+    pub(crate) credentials: CredentialStore,
     pub(crate) document_usage: Mutex<HashMap<String, documents::RequestTokenCounts>>,
 }
 
@@ -54,6 +56,7 @@ impl AppState {
             inference: services::inference_coordinator::InferenceCoordinator::default(),
             pending_clipboard: Mutex::new(None),
             api_token: api::generate_token(),
+            credentials: CredentialStore::windows(),
             document_usage: Mutex::new(HashMap::new()),
         }
     }
@@ -144,6 +147,40 @@ fn update_settings(
             &result.model_id,
         ))?;
     Ok(result)
+}
+
+#[tauri::command(async)]
+fn get_provider_credential_status(
+    state: tauri::State<'_, AppState>,
+    provider_id: domain::ProviderId,
+) -> Result<CredentialStatus, RuntimeError> {
+    state
+        .credentials
+        .status(provider_id)
+        .map_err(services::credentials::map_error)
+}
+
+#[tauri::command(async)]
+fn save_provider_credential(
+    state: tauri::State<'_, AppState>,
+    provider_id: domain::ProviderId,
+    secret: String,
+) -> Result<CredentialStatus, RuntimeError> {
+    state
+        .credentials
+        .save(provider_id, &secret)
+        .map_err(services::credentials::map_error)
+}
+
+#[tauri::command(async)]
+fn delete_provider_credential(
+    state: tauri::State<'_, AppState>,
+    provider_id: domain::ProviderId,
+) -> Result<(), RuntimeError> {
+    state
+        .credentials
+        .delete(provider_id)
+        .map_err(services::credentials::map_error)
 }
 
 #[tauri::command(async)]
@@ -522,6 +559,9 @@ pub fn run() {
             get_api_token,
             write_clipboard,
             update_settings,
+            get_provider_credential_status,
+            save_provider_credential,
+            delete_provider_credential,
             detect_language,
             check_llama_server,
             download_llama_cpp,

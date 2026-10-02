@@ -74,6 +74,20 @@ pub enum ProviderId {
     OpenAiCompatible,
 }
 
+impl ProviderId {
+    pub fn service_name(self) -> &'static str {
+        match self {
+            Self::LlamaCpp => "com.lingoloc.desktop.ai.llamacpp",
+            Self::LmStudio => "com.lingoloc.desktop.ai.lmstudio",
+            Self::OpenAi => "com.lingoloc.desktop.ai.openai",
+            Self::Anthropic => "com.lingoloc.desktop.ai.anthropic",
+            Self::Gemini => "com.lingoloc.desktop.ai.gemini",
+            Self::DeepL => "com.lingoloc.desktop.ai.deepl",
+            Self::OpenAiCompatible => "com.lingoloc.desktop.ai.openai-compatible",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BackendCapabilities {
     pub model_list: bool,
