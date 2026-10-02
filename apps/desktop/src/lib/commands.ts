@@ -70,7 +70,7 @@ export function formatTiming(
   if (input == null || output == null || total == null) {
     return `${latency} ms · token usage unavailable`;
   }
-  return `${latency} ms · ${latency > 0 ? ((output * 1000) / latency).toFixed(1) : '0.0'} tok/s · ${input} in · ${output} out · ${total} total`;
+  return `${latency} ms · ${latency > 0 ? ((output * 1000) / latency).toFixed(1) : '0.0'} tok/s · Used tokens: ${input} in · ${output} out · ${total} total`;
 }
 
 export interface DetectedLanguage {

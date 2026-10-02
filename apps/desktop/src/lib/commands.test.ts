@@ -34,7 +34,7 @@ describe('translation timing formatter', () => {
         completion_tokens: 118,
         total_tokens: 332,
       }),
-    ).toBe('3779 ms · 31.2 tok/s · 214 in · 118 out · 332 total');
+    ).toBe('3779 ms · 31.2 tok/s · Used tokens: 214 in · 118 out · 332 total');
   });
 
   it('reports unavailable usage without estimating tokens', () => {
