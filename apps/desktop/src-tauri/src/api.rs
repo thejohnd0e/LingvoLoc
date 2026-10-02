@@ -158,10 +158,19 @@ fn translate(request: &HttpRequest, state: &AppState) -> (u16, String) {
     };
     let request = build_translation_request(&settings, body, source_language);
     let snapshot = crate::services::inference_coordinator::snapshot(&settings, &request.model_id);
-    match state.inference.run_interactive(&snapshot, || {
-        translation::translate(&settings, request.clone())
-    }) {
+    let (request_id, cancellation) = state.request_registry.start_generated("api");
+    let result = state.inference.run_interactive(&snapshot, || {
+        translation::translate_with_cancellation_and_credentials(
+            &settings,
+            request.clone(),
+            &cancellation,
+            &state.credentials,
+        )
+    });
+    state.request_registry.finish(&request_id);
+    match result {
         Ok(result) => {
+            state.session_usage.record_success(&result);
             let history_result = state
                 .history
                 .lock()

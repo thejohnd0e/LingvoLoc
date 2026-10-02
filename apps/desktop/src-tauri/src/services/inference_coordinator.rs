@@ -177,7 +177,21 @@ pub fn snapshot(settings: &Settings, model_id: &str) -> String {
         settings.runtime_mode,
         RuntimeMode::LmStudio | RuntimeMode::Standalone
     ) {
-        return format!("{mode}|{model_id}");
+        let endpoint_category = match settings.runtime_mode {
+            RuntimeMode::OpenAi => "openai",
+            RuntimeMode::Anthropic => "anthropic",
+            RuntimeMode::Gemini => "gemini",
+            RuntimeMode::DeepL => {
+                if settings.cloud.deep_l.plan == "pro" {
+                    "deepl-pro"
+                } else {
+                    "deepl-free"
+                }
+            }
+            RuntimeMode::OpenAiCompatible => "openai-compatible",
+            RuntimeMode::LmStudio | RuntimeMode::Standalone => unreachable!(),
+        };
+        return format!("{mode}|{endpoint_category}|{model_id}");
     }
     format!(
         "{mode}|{model_id}|{}|{}|{}",
@@ -405,7 +419,7 @@ mod tests {
         settings.cloud.open_ai.model_id = "gpt-4o-mini".into();
 
         let value = snapshot(&settings, "gpt-4o-mini");
-        assert!(value.contains("openAi|gpt-4o-mini"));
+        assert!(value.contains("openAi|openai|gpt-4o-mini"));
         assert!(!value.contains("sk-test-secret"));
     }
 }
