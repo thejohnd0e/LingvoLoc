@@ -61,8 +61,13 @@ impl AnthropicBackend {
 
     fn body(&self, request: &TranslationRequest) -> Value {
         let (system, user) = neutral_prompt(request);
+        let model = if request.model_id.trim().is_empty() {
+            self.model_id.as_str()
+        } else {
+            request.model_id.trim()
+        };
         json!({
-            "model": self.model_id,
+            "model": model,
             "max_tokens": 4096,
             "system": system,
             "messages": [{"role": "user", "content": user}],
@@ -103,7 +108,7 @@ impl TranslationBackend for AnthropicBackend {
                 Some(after) => format!("{}/v1/models?limit=100&after_id={after}", self.base_url),
                 None => format!("{}/v1/models?limit=100", self.base_url),
             };
-            let response = self.transport.get(&url)?;
+            let response = self.transport.get_with_headers(&url, self.headers()?)?;
             let value: Value = response.json().map_err(|_| {
                 RuntimeError::MalformedResponse(
                     "Anthropic models response is not valid JSON".into(),
@@ -315,5 +320,18 @@ mod tests {
         })
         .unwrap();
         assert_eq!(input, Some(4));
+    }
+
+    #[test]
+    fn list_models_request_includes_api_key_header() {
+        let backend = AnthropicBackend::with_base_url(
+            "https://api.anthropic.com",
+            "claude-3-5-haiku-latest".into(),
+            "secret".into(),
+        )
+        .unwrap();
+        let headers = backend.headers().unwrap();
+        assert_eq!(headers["x-api-key"], "secret");
+        assert_eq!(headers["anthropic-version"], "2023-06-01");
     }
 }

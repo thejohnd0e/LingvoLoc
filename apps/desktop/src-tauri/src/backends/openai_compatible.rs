@@ -49,7 +49,12 @@ impl OpenAiCompatibleBackend {
 
     fn body(&self, request: &TranslationRequest) -> Value {
         let (system, user) = neutral_prompt(request);
-        json!({"model": self.model_id, "messages": [{"role":"system","content":system},{"role":"user","content":user}], "temperature": 0.2, "stream": true})
+        let model = if request.model_id.trim().is_empty() {
+            self.model_id.as_str()
+        } else {
+            request.model_id.trim()
+        };
+        json!({"model": model, "messages": [{"role":"system","content":system},{"role":"user","content":user}], "temperature": 0.2, "stream": true})
     }
 }
 
@@ -74,7 +79,10 @@ impl TranslationBackend for OpenAiCompatibleBackend {
         })
     }
     fn list_models(&self) -> Result<Vec<LocalModel>, RuntimeError> {
-        let response = self.transport.get(&format!("{}/models", self.base_url))?;
+        let response = self.transport.get_with_headers(
+            &format!("{}/models", self.base_url),
+            self.headers()?,
+        )?;
         let value: Value = response.json().map_err(|_| {
             RuntimeError::MalformedResponse("compatible models response is not valid JSON".into())
         })?;
@@ -293,5 +301,53 @@ mod tests {
             (2, 3, 5)
         );
         let _ = request;
+    }
+
+    #[test]
+    fn list_models_sends_authorization_and_parses_ids() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::thread;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buffer = [0_u8; 4096];
+            let count = stream.read(&mut buffer).unwrap();
+            let request = String::from_utf8_lossy(&buffer[..count]).into_owned();
+            let body = br#"{"data":[{"id":"custom-a"},{"id":"custom-b"}]}"#;
+            stream
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        String::from_utf8_lossy(body)
+                    )
+                    .as_bytes(),
+                )
+                .unwrap();
+            request
+        });
+
+        let backend = OpenAiCompatibleBackend::new(
+            format!("http://{address}/v1"),
+            "custom-a".into(),
+            "secret".into(),
+        )
+        .unwrap();
+        let models = backend.list_models().unwrap();
+        let request = server.join().unwrap().to_ascii_lowercase();
+        assert!(
+            request.contains("authorization: bearer secret"),
+            "request missing auth header: {request}"
+        );
+        assert_eq!(
+            models
+                .iter()
+                .map(|model| model.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["custom-a", "custom-b"]
+        );
     }
 }

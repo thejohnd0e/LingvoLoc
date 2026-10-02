@@ -52,8 +52,13 @@ impl OpenAiBackend {
 
     fn response_body(&self, request: &TranslationRequest) -> Value {
         let (system, user) = neutral_prompt(request);
+        let model = if request.model_id.trim().is_empty() {
+            self.model_id.as_str()
+        } else {
+            request.model_id.trim()
+        };
         json!({
-            "model": self.model_id,
+            "model": model,
             "input": [
                 { "role": "system", "content": [{"type": "input_text", "text": system}] },
                 { "role": "user", "content": [{"type": "input_text", "text": user}] }
@@ -88,7 +93,10 @@ impl TranslationBackend for OpenAiBackend {
     }
 
     fn list_models(&self) -> Result<Vec<LocalModel>, RuntimeError> {
-        let response = self.transport.get(&format!("{}/models", self.base_url))?;
+        let response = self.transport.get_with_headers(
+            &format!("{}/models", self.base_url),
+            self.headers()?,
+        )?;
         let value: Value = response.json().map_err(|_| {
             RuntimeError::MalformedResponse("OpenAI models response is not valid JSON".into())
         })?;
@@ -316,5 +324,17 @@ mod tests {
         })
         .unwrap();
         assert!(event.contains("response.output_text.delta"));
+    }
+
+    #[test]
+    fn list_models_request_includes_bearer_authorization() {
+        let backend = OpenAiBackend::with_base_url(
+            "https://api.openai.com/v1",
+            "gpt-4o-mini".into(),
+            "secret".into(),
+        )
+        .unwrap();
+        let headers = backend.headers().unwrap();
+        assert_eq!(headers[reqwest::header::AUTHORIZATION], "Bearer secret");
     }
 }
