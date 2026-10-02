@@ -5,6 +5,9 @@ export interface TranslationResult {
   model_id: string;
   adapter_id: string;
   latency_ms: number;
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
+  total_tokens?: number | null;
 }
 
 export interface RuntimeStatus {
