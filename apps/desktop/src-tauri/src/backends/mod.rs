@@ -1,12 +1,11 @@
+pub mod http;
 pub mod local;
 
 use crate::domain::{
     BackendCapabilities, LocalModel, ProviderId, RuntimeError, RuntimeStatus, Settings,
     TranslationRequest, TranslationResult,
 };
-
-#[derive(Debug, Default)]
-pub struct RequestCancellation;
+use crate::services::request_control::RequestCancellation;
 
 pub trait TranslationBackend: Send + Sync {
     fn provider_id(&self) -> ProviderId;

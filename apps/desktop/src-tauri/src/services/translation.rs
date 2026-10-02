@@ -1,7 +1,8 @@
-use crate::backends::{self, RequestCancellation};
+use crate::backends;
 use crate::domain::{
     LocalModel, RuntimeError, RuntimeStatus, Settings, TranslationRequest, TranslationResult,
 };
+use crate::services::request_control::RequestCancellation;
 
 pub fn status(settings: &Settings) -> Result<RuntimeStatus, RuntimeError> {
     backends::for_settings(settings)?.status()

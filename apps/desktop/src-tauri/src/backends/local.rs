@@ -1,10 +1,11 @@
-use super::{RequestCancellation, TranslationBackend};
+use super::TranslationBackend;
 use crate::adapters::Family;
 use crate::domain::{
     BackendCapabilities, LocalModel, ModelRuntime, ProviderId, RuntimeError, RuntimeMode,
     RuntimeStatus, Settings, TranslationRequest, TranslationResult,
 };
 use crate::runtimes::{llama_server::StandaloneRuntime, lm_studio::LmStudioRuntime};
+use crate::services::request_control::RequestCancellation;
 use crate::trace::runtime_event as trace_runtime;
 use std::time::Instant;
 
