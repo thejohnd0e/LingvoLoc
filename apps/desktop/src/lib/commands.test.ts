@@ -22,7 +22,32 @@ import {
   startEpubJob,
   startFb2Job,
   startTxtJob,
+  formatTiming,
 } from './commands';
+
+describe('translation timing formatter', () => {
+  it('formats exact provider usage and output speed', () => {
+    expect(
+      formatTiming({
+        latency_ms: 3779,
+        prompt_tokens: 214,
+        completion_tokens: 118,
+        total_tokens: 332,
+      }),
+    ).toBe('3779 ms · 31.2 tok/s · 214 in · 118 out · 332 total');
+  });
+
+  it('reports unavailable usage without estimating tokens', () => {
+    expect(
+      formatTiming({
+        latency_ms: 3779,
+        prompt_tokens: null,
+        completion_tokens: null,
+        total_tokens: null,
+      }),
+    ).toBe('3779 ms · token usage unavailable');
+  });
+});
 
 const commandCases = [
   {
