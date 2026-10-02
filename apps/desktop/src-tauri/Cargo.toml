@@ -1,6 +1,6 @@
 [package]
 name = "lingvoloc"
-version = "3.1.4"
+version = "4.0.1"
 description = "Private local translation desktop application"
 authors = ["LingvoLoc"]
 license = "MIT"
@@ -25,8 +25,8 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 arboard = "3"
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
-tokio = { version = "1", features = ["rt", "time", "net"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "stream", "rustls-tls"] }
+tokio = { version = "1", features = ["rt", "time", "net", "sync", "macros"] }
 whatlang = "0.16"
 rusqlite = { version = "0.32", features = ["bundled"] }
 rand = "0.9"

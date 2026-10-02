@@ -5,4 +5,5 @@ pub mod history;
 pub mod inference_coordinator;
 pub mod lexical;
 pub mod request_control;
+pub mod session_usage;
 pub mod translation;

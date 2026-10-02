@@ -235,10 +235,7 @@ mod tests {
         store.save(ProviderId::Anthropic, "new-secret").unwrap();
         assert_eq!(store.get(ProviderId::Anthropic).unwrap(), "new-secret");
         store.delete(ProviderId::Anthropic).unwrap();
-        assert_eq!(
-            store.status(ProviderId::Anthropic).unwrap().configured,
-            false
-        );
+        assert!(!store.status(ProviderId::Anthropic).unwrap().configured);
     }
 
     #[test]
