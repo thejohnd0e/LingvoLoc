@@ -226,6 +226,7 @@ export default function App() {
   const [additionalOpen, setAdditionalOpen] = useState(false);
   const [lexicalBusy, setLexicalBusy] = useState(false);
   const [dictionariesBusy, setDictionariesBusy] = useState(false);
+  const [credentialFocused, setCredentialFocused] = useState(false);
   const sourceInputRef = useRef<HTMLTextAreaElement>(null);
   const settingsRef = useRef(settings);
   const lexicalRequestId = useRef(0);
@@ -1711,7 +1712,12 @@ export default function App() {
                   <input
                     aria-label="Provider API key"
                     type="password"
-                    value={credentialInput}
+                    value={
+                      credentialInput ||
+                      (credentialStatus?.configured && !credentialFocused
+                        ? '••••••••••••••••'
+                        : '')
+                    }
                     placeholder="Enter key"
                     onChange={(event) => setCredentialInput(event.target.value)}
                   />
