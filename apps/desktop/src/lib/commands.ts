@@ -58,10 +58,7 @@ export interface TranslationResult {
 export function formatTiming(
   result: Pick<
     TranslationResult,
-    | 'latency_ms'
-    | 'prompt_tokens'
-    | 'completion_tokens'
-    | 'total_tokens'
+    'latency_ms' | 'prompt_tokens' | 'completion_tokens' | 'total_tokens'
   >,
 ) {
   const {
@@ -243,6 +240,11 @@ export interface DocumentJobSummary {
   job: DocumentJob;
   total_blocks: number;
   translated_blocks: number;
+  last_request_usage?: {
+    input_tokens?: number | null;
+    output_tokens?: number | null;
+    total_tokens?: number | null;
+  } | null;
 }
 
 export interface DocumentExport {

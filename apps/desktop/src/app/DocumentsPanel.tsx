@@ -68,6 +68,18 @@ function summaryLabel(summary: DocumentJobSummary): string {
   return state.replace(/_/g, ' ');
 }
 
+function usageLabel(summary: DocumentJobSummary): string | null {
+  const usage = summary.last_request_usage;
+  if (
+    usage?.input_tokens == null ||
+    usage.output_tokens == null ||
+    usage.total_tokens == null
+  ) {
+    return null;
+  }
+  return `Last request: ${usage.input_tokens} in · ${usage.output_tokens} out · ${usage.total_tokens} total`;
+}
+
 type DocumentFormat = 'txt' | 'docx' | 'epub' | 'fb2' | 'pdf';
 
 const documentFormats: Record<
@@ -971,6 +983,9 @@ export default function DocumentsPanel({
                   <span className="recent-count">
                     {item.translated_blocks} / {item.total_blocks}
                   </span>
+                  {usageLabel(item) && (
+                    <span className="recent-usage">{usageLabel(item)}</span>
+                  )}
                   {!selected && (
                     <button
                       className="quiet"
