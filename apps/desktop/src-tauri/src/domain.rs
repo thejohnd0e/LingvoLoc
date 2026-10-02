@@ -192,6 +192,19 @@ pub struct Settings {
     pub cloud: CloudSettings,
 }
 
+impl Settings {
+    pub fn active_model_id(&self) -> &str {
+        match self.runtime_mode {
+            RuntimeMode::OpenAi => self.cloud.open_ai.model_id.as_str(),
+            RuntimeMode::Anthropic => self.cloud.anthropic.model_id.as_str(),
+            RuntimeMode::Gemini => self.cloud.gemini.model_id.as_str(),
+            RuntimeMode::DeepL => "deepL",
+            RuntimeMode::OpenAiCompatible => self.cloud.open_ai_compatible.model_id.as_str(),
+            RuntimeMode::LmStudio | RuntimeMode::Standalone => self.model_id.as_str(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RuntimeError {
     InvalidInput(String),
