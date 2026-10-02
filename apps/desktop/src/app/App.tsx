@@ -1779,29 +1779,36 @@ export default function App() {
                   </span>
                 </div>
               </div>
-              <div className="runtime-row">
-                <b>Proxy</b>
-                <div className="cloud-field">
-                  <input
-                    aria-label="Cloud proxy"
-                    value={settings.cloud.proxyUrl}
-                    placeholder="http://host:port (optional)"
-                    spellCheck={false}
-                    onChange={(event) =>
-                      updateSettings({
-                        cloud: {
-                          ...settings.cloud,
-                          proxyUrl: event.target.value,
-                        },
-                      })
-                    }
-                  />
-                  <span className="runtime-note">
-                    Used for all cloud providers. Leave empty to connect
-                    directly.
-                  </span>
+              {
+                <div className="runtime-row">
+                  <b>Proxy</b>
+                  <div className="cloud-field">
+                    <input
+                      aria-label="Provider proxy"
+                      value={settings.cloud[settings.runtimeMode].proxyUrl}
+                      placeholder="http://host:port or socks5://host:port"
+                      spellCheck={false}
+                      onChange={(event) => {
+                        const provider = settings.runtimeMode;
+                        if (!isCloudProvider(provider)) return;
+                        updateSettings({
+                          cloud: {
+                            ...settings.cloud,
+                            [provider]: {
+                              ...settings.cloud[provider],
+                              proxyUrl: event.target.value,
+                            },
+                          },
+                        });
+                      }}
+                    />
+                    <span className="runtime-note">
+                      Optional. Applies to{' '}
+                      {runtimeModeLabel(settings.runtimeMode)} only.
+                    </span>
+                  </div>
                 </div>
-              </div>
+              }
               <label className="consent-row">
                 <input
                   type="checkbox"

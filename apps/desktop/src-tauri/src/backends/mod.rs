@@ -78,7 +78,6 @@ fn for_settings_with_key(
     settings: &Settings,
     key: String,
 ) -> Result<Box<dyn TranslationBackend>, RuntimeError> {
-    let proxy = settings.cloud.proxy_url.as_str();
     match settings.runtime_mode {
         crate::domain::RuntimeMode::LmStudio | crate::domain::RuntimeMode::Standalone => {
             Ok(Box::new(local::LocalBackend::new(settings.clone())))
@@ -89,18 +88,19 @@ fn for_settings_with_key(
                 settings.cloud.open_ai.model_id.clone(),
                 key,
             )?
-            .with_proxy(proxy)?,
+            .with_proxy(&settings.cloud.open_ai.proxy_url)?,
         )),
         crate::domain::RuntimeMode::Anthropic => Ok(Box::new(
             anthropic::AnthropicBackend::new(settings.cloud.anthropic.model_id.clone(), key)?
-                .with_proxy(proxy)?,
+                .with_proxy(&settings.cloud.anthropic.proxy_url)?,
         )),
         crate::domain::RuntimeMode::Gemini => Ok(Box::new(
             gemini::GeminiBackend::new(settings.cloud.gemini.model_id.clone(), key)?
-                .with_proxy(proxy)?,
+                .with_proxy(&settings.cloud.gemini.proxy_url)?,
         )),
         crate::domain::RuntimeMode::DeepL => Ok(Box::new(
-            deepl::DeepLBackend::new(&settings.cloud.deep_l.plan, key)?.with_proxy(proxy)?,
+            deepl::DeepLBackend::new(&settings.cloud.deep_l.plan, key)?
+                .with_proxy(&settings.cloud.deep_l.proxy_url)?,
         )),
         crate::domain::RuntimeMode::OpenAiCompatible => Ok(Box::new(
             openai_compatible::OpenAiCompatibleBackend::new(
@@ -108,7 +108,7 @@ fn for_settings_with_key(
                 settings.cloud.open_ai_compatible.model_id.clone(),
                 key,
             )?
-            .with_proxy(proxy)?,
+            .with_proxy(&settings.cloud.open_ai_compatible.proxy_url)?,
         )),
         crate::domain::RuntimeMode::DeepSeek => Ok(Box::new(
             openai_compatible::OpenAiCompatibleBackend::for_provider(
@@ -117,7 +117,7 @@ fn for_settings_with_key(
                 settings.cloud.deep_seek.model_id.clone(),
                 key,
             )?
-            .with_proxy(proxy)?,
+            .with_proxy(&settings.cloud.deep_seek.proxy_url)?,
         )),
         crate::domain::RuntimeMode::OpenRouter => Ok(Box::new(
             openai_compatible::OpenAiCompatibleBackend::for_provider(
@@ -126,7 +126,7 @@ fn for_settings_with_key(
                 settings.cloud.open_router.model_id.clone(),
                 key,
             )?
-            .with_proxy(proxy)?,
+            .with_proxy(&settings.cloud.open_router.proxy_url)?,
         )),
     }
 }

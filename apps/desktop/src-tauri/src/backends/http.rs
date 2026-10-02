@@ -64,10 +64,10 @@ impl HttpTransport {
         } else {
             let parsed = reqwest::Url::parse(proxy)
                 .ok()
-                .filter(|url| matches!(url.scheme(), "http" | "https") && url.host_str().is_some())
+                .filter(|url| matches!(url.scheme(), "http" | "https" | "socks5" | "socks5h") && url.host_str().is_some())
                 .ok_or_else(|| {
                     RuntimeError::InvalidInput(
-                        "proxy must be an http:// or https:// URL, e.g. http://192.168.0.12:9102"
+                        "proxy must be an http://, https:// or socks5:// URL, e.g. http://192.168.0.12:9102"
                             .into(),
                     )
                 })?;
@@ -649,6 +649,7 @@ mod tests {
         assert!(transport.with_proxy("http://192.168.0.12:9102").is_ok());
         assert!(transport.with_proxy("").is_ok());
         assert!(transport.with_proxy("not a url").is_err());
+        assert!(transport.with_proxy("socks5://127.0.0.1:1080").is_ok());
         assert!(transport.with_proxy("ftp://host:1").is_err());
     }
 

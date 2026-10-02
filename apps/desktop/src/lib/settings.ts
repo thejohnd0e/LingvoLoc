@@ -19,18 +19,19 @@ export interface LocalModel {
 
 export interface CloudModelConfig {
   modelId: string;
+  proxyUrl: string;
   availableModels: LocalModel[];
   modelsRefreshedAt: number | null;
 }
 
 export interface CloudSettings {
   consentAccepted: boolean;
-  proxyUrl: string;
   openAi: CloudModelConfig;
   anthropic: CloudModelConfig;
   gemini: CloudModelConfig;
   deepL: {
     plan: 'free' | 'pro';
+    proxyUrl: string;
     availableLanguages: string[];
     languagesRefreshedAt: number | null;
   };
@@ -63,35 +64,49 @@ export interface Settings {
 
 export const defaultCloudSettings: CloudSettings = {
   consentAccepted: false,
-  proxyUrl: '',
   openAi: {
     modelId: 'gpt-4o-mini',
+    proxyUrl: '',
     availableModels: [],
     modelsRefreshedAt: null,
   },
   anthropic: {
     modelId: 'claude-3-5-haiku-latest',
+    proxyUrl: '',
     availableModels: [],
     modelsRefreshedAt: null,
   },
   gemini: {
     modelId: 'gemini-2.0-flash',
+    proxyUrl: '',
     availableModels: [],
     modelsRefreshedAt: null,
   },
-  deepL: { plan: 'free', availableLanguages: [], languagesRefreshedAt: null },
+  deepL: {
+    plan: 'free',
+    proxyUrl: '',
+    availableLanguages: [],
+    languagesRefreshedAt: null,
+  },
   openAiCompatible: {
     modelId: '',
+    proxyUrl: '',
     availableModels: [],
     modelsRefreshedAt: null,
     endpoint: '',
   },
   deepSeek: {
     modelId: 'deepseek-chat',
+    proxyUrl: '',
     availableModels: [],
     modelsRefreshedAt: null,
   },
-  openRouter: { modelId: '', availableModels: [], modelsRefreshedAt: null },
+  openRouter: {
+    modelId: '',
+    proxyUrl: '',
+    availableModels: [],
+    modelsRefreshedAt: null,
+  },
 };
 
 const storageKey = 'lingvoloc.settings';

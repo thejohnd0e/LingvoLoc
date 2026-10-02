@@ -113,6 +113,9 @@ pub struct CloudModelConfig {
     pub available_models: Vec<LocalModel>,
     #[serde(default)]
     pub models_refreshed_at: Option<u64>,
+    /// Optional `http://`, `https://` or `socks5://` proxy for this provider.
+    #[serde(default)]
+    pub proxy_url: String,
 }
 
 impl CloudModelConfig {
@@ -122,6 +125,7 @@ impl CloudModelConfig {
             endpoint: String::new(),
             available_models: Vec::new(),
             models_refreshed_at: None,
+            proxy_url: String::new(),
         }
     }
 }
@@ -135,6 +139,8 @@ pub struct DeepLSettings {
     pub available_languages: Vec<String>,
     #[serde(default)]
     pub languages_refreshed_at: Option<u64>,
+    #[serde(default)]
+    pub proxy_url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -142,9 +148,6 @@ pub struct DeepLSettings {
 pub struct CloudSettings {
     #[serde(default)]
     pub consent_accepted: bool,
-    /// Optional `http://host:port` proxy used for every cloud request.
-    #[serde(default)]
-    pub proxy_url: String,
     pub open_ai: CloudModelConfig,
     pub anthropic: CloudModelConfig,
     pub gemini: CloudModelConfig,
@@ -168,7 +171,6 @@ impl Default for CloudSettings {
     fn default() -> Self {
         Self {
             consent_accepted: false,
-            proxy_url: String::new(),
             open_ai: CloudModelConfig::new("gpt-4o-mini"),
             anthropic: CloudModelConfig::new("claude-3-5-haiku-latest"),
             gemini: CloudModelConfig::new("gemini-2.0-flash"),
@@ -176,6 +178,7 @@ impl Default for CloudSettings {
                 plan: "free".into(),
                 available_languages: Vec::new(),
                 languages_refreshed_at: None,
+                proxy_url: String::new(),
             },
             open_ai_compatible: CloudModelConfig::new(""),
             deep_seek: default_deep_seek(),
