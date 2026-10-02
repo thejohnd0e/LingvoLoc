@@ -52,6 +52,22 @@ export interface TranslationResult {
   prompt_tokens?: number | null;
   completion_tokens?: number | null;
   total_tokens?: number | null;
+  provider_id?: string | null;
+  billed_characters?: number | null;
+}
+
+export type ProviderId =
+  | 'llamaCpp'
+  | 'lmStudio'
+  | 'openAi'
+  | 'anthropic'
+  | 'gemini'
+  | 'deepL'
+  | 'openAiCompatible';
+
+export interface CredentialStatus {
+  configured: boolean;
+  hint: string | null;
 }
 
 /** Formats only exact provider usage; missing usage is reported instead of estimated. */
@@ -145,6 +161,17 @@ export const listModels = () => invokeNative<LocalModel[]>('list_models');
 export const getNativeSettings = () => invokeNative<Settings>('get_settings');
 export const updateSettings = (next: Settings) =>
   invokeNative<Settings>('update_settings', { next });
+export const getProviderCredentialStatus = (providerId: ProviderId) =>
+  invokeNative<CredentialStatus>('get_provider_credential_status', {
+    providerId,
+  });
+export const saveProviderCredential = (providerId: ProviderId, secret: string) =>
+  invokeNative<CredentialStatus>('save_provider_credential', {
+    providerId,
+    secret,
+  });
+export const deleteProviderCredential = (providerId: ProviderId) =>
+  invokeNative<void>('delete_provider_credential', { providerId });
 export const translate = (request: TranslationRequest) =>
   invokeNative<TranslationResult>('translate', { request });
 export const detectLanguage = (text: string) =>
