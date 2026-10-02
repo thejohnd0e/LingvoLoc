@@ -11,6 +11,7 @@ use std::time::Instant;
 
 pub const DEEPSEEK_ENDPOINT: &str = "https://api.deepseek.com/v1";
 pub const OPENROUTER_ENDPOINT: &str = "https://openrouter.ai/api/v1";
+pub const XAI_ENDPOINT: &str = "https://api.x.ai/v1";
 
 pub struct OpenAiCompatibleBackend {
     provider: ProviderId,
@@ -110,6 +111,7 @@ impl TranslationBackend for OpenAiCompatibleBackend {
                 match self.provider {
                     ProviderId::DeepSeek => "DeepSeek",
                     ProviderId::OpenRouter => "OpenRouter",
+                    ProviderId::Xai => "xAI Grok",
                     _ => "OpenAI-compatible",
                 }
             ),
@@ -186,6 +188,7 @@ impl TranslationBackend for OpenAiCompatibleBackend {
             adapter_id: match self.provider {
                 ProviderId::DeepSeek => "deepseek",
                 ProviderId::OpenRouter => "openrouter",
+                ProviderId::Xai => "xai",
                 _ => "openai-compatible",
             }
             .into(),

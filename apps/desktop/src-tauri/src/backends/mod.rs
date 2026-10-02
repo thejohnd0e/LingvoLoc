@@ -66,6 +66,7 @@ pub fn for_settings_with_credentials(
         crate::domain::RuntimeMode::OpenRouter => {
             credentials.get(crate::domain::ProviderId::OpenRouter)
         }
+        crate::domain::RuntimeMode::Xai => credentials.get(crate::domain::ProviderId::Xai),
         crate::domain::RuntimeMode::LmStudio | crate::domain::RuntimeMode::Standalone => {
             Ok(String::new())
         }
@@ -127,6 +128,15 @@ fn for_settings_with_key(
                 key,
             )?
             .with_proxy(&settings.cloud.open_router.proxy_url)?,
+        )),
+        crate::domain::RuntimeMode::Xai => Ok(Box::new(
+            openai_compatible::OpenAiCompatibleBackend::for_provider(
+                crate::domain::ProviderId::Xai,
+                openai_compatible::XAI_ENDPOINT.into(),
+                settings.cloud.xai.model_id.clone(),
+                key,
+            )?
+            .with_proxy(&settings.cloud.xai.proxy_url)?,
         )),
     }
 }

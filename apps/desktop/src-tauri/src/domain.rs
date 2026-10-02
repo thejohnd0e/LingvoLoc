@@ -62,6 +62,7 @@ pub enum RuntimeMode {
     OpenAiCompatible,
     DeepSeek,
     OpenRouter,
+    Xai,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -76,6 +77,7 @@ pub enum ProviderId {
     OpenAiCompatible,
     DeepSeek,
     OpenRouter,
+    Xai,
 }
 
 impl ProviderId {
@@ -90,6 +92,7 @@ impl ProviderId {
             Self::OpenAiCompatible => "com.lingoloc.desktop.ai.openai-compatible",
             Self::DeepSeek => "com.lingoloc.desktop.ai.deepseek",
             Self::OpenRouter => "com.lingoloc.desktop.ai.openrouter",
+            Self::Xai => "com.lingoloc.desktop.ai.xai",
         }
     }
 }
@@ -157,6 +160,8 @@ pub struct CloudSettings {
     pub deep_seek: CloudModelConfig,
     #[serde(default = "default_open_router")]
     pub open_router: CloudModelConfig,
+    #[serde(default = "default_xai")]
+    pub xai: CloudModelConfig,
 }
 
 fn default_deep_seek() -> CloudModelConfig {
@@ -164,6 +169,10 @@ fn default_deep_seek() -> CloudModelConfig {
 }
 
 fn default_open_router() -> CloudModelConfig {
+    CloudModelConfig::new("")
+}
+
+fn default_xai() -> CloudModelConfig {
     CloudModelConfig::new("")
 }
 
@@ -183,6 +192,7 @@ impl Default for CloudSettings {
             open_ai_compatible: CloudModelConfig::new(""),
             deep_seek: default_deep_seek(),
             open_router: default_open_router(),
+            xai: default_xai(),
         }
     }
 }
@@ -229,6 +239,7 @@ impl Settings {
             RuntimeMode::OpenAiCompatible => self.cloud.open_ai_compatible.model_id.as_str(),
             RuntimeMode::DeepSeek => self.cloud.deep_seek.model_id.as_str(),
             RuntimeMode::OpenRouter => self.cloud.open_router.model_id.as_str(),
+            RuntimeMode::Xai => self.cloud.xai.model_id.as_str(),
             RuntimeMode::LmStudio | RuntimeMode::Standalone => self.model_id.as_str(),
         }
     }
@@ -405,6 +416,7 @@ mod tests {
             ("openAiCompatible", ProviderId::OpenAiCompatible),
             ("deepSeek", ProviderId::DeepSeek),
             ("openRouter", ProviderId::OpenRouter),
+            ("xai", ProviderId::Xai),
         ] {
             assert_eq!(
                 serde_json::from_str::<ProviderId>(&format!("\"{json}\"")).unwrap(),

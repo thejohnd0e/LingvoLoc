@@ -65,7 +65,8 @@ export type ProviderId =
   | 'deepL'
   | 'openAiCompatible'
   | 'deepSeek'
-  | 'openRouter';
+  | 'openRouter'
+  | 'xai';
 
 export interface CredentialStatus {
   configured: boolean;

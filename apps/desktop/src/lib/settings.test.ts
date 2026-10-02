@@ -64,6 +64,12 @@ const fallback: Settings = {
       availableModels: [],
       modelsRefreshedAt: null,
     },
+    xai: {
+      modelId: '',
+      proxyUrl: '',
+      availableModels: [],
+      modelsRefreshedAt: null,
+    },
   },
 };
 
@@ -127,6 +133,7 @@ describe('settings persistence', () => {
     'openAiCompatible',
     'deepSeek',
     'openRouter',
+    'xai',
   ] as const)('accepts runtime mode %s', (runtimeMode) => {
     localStorage.setItem('lingvoloc.settings', JSON.stringify({ runtimeMode }));
     expect(loadSettings(fallback).runtimeMode).toBe(runtimeMode);

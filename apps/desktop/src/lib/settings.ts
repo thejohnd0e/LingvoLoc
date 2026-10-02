@@ -7,7 +7,8 @@ export type RuntimeMode =
   | 'deepL'
   | 'openAiCompatible'
   | 'deepSeek'
-  | 'openRouter';
+  | 'openRouter'
+  | 'xai';
 export type TranslationStyle =
   'neutral' | 'literary' | 'technical' | 'conversational';
 
@@ -38,6 +39,7 @@ export interface CloudSettings {
   openAiCompatible: CloudModelConfig & { endpoint: string };
   deepSeek: CloudModelConfig;
   openRouter: CloudModelConfig;
+  xai: CloudModelConfig;
 }
 
 const translationStyles: readonly TranslationStyle[] = [
@@ -102,6 +104,12 @@ export const defaultCloudSettings: CloudSettings = {
     modelsRefreshedAt: null,
   },
   openRouter: {
+    modelId: '',
+    proxyUrl: '',
+    availableModels: [],
+    modelsRefreshedAt: null,
+  },
+  xai: {
     modelId: '',
     proxyUrl: '',
     availableModels: [],

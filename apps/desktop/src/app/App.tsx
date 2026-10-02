@@ -90,6 +90,7 @@ const cloudProviders: Array<{ id: ProviderId; label: string }> = [
   { id: 'openAiCompatible', label: 'OpenAI-compatible' },
   { id: 'deepSeek', label: 'DeepSeek' },
   { id: 'openRouter', label: 'OpenRouter' },
+  { id: 'xai', label: 'xAI Grok' },
 ];
 
 function isFreeModel(id: string): boolean {
@@ -132,6 +133,8 @@ function runtimeModeLabel(mode: Settings['runtimeMode']): string {
       return 'DeepSeek';
     case 'openRouter':
       return 'OpenRouter';
+    case 'xai':
+      return 'xAI Grok';
   }
 }
 

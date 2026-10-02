@@ -114,6 +114,7 @@ fn settings_for_provider(
         domain::ProviderId::OpenAiCompatible => domain::RuntimeMode::OpenAiCompatible,
         domain::ProviderId::DeepSeek => domain::RuntimeMode::DeepSeek,
         domain::ProviderId::OpenRouter => domain::RuntimeMode::OpenRouter,
+        domain::ProviderId::Xai => domain::RuntimeMode::Xai,
         domain::ProviderId::LlamaCpp | domain::ProviderId::LmStudio => {
             return Err(RuntimeError::InvalidInput(
                 "provider has no cloud refresh command".into(),
