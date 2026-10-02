@@ -70,6 +70,14 @@ export interface CredentialStatus {
   hint: string | null;
 }
 
+export interface BackendCapabilities {
+  model_list: boolean;
+  custom_model_id: boolean;
+  token_usage: boolean;
+  billed_characters: boolean;
+  translation_styles: boolean;
+}
+
 /** Formats only exact provider usage; missing usage is reported instead of estimated. */
 export function formatTiming(
   result: Pick<
@@ -103,6 +111,18 @@ export interface HistoryEntry {
   model_id: string;
   created_at: number;
   favorite: boolean;
+  provider_id?: ProviderId | null;
+}
+
+export interface SessionUsageEntry {
+  providerId: ProviderId;
+  modelId: string;
+  requests: number;
+  failedRequests: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  billedCharacters: number | null;
 }
 
 export interface TranslationRequest {
@@ -158,6 +178,16 @@ export const getApiToken = () => invokeNative<string>('get_api_token');
 export const writeClipboard = (text: string) =>
   invokeNative<void>('write_clipboard', { text });
 export const listModels = () => invokeNative<LocalModel[]>('list_models');
+export const getBackendCapabilities = () =>
+  invokeNative<BackendCapabilities>('get_backend_capabilities');
+export const refreshProviderModels = (providerId: ProviderId) =>
+  invokeNative<LocalModel[]>('refresh_provider_models', { providerId });
+export const refreshDeepLLanguages = () =>
+  invokeNative<string[]>('refresh_deepl_languages');
+export const testProviderConnection = (providerId: ProviderId) =>
+  invokeNative<RuntimeStatus>('test_provider_connection', { providerId });
+export const getSessionUsage = () =>
+  invokeNative<SessionUsageEntry[]>('get_session_usage');
 export const getNativeSettings = () => invokeNative<Settings>('get_settings');
 export const updateSettings = (next: Settings) =>
   invokeNative<Settings>('update_settings', { next });
@@ -165,7 +195,10 @@ export const getProviderCredentialStatus = (providerId: ProviderId) =>
   invokeNative<CredentialStatus>('get_provider_credential_status', {
     providerId,
   });
-export const saveProviderCredential = (providerId: ProviderId, secret: string) =>
+export const saveProviderCredential = (
+  providerId: ProviderId,
+  secret: string,
+) =>
   invokeNative<CredentialStatus>('save_provider_credential', {
     providerId,
     secret,

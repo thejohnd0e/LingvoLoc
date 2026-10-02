@@ -21,11 +21,28 @@ const fallback: Settings = {
   translationStyle: 'neutral',
   cloud: {
     consentAccepted: false,
-    openAi: { modelId: 'gpt-4o-mini', availableModels: [], modelsRefreshedAt: null },
-    anthropic: { modelId: 'claude-3-5-haiku-latest', availableModels: [], modelsRefreshedAt: null },
-    gemini: { modelId: 'gemini-2.0-flash', availableModels: [], modelsRefreshedAt: null },
+    openAi: {
+      modelId: 'gpt-4o-mini',
+      availableModels: [],
+      modelsRefreshedAt: null,
+    },
+    anthropic: {
+      modelId: 'claude-3-5-haiku-latest',
+      availableModels: [],
+      modelsRefreshedAt: null,
+    },
+    gemini: {
+      modelId: 'gemini-2.0-flash',
+      availableModels: [],
+      modelsRefreshedAt: null,
+    },
     deepL: { plan: 'free', availableLanguages: [], languagesRefreshedAt: null },
-    openAiCompatible: { modelId: '', availableModels: [], modelsRefreshedAt: null, endpoint: '' },
+    openAiCompatible: {
+      modelId: '',
+      availableModels: [],
+      modelsRefreshedAt: null,
+      endpoint: '',
+    },
   },
 };
 
@@ -79,13 +96,18 @@ describe('settings persistence', () => {
     });
   });
 
-  it.each(['lmStudio', 'standalone', 'openAi', 'anthropic', 'gemini', 'deepL', 'openAiCompatible'] as const)(
-    'accepts runtime mode %s',
-    (runtimeMode) => {
-      localStorage.setItem('lingvoloc.settings', JSON.stringify({ runtimeMode }));
-      expect(loadSettings(fallback).runtimeMode).toBe(runtimeMode);
-    },
-  );
+  it.each([
+    'lmStudio',
+    'standalone',
+    'openAi',
+    'anthropic',
+    'gemini',
+    'deepL',
+    'openAiCompatible',
+  ] as const)('accepts runtime mode %s', (runtimeMode) => {
+    localStorage.setItem('lingvoloc.settings', JSON.stringify({ runtimeMode }));
+    expect(loadSettings(fallback).runtimeMode).toBe(runtimeMode);
+  });
 
   it('rejects invalid cloud provider data without changing the fallback contract', () => {
     localStorage.setItem(

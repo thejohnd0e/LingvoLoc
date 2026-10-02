@@ -58,13 +58,21 @@ export interface Settings {
 
 export const defaultCloudSettings: CloudSettings = {
   consentAccepted: false,
-  openAi: { modelId: 'gpt-4o-mini', availableModels: [], modelsRefreshedAt: null },
+  openAi: {
+    modelId: 'gpt-4o-mini',
+    availableModels: [],
+    modelsRefreshedAt: null,
+  },
   anthropic: {
     modelId: 'claude-3-5-haiku-latest',
     availableModels: [],
     modelsRefreshedAt: null,
   },
-  gemini: { modelId: 'gemini-2.0-flash', availableModels: [], modelsRefreshedAt: null },
+  gemini: {
+    modelId: 'gemini-2.0-flash',
+    availableModels: [],
+    modelsRefreshedAt: null,
+  },
   deepL: { plan: 'free', availableLanguages: [], languagesRefreshedAt: null },
   openAiCompatible: {
     modelId: '',
