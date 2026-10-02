@@ -12,6 +12,8 @@ describe('local API client', () => {
           model_id: 'translategemma-4b',
           adapter_id: 'translategemma',
           latency_ms: 42,
+          provider_id: 'deepL',
+          billed_characters: 450,
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       ),
@@ -22,6 +24,8 @@ describe('local API client', () => {
     ).resolves.toMatchObject({
       text: 'Привет',
       latency_ms: 42,
+      provider_id: 'deepL',
+      billed_characters: 450,
     });
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:47831/api/v1/translate',

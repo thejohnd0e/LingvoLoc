@@ -8,6 +8,8 @@ export interface TranslationResult {
   prompt_tokens?: number | null;
   completion_tokens?: number | null;
   total_tokens?: number | null;
+  provider_id?: string | null;
+  billed_characters?: number | null;
 }
 
 export interface RuntimeStatus {
