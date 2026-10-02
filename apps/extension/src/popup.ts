@@ -50,7 +50,11 @@ app.innerHTML = `
           <button id="font-increase" class="font-button" type="button" aria-label="Increase text size">+</button>
           <button id="detach" class="font-button detach-button" type="button" title="Open in a separate window that stays open when you switch tabs" aria-label="Open in a separate window">⧉</button>
         </div>
-         <span class="status" id="status"><i></i> READY</span>
+          <span class="status" id="status"><i></i> READY</span>
+          <div class="metrics" id="metrics" hidden aria-live="polite">
+            <div class="metric"><span>Time</span><strong id="metric-time"></strong></div>
+            <div class="metric"><span>Tokens</span><strong id="metric-tokens"></strong></div>
+          </div>
       </div>
     </header>
     <div id="pairing" class="pairing" hidden>
@@ -91,6 +95,9 @@ const increaseButton =
   document.querySelector<HTMLButtonElement>('#font-increase')!;
 const fontSizeLabel = document.querySelector<HTMLSpanElement>('#font-size')!;
 const status = document.querySelector<HTMLSpanElement>('#status')!;
+const metrics = document.querySelector<HTMLDivElement>('#metrics')!;
+const metricTime = document.querySelector<HTMLElement>('#metric-time')!;
+const metricTokens = document.querySelector<HTMLElement>('#metric-tokens')!;
 const result = document.querySelector<HTMLOutputElement>('#result')!;
 const copyButton = document.querySelector<HTMLButtonElement>('#copy')!;
 const clearButton = document.querySelector<HTMLButtonElement>('#clear')!;
@@ -101,6 +108,19 @@ const originalTextField = document.querySelector<HTMLLabelElement>(
 )!;
 const splitter = document.querySelector<HTMLDivElement>('#splitter')!;
 const shell = document.querySelector<HTMLElement>('.shell')!;
+
+function showStatus(value: string) {
+  status.hidden = false;
+  metrics.hidden = true;
+  status.textContent = value;
+}
+
+function showMetrics(time: number, tokens: string) {
+  status.hidden = true;
+  metrics.hidden = false;
+  metricTime.textContent = `${time} MS`;
+  metricTokens.textContent = tokens;
+}
 
 const saved = await chrome.storage.local.get([
   'detachState',
@@ -164,20 +184,20 @@ if (detached?.result) {
 }
 
 if (state.token) {
-  status.textContent = 'CHECKING';
+  showStatus('CHECKING');
   try {
     await getStatus(state.token);
-    status.textContent = 'READY';
+    showStatus('READY');
     pairing.hidden = true;
   } catch {
     state.token = '';
     tokenInput.value = '';
     await chrome.storage.local.remove('apiToken');
-    status.textContent = 'PAIRING REQUIRED';
+    showStatus('PAIRING REQUIRED');
     pairing.hidden = false;
   }
 } else {
-  status.textContent = 'PAIRING REQUIRED';
+  showStatus('PAIRING REQUIRED');
   pairing.hidden = false;
 }
 
@@ -263,22 +283,22 @@ textInput.addEventListener('blur', () => {
 pairButton.addEventListener('click', async () => {
   const token = tokenInput.value.trim();
   if (!token) {
-    status.textContent = 'ERROR';
+    showStatus('ERROR');
     result.textContent = 'Paste the pairing token first.';
     return;
   }
   pairButton.disabled = true;
-  status.textContent = 'CHECKING';
+  showStatus('CHECKING');
   result.textContent = '';
   try {
     const runtime = await getStatus(token);
     await chrome.storage.local.set({ apiToken: token });
     state.token = token;
-    status.textContent = 'PAIRED';
+    showStatus('PAIRED');
     pairing.hidden = true;
     result.textContent = runtime.detail;
   } catch (error) {
-    status.textContent = 'ERROR';
+    showStatus('ERROR');
     result.textContent =
       error instanceof Error ? error.message : 'Pairing failed';
   } finally {
@@ -294,7 +314,7 @@ async function translateCurrentText() {
   }
   button.disabled = true;
   copyButton.disabled = true;
-  status.textContent = 'TRANSLATING';
+  showStatus('TRANSLATING');
   state.usage = 'Token usage unavailable';
   result.innerHTML =
     '<span class="loading-state" role="status"><span class="loading-dots" aria-hidden="true"><i></i><i></i><i></i></span> Translating...</span>';
@@ -332,11 +352,11 @@ async function translateCurrentText() {
       usageParagraphs,
       paragraphs.length,
     );
-    status.textContent = `${totalLatency} MS · ${state.usage}`;
+    showMetrics(totalLatency, state.usage);
   } catch (error) {
     result.textContent =
       error instanceof Error ? error.message : 'Translation failed';
-    status.textContent = 'ERROR';
+    showStatus('ERROR');
   } finally {
     button.disabled = false;
     copyButton.disabled = false;
@@ -349,7 +369,7 @@ clearButton.addEventListener('click', () => {
   state.text = '';
   textInput.value = '';
   result.textContent = '';
-  status.textContent = state.token ? 'READY' : 'PAIRING REQUIRED';
+  showStatus(state.token ? 'READY' : 'PAIRING REQUIRED');
 });
 
 originalToggle.addEventListener('click', () => {

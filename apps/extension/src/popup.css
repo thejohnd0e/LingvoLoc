@@ -121,6 +121,37 @@ h1 {
   border-radius: 50%;
   background: currentColor;
 }
+.metrics {
+  display: grid;
+  min-width: 150px;
+  max-width: 190px;
+  gap: 3px;
+  padding-top: 1px;
+}
+.metric {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 7px;
+  color: #92a3b7;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+.metric strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: inherit;
+  font-size: 10px;
+  font-weight: inherit;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: none;
+}
+.metric:last-child strong {
+  white-space: nowrap;
+}
 .field {
   display: grid;
   gap: 5px;
