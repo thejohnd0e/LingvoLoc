@@ -123,7 +123,7 @@ LingvoLoc переводит **текстовые PDF прямо на месте
 В окне **Settings** (значок шестерёнки) есть разделы runtime, облачного провайдера, словарей и браузерного расширения:
 
 - **Model runtime**: режим Standalone или LM Studio, папка моделей, поддержка GPU и llama.cpp.
-- **Cloud provider**: режимы OpenAI, Anthropic, Gemini, DeepL и OpenAI-compatible, модель/endpoint, безопасное хранение API-ключа, явное согласие на отправку текста и usage текущего сеанса.
+- **Cloud provider**: режимы OpenAI, Anthropic, Gemini, DeepL, DeepSeek, OpenRouter и OpenAI-compatible (свой endpoint), выбор модели с подсветкой (★) моделей, в id которых есть `free`, безопасное хранение API-ключа, явное согласие на отправку текста и usage текущего сеанса.
 - **Dictionaries**: папка StarDict и словари для поиска.
 - **Browser extension**: **Copy token** копирует токен сопряжения для расширения браузера.
 

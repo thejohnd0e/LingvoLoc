@@ -60,6 +60,8 @@ pub enum RuntimeMode {
     Gemini,
     DeepL,
     OpenAiCompatible,
+    DeepSeek,
+    OpenRouter,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -72,6 +74,8 @@ pub enum ProviderId {
     Gemini,
     DeepL,
     OpenAiCompatible,
+    DeepSeek,
+    OpenRouter,
 }
 
 impl ProviderId {
@@ -84,6 +88,8 @@ impl ProviderId {
             Self::Gemini => "com.lingoloc.desktop.ai.gemini",
             Self::DeepL => "com.lingoloc.desktop.ai.deepl",
             Self::OpenAiCompatible => "com.lingoloc.desktop.ai.openai-compatible",
+            Self::DeepSeek => "com.lingoloc.desktop.ai.deepseek",
+            Self::OpenRouter => "com.lingoloc.desktop.ai.openrouter",
         }
     }
 }
@@ -141,6 +147,18 @@ pub struct CloudSettings {
     pub gemini: CloudModelConfig,
     pub deep_l: DeepLSettings,
     pub open_ai_compatible: CloudModelConfig,
+    #[serde(default = "default_deep_seek")]
+    pub deep_seek: CloudModelConfig,
+    #[serde(default = "default_open_router")]
+    pub open_router: CloudModelConfig,
+}
+
+fn default_deep_seek() -> CloudModelConfig {
+    CloudModelConfig::new("deepseek-chat")
+}
+
+fn default_open_router() -> CloudModelConfig {
+    CloudModelConfig::new("")
 }
 
 impl Default for CloudSettings {
@@ -156,6 +174,8 @@ impl Default for CloudSettings {
                 languages_refreshed_at: None,
             },
             open_ai_compatible: CloudModelConfig::new(""),
+            deep_seek: default_deep_seek(),
+            open_router: default_open_router(),
         }
     }
 }
@@ -200,6 +220,8 @@ impl Settings {
             RuntimeMode::Gemini => self.cloud.gemini.model_id.as_str(),
             RuntimeMode::DeepL => "deepL",
             RuntimeMode::OpenAiCompatible => self.cloud.open_ai_compatible.model_id.as_str(),
+            RuntimeMode::DeepSeek => self.cloud.deep_seek.model_id.as_str(),
+            RuntimeMode::OpenRouter => self.cloud.open_router.model_id.as_str(),
             RuntimeMode::LmStudio | RuntimeMode::Standalone => self.model_id.as_str(),
         }
     }
@@ -374,6 +396,8 @@ mod tests {
             ("gemini", ProviderId::Gemini),
             ("deepL", ProviderId::DeepL),
             ("openAiCompatible", ProviderId::OpenAiCompatible),
+            ("deepSeek", ProviderId::DeepSeek),
+            ("openRouter", ProviderId::OpenRouter),
         ] {
             assert_eq!(
                 serde_json::from_str::<ProviderId>(&format!("\"{json}\"")).unwrap(),

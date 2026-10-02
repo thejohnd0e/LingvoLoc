@@ -43,6 +43,12 @@ const fallback: Settings = {
       modelsRefreshedAt: null,
       endpoint: '',
     },
+    deepSeek: {
+      modelId: 'deepseek-chat',
+      availableModels: [],
+      modelsRefreshedAt: null,
+    },
+    openRouter: { modelId: '', availableModels: [], modelsRefreshedAt: null },
   },
 };
 
@@ -104,6 +110,8 @@ describe('settings persistence', () => {
     'gemini',
     'deepL',
     'openAiCompatible',
+    'deepSeek',
+    'openRouter',
   ] as const)('accepts runtime mode %s', (runtimeMode) => {
     localStorage.setItem('lingvoloc.settings', JSON.stringify({ runtimeMode }));
     expect(loadSettings(fallback).runtimeMode).toBe(runtimeMode);

@@ -112,6 +112,8 @@ fn settings_for_provider(
         domain::ProviderId::Gemini => domain::RuntimeMode::Gemini,
         domain::ProviderId::DeepL => domain::RuntimeMode::DeepL,
         domain::ProviderId::OpenAiCompatible => domain::RuntimeMode::OpenAiCompatible,
+        domain::ProviderId::DeepSeek => domain::RuntimeMode::DeepSeek,
+        domain::ProviderId::OpenRouter => domain::RuntimeMode::OpenRouter,
         domain::ProviderId::LlamaCpp | domain::ProviderId::LmStudio => {
             return Err(RuntimeError::InvalidInput(
                 "provider has no cloud refresh command".into(),

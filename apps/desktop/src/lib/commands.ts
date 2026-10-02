@@ -63,7 +63,9 @@ export type ProviderId =
   | 'anthropic'
   | 'gemini'
   | 'deepL'
-  | 'openAiCompatible';
+  | 'openAiCompatible'
+  | 'deepSeek'
+  | 'openRouter';
 
 export interface CredentialStatus {
   configured: boolean;

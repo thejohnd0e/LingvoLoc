@@ -172,6 +172,8 @@ pub fn snapshot(settings: &Settings, model_id: &str) -> String {
         RuntimeMode::Gemini => "gemini",
         RuntimeMode::DeepL => "deepL",
         RuntimeMode::OpenAiCompatible => "openAiCompatible",
+        RuntimeMode::DeepSeek => "deepSeek",
+        RuntimeMode::OpenRouter => "openRouter",
     };
     if !matches!(
         settings.runtime_mode,
@@ -189,6 +191,8 @@ pub fn snapshot(settings: &Settings, model_id: &str) -> String {
                 }
             }
             RuntimeMode::OpenAiCompatible => "openai-compatible",
+            RuntimeMode::DeepSeek => "deepseek",
+            RuntimeMode::OpenRouter => "openrouter",
             RuntimeMode::LmStudio | RuntimeMode::Standalone => unreachable!(),
         };
         return format!("{mode}|{endpoint_category}|{model_id}");

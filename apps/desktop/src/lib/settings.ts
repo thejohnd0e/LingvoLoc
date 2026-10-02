@@ -5,7 +5,9 @@ export type RuntimeMode =
   | 'anthropic'
   | 'gemini'
   | 'deepL'
-  | 'openAiCompatible';
+  | 'openAiCompatible'
+  | 'deepSeek'
+  | 'openRouter';
 export type TranslationStyle =
   'neutral' | 'literary' | 'technical' | 'conversational';
 
@@ -32,6 +34,8 @@ export interface CloudSettings {
     languagesRefreshedAt: number | null;
   };
   openAiCompatible: CloudModelConfig & { endpoint: string };
+  deepSeek: CloudModelConfig;
+  openRouter: CloudModelConfig;
 }
 
 const translationStyles: readonly TranslationStyle[] = [
@@ -80,6 +84,12 @@ export const defaultCloudSettings: CloudSettings = {
     modelsRefreshedAt: null,
     endpoint: '',
   },
+  deepSeek: {
+    modelId: 'deepseek-chat',
+    availableModels: [],
+    modelsRefreshedAt: null,
+  },
+  openRouter: { modelId: '', availableModels: [], modelsRefreshedAt: null },
 };
 
 const storageKey = 'lingvoloc.settings';
@@ -150,6 +160,14 @@ function normalizeCloudSettings(
       ...fallbackCloud.openAiCompatible,
       ...(candidate.openAiCompatible ?? {}),
     },
+    deepSeek: normalizeCloudModelConfig(
+      candidate.deepSeek,
+      fallbackCloud.deepSeek,
+    ),
+    openRouter: normalizeCloudModelConfig(
+      candidate.openRouter,
+      fallbackCloud.openRouter,
+    ),
   };
 }
 

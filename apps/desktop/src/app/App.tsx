@@ -87,10 +87,10 @@ const cloudProviders: Array<{ id: ProviderId; label: string }> = [
   { id: 'gemini', label: 'Google Gemini' },
   { id: 'deepL', label: 'DeepL' },
   { id: 'openAiCompatible', label: 'OpenAI-compatible' },
+  { id: 'deepSeek', label: 'DeepSeek' },
+  { id: 'openRouter', label: 'OpenRouter' },
 ];
 
-function isCloudProvider(
-  value: Settings['runtimeMode'],
 function isFreeModel(id: string): boolean {
   return /free/i.test(id);
 }
@@ -104,6 +104,8 @@ function ModelOption({ id }: { id: string }) {
   );
 }
 
+function isCloudProvider(
+  value: Settings['runtimeMode'],
 ): value is Exclude<ProviderId, 'llamaCpp' | 'lmStudio'> {
   // ProviderId also contains local runtime identifiers.
   return value !== 'standalone' && value !== 'lmStudio';
@@ -125,6 +127,10 @@ function runtimeModeLabel(mode: Settings['runtimeMode']): string {
       return 'DeepL';
     case 'openAiCompatible':
       return 'OpenAI-compatible';
+    case 'deepSeek':
+      return 'DeepSeek';
+    case 'openRouter':
+      return 'OpenRouter';
   }
 }
 
@@ -220,13 +226,13 @@ export default function App() {
   const [credentialStatus, setCredentialStatus] =
     useState<CredentialStatus | null>(null);
   const [credentialInput, setCredentialInput] = useState('');
+  const [credentialFocused, setCredentialFocused] = useState(false);
   const [usageEntries, setUsageEntries] = useState<SessionUsageEntry[]>([]);
   const [usageBusy, setUsageBusy] = useState(false);
   const [cloudModelsMessage, setCloudModelsMessage] = useState('');
   const [additionalOpen, setAdditionalOpen] = useState(false);
   const [lexicalBusy, setLexicalBusy] = useState(false);
   const [dictionariesBusy, setDictionariesBusy] = useState(false);
-  const [credentialFocused, setCredentialFocused] = useState(false);
   const sourceInputRef = useRef<HTMLTextAreaElement>(null);
   const settingsRef = useRef(settings);
   const lexicalRequestId = useRef(0);
@@ -1604,27 +1610,6 @@ export default function App() {
               aria-label="Cloud provider"
             >
               <span className="panel-label">CLOUD PROVIDER</span>
-              <label className="runtime-row">
-                <b>Model</b>
-                {cloudModelOptions.length > 0 ? (
-                  <select
-                    aria-label="Cloud model"
-                    value={selectedCloudModel}
-                    onChange={(event) => {
-                      const provider = settings.runtimeMode;
-                      if (provider === 'deepL' || !isCloudProvider(provider))
-                        return;
-                      updateSettings({
-                        cloud: {
-                          ...settings.cloud,
-                          [provider]: {
-                            ...settings.cloud[provider],
-                            modelId: event.target.value,
-                          },
-                        },
-                      });
-                    }}
-                  >
               {settings.runtimeMode === 'openAiCompatible' && (
                 <label className="runtime-row">
                   <b>Endpoint</b>
@@ -1647,6 +1632,27 @@ export default function App() {
                   />
                 </label>
               )}
+              <label className="runtime-row">
+                <b>Model</b>
+                {cloudModelOptions.length > 0 ? (
+                  <select
+                    aria-label="Cloud model"
+                    value={selectedCloudModel}
+                    onChange={(event) => {
+                      const provider = settings.runtimeMode;
+                      if (provider === 'deepL' || !isCloudProvider(provider))
+                        return;
+                      updateSettings({
+                        cloud: {
+                          ...settings.cloud,
+                          [provider]: {
+                            ...settings.cloud[provider],
+                            modelId: event.target.value,
+                          },
+                        },
+                      });
+                    }}
+                  >
                     {cloudModelOptions.map((model) => (
                       <ModelOption key={model.id} id={model.id} />
                     ))}
@@ -1719,6 +1725,8 @@ export default function App() {
                         : '')
                     }
                     placeholder="Enter key"
+                    onFocus={() => setCredentialFocused(true)}
+                    onBlur={() => setCredentialFocused(false)}
                     onChange={(event) => setCredentialInput(event.target.value)}
                   />
                   <button

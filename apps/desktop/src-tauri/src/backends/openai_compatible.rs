@@ -9,7 +9,11 @@ use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde_json::{json, Value};
 use std::time::Instant;
 
+pub const DEEPSEEK_ENDPOINT: &str = "https://api.deepseek.com/v1";
+pub const OPENROUTER_ENDPOINT: &str = "https://openrouter.ai/api/v1";
+
 pub struct OpenAiCompatibleBackend {
+    provider: ProviderId,
     transport: HttpTransport,
     base_url: String,
     model_id: String,
@@ -18,7 +22,18 @@ pub struct OpenAiCompatibleBackend {
 
 impl OpenAiCompatibleBackend {
     pub fn new(base_url: String, model_id: String, api_key: String) -> Result<Self, RuntimeError> {
-        Self::with_transport(base_url, model_id, api_key, HttpTransport::new()?)
+        Self::for_provider(ProviderId::OpenAiCompatible, base_url, model_id, api_key)
+    }
+
+    pub fn for_provider(
+        provider: ProviderId,
+        base_url: String,
+        model_id: String,
+        api_key: String,
+    ) -> Result<Self, RuntimeError> {
+        let mut backend = Self::with_transport(base_url, model_id, api_key, HttpTransport::new()?)?;
+        backend.provider = provider;
+        Ok(backend)
     }
 
     fn with_transport(
@@ -29,6 +44,7 @@ impl OpenAiCompatibleBackend {
     ) -> Result<Self, RuntimeError> {
         let base_url = validate_base_url(&base_url)?;
         Ok(Self {
+            provider: ProviderId::OpenAiCompatible,
             transport,
             base_url,
             model_id,
@@ -60,7 +76,7 @@ impl OpenAiCompatibleBackend {
 
 impl TranslationBackend for OpenAiCompatibleBackend {
     fn provider_id(&self) -> ProviderId {
-        ProviderId::OpenAiCompatible
+        self.provider
     }
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
@@ -177,12 +193,17 @@ impl TranslationBackend for OpenAiCompatibleBackend {
         Ok(TranslationResult {
             text,
             model_id: request.model_id.clone(),
-            adapter_id: "openai-compatible".into(),
+            adapter_id: match self.provider {
+                ProviderId::DeepSeek => "deepseek",
+                ProviderId::OpenRouter => "openrouter",
+                _ => "openai-compatible",
+            }
+            .into(),
             latency_ms: started.elapsed().as_millis(),
             prompt_tokens: usage.map(|u| u.0),
             completion_tokens: usage.map(|u| u.1),
             total_tokens: usage.map(|u| u.2),
-            provider_id: Some(ProviderId::OpenAiCompatible),
+            provider_id: Some(self.provider),
             billed_characters: None,
         })
     }

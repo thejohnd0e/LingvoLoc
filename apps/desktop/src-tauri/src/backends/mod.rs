@@ -60,6 +60,12 @@ pub fn for_settings_with_credentials(
         crate::domain::RuntimeMode::OpenAiCompatible => {
             credentials.get(crate::domain::ProviderId::OpenAiCompatible)
         }
+        crate::domain::RuntimeMode::DeepSeek => {
+            credentials.get(crate::domain::ProviderId::DeepSeek)
+        }
+        crate::domain::RuntimeMode::OpenRouter => {
+            credentials.get(crate::domain::ProviderId::OpenRouter)
+        }
         crate::domain::RuntimeMode::LmStudio | crate::domain::RuntimeMode::Standalone => {
             Ok(String::new())
         }
@@ -100,6 +106,22 @@ fn for_settings_with_key(
                 key,
             )?))
         }
+        crate::domain::RuntimeMode::DeepSeek => Ok(Box::new(
+            openai_compatible::OpenAiCompatibleBackend::for_provider(
+                crate::domain::ProviderId::DeepSeek,
+                openai_compatible::DEEPSEEK_ENDPOINT.into(),
+                settings.cloud.deep_seek.model_id.clone(),
+                key,
+            )?,
+        )),
+        crate::domain::RuntimeMode::OpenRouter => Ok(Box::new(
+            openai_compatible::OpenAiCompatibleBackend::for_provider(
+                crate::domain::ProviderId::OpenRouter,
+                openai_compatible::OPENROUTER_ENDPOINT.into(),
+                settings.cloud.open_router.model_id.clone(),
+                key,
+            )?,
+        )),
     }
 }
 
