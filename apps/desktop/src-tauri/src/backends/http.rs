@@ -31,6 +31,7 @@ impl Default for HttpTimeouts {
     }
 }
 
+#[derive(Clone)]
 pub struct HttpTransport {
     client: Client,
     async_client: reqwest::Client,
@@ -117,12 +118,24 @@ impl HttpTransport {
         }
         let status = response.status();
         let headers = response.headers().clone();
-        Err(safe_http_error_with_cap(
-            status,
-            &headers,
-            response,
-            self.timeouts.max_error_body,
-        ))
+        let mut body = Vec::new();
+        let _ = response
+            .take(self.timeouts.max_error_body as u64)
+            .read_to_end(&mut body);
+        let message = provider_error_message(&body);
+        crate::trace::runtime_event(
+            "cloud_http_error",
+            &format!(
+                "status={} message={}",
+                status.as_u16(),
+                message.as_deref().unwrap_or("-")
+            ),
+        );
+        let error = safe_http_error(status, &headers, &body);
+        Err(match message {
+            Some(message) if self.provider_messages => with_message(error, &message),
+            _ => error,
+        })
     }
 
     #[allow(dead_code)]

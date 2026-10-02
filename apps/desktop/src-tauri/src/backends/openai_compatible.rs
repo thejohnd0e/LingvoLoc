@@ -35,7 +35,11 @@ impl OpenAiCompatibleBackend {
             base_url,
             model_id,
             api_key,
-            HttpTransport::new()?.with_provider_messages(),
+            HttpTransport::with_timeouts(super::http::HttpTimeouts {
+                request: std::time::Duration::from_secs(120),
+                ..Default::default()
+            })?
+            .with_provider_messages(),
         )?;
         backend.provider = provider;
         Ok(backend)
@@ -75,7 +79,7 @@ impl OpenAiCompatibleBackend {
         } else {
             request.model_id.trim()
         };
-        json!({"model": model, "messages": [{"role":"system","content":system},{"role":"user","content":user}], "temperature": 0.2, "stream": true})
+        json!({"model": model, "messages": [{"role":"system","content":system},{"role":"user","content":user}], "temperature": 0.2, "stream": false})
     }
 }
 
@@ -114,93 +118,56 @@ impl TranslationBackend for OpenAiCompatibleBackend {
         cancellation: &RequestCancellation,
     ) -> Result<TranslationResult, RuntimeError> {
         let started = Instant::now();
-        let output = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
-        let usage = std::sync::Arc::new(std::sync::Mutex::new(None));
-        let output_ref = output.clone();
-        let usage_ref = usage.clone();
-        let mut buffer = String::new();
-        self.transport.stream_post_json(
-            &format!("{}/chat/completions", self.base_url),
-            self.headers()?,
-            &self.body(request),
-            cancellation.clone(),
-            move |chunk| {
-                if buffer.is_empty() && chunk.starts_with(b"{") {
-                    let value: Value = serde_json::from_slice(chunk).map_err(|_| {
-                        RuntimeError::MalformedResponse(
-                            "compatible response is not valid JSON".into(),
-                        )
-                    })?;
-                    if let Some(error) = stream_error(&value) {
-                        return Err(error);
-                    }
-                    if let Some(content) = value
-                        .pointer("/choices/0/message/content")
-                        .and_then(Value::as_str)
-                    {
-                        output_ref
-                            .lock()
-                            .map_err(|_| {
-                                RuntimeError::Connection(
-                                    "translation output lock is poisoned".into(),
-                                )
-                            })?
-                            .push_str(content);
-                    }
-                    if let Some(value) = value.get("usage") {
-                        *usage_ref.lock().map_err(|_| {
-                            RuntimeError::Connection("translation usage lock is poisoned".into())
-                        })? = Some(parse_usage(value)?);
-                    }
-                    return Ok(());
+        // The blocking client is used instead of a streamed request: it is the transport
+        // that is known to work for model listing and Gemini. It runs on a helper thread so
+        // that the Cancel button can stop waiting at once.
+        let (sender, receiver) = std::sync::mpsc::channel();
+        {
+            let transport = self.transport.clone();
+            let url = format!("{}/chat/completions", self.base_url);
+            let headers = self.headers()?;
+            let body = self.body(request);
+            std::thread::spawn(move || {
+                let outcome = transport
+                    .post_json(&url, headers, &body)
+                    .and_then(|response| {
+                        response.json::<Value>().map_err(|_| {
+                            RuntimeError::MalformedResponse(
+                                "compatible response is not valid JSON".into(),
+                            )
+                        })
+                    });
+                let _ = sender.send(outcome);
+            });
+        }
+        let value = loop {
+            if cancellation.is_cancelled() {
+                return Err(RuntimeError::Cancelled);
+            }
+            match receiver.recv_timeout(std::time::Duration::from_millis(100)) {
+                Ok(outcome) => break outcome?,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(RuntimeError::Connection(
+                        "provider request ended unexpectedly".into(),
+                    ))
                 }
-                buffer.push_str(&String::from_utf8_lossy(chunk));
-                consume_sse(&mut buffer, |event| {
-                    if event == "[DONE]" {
-                        return Ok(());
-                    }
-                    let value: Value = serde_json::from_str(event).map_err(|_| {
-                        RuntimeError::MalformedResponse(
-                            "compatible stream event is not valid JSON".into(),
-                        )
-                    })?;
-                    if let Some(error) = stream_error(&value) {
-                        return Err(error);
-                    }
-                    if let Some(content) = value
-                        .pointer("/choices/0/delta/content")
-                        .and_then(Value::as_str)
-                    {
-                        output_ref
-                            .lock()
-                            .map_err(|_| {
-                                RuntimeError::Connection(
-                                    "translation output lock is poisoned".into(),
-                                )
-                            })?
-                            .push_str(content);
-                    }
-                    if let Some(value) = value.get("usage") {
-                        *usage_ref.lock().map_err(|_| {
-                            RuntimeError::Connection("translation usage lock is poisoned".into())
-                        })? = Some(parse_usage(value)?);
-                    }
-                    Ok(())
-                })
-            },
-        )?;
-        let text = output
-            .lock()
-            .map_err(|_| RuntimeError::Connection("translation output lock is poisoned".into()))?
-            .clone();
-        if text.is_empty() {
+            }
+        };
+        if let Some(error) = stream_error(&value) {
+            return Err(error);
+        }
+        let text = value
+            .pointer("/choices/0/message/content")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        if text.trim().is_empty() {
             return Err(RuntimeError::MalformedResponse(
                 "compatible response contained no translation".into(),
             ));
         }
-        let usage = *usage
-            .lock()
-            .map_err(|_| RuntimeError::Connection("translation usage lock is poisoned".into()))?;
+        let usage = value.get("usage").map(parse_usage).transpose()?;
         Ok(TranslationResult {
             text,
             model_id: request.model_id.clone(),
@@ -230,22 +197,6 @@ fn stream_error(value: &Value) -> Option<RuntimeError> {
     Some(RuntimeError::Connection(format!(
         "provider error: {message}"
     )))
-}
-
-fn consume_sse(
-    buffer: &mut String,
-    mut on_event: impl FnMut(&str) -> Result<(), RuntimeError>,
-) -> Result<(), RuntimeError> {
-    while let Some(index) = buffer.find("\n\n") {
-        let frame = buffer[..index].to_string();
-        buffer.drain(..index + 2);
-        for line in frame.lines() {
-            if let Some(data) = line.strip_prefix("data:") {
-                on_event(data.trim())?;
-            }
-        }
-    }
-    Ok(())
 }
 
 fn parse_usage(value: &Value) -> Result<(u64, u64, u64), RuntimeError> {
@@ -336,7 +287,7 @@ mod tests {
             text: "Hello".into(),
             translation_style: Default::default(),
         };
-        let backend_body = json!({"model":"custom","messages":[{"role":"system","content":"x"},{"role":"user","content":"Hello"}],"stream":true});
+        let backend_body = json!({"model":"custom","messages":[{"role":"system","content":"x"},{"role":"user","content":"Hello"}],"stream":false});
         assert_eq!(backend_body["model"], "custom");
         assert_eq!(
             parse_usage(&json!({"prompt_tokens":2,"completion_tokens":3,"total_tokens":5}))
@@ -392,5 +343,96 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["custom-a", "custom-b"]
         );
+    }
+
+    fn one_shot_server(status_line: &'static str, body: &'static str) -> String {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buffer = [0_u8; 8192];
+            let _ = stream.read(&mut buffer);
+            let _ = stream.write_all(
+                format!(
+                    "HTTP/1.1 {status_line}
+Content-Length: {}
+Connection: close
+
+{body}",
+                    body.len()
+                )
+                .as_bytes(),
+            );
+        });
+        format!("http://{address}/v1")
+    }
+
+    fn sample_request() -> TranslationRequest {
+        TranslationRequest {
+            model_id: "m:free".into(),
+            adapter_id: String::new(),
+            source_language: "en".into(),
+            target_language: "ru".into(),
+            text: "mom".into(),
+            translation_style: Default::default(),
+        }
+    }
+
+    #[test]
+    fn translate_reads_a_non_streamed_response_with_usage() {
+        let endpoint = one_shot_server(
+            "200 OK",
+            r#"{"choices":[{"message":{"content":"мама"}}],"usage":{"prompt_tokens":3,"completion_tokens":1}}"#,
+        );
+        let backend = OpenAiCompatibleBackend::for_provider(
+            ProviderId::OpenRouter,
+            endpoint,
+            "m:free".into(),
+            "k".into(),
+        )
+        .unwrap();
+        let result = backend
+            .translate(&sample_request(), &RequestCancellation::default())
+            .unwrap();
+        assert_eq!(result.text, "мама");
+        assert_eq!(result.total_tokens, Some(4));
+        assert_eq!(result.provider_id, Some(ProviderId::OpenRouter));
+    }
+
+    #[test]
+    fn http_errors_include_the_provider_message() {
+        let endpoint = one_shot_server(
+            "404 Not Found",
+            r#"{"error":{"message":"No endpoints found for this model"}}"#,
+        );
+        let backend = OpenAiCompatibleBackend::for_provider(
+            ProviderId::OpenRouter,
+            endpoint,
+            "m".into(),
+            "k".into(),
+        )
+        .unwrap();
+        let error = backend
+            .translate(&sample_request(), &RequestCancellation::default())
+            .unwrap_err();
+        assert!(error.to_string().contains("No endpoints found"), "{error}");
+    }
+
+    #[test]
+    fn in_band_error_objects_become_errors() {
+        let endpoint = one_shot_server("200 OK", r#"{"error":{"message":"rate limited"}}"#);
+        let backend = OpenAiCompatibleBackend::for_provider(
+            ProviderId::DeepSeek,
+            endpoint,
+            "m".into(),
+            "k".into(),
+        )
+        .unwrap();
+        let error = backend
+            .translate(&sample_request(), &RequestCancellation::default())
+            .unwrap_err();
+        assert!(error.to_string().contains("rate limited"), "{error}");
     }
 }
