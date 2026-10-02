@@ -1,7 +1,8 @@
 use crate::domain::RuntimeError;
+use crate::services::request_control::RequestCancellation;
 use reqwest::blocking::{Client, Response};
 use reqwest::header::HeaderMap;
-use std::io::BufRead;
+use std::io::{BufRead, Read};
 use std::time::{Duration, SystemTime};
 
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
@@ -30,6 +31,7 @@ impl Default for HttpTimeouts {
 
 pub struct HttpTransport {
     client: Client,
+    async_client: reqwest::Client,
     timeouts: HttpTimeouts,
 }
 
@@ -44,7 +46,16 @@ impl HttpTransport {
             .timeout(timeouts.request)
             .build()
             .map_err(|error| RuntimeError::Connection(format!("HTTP client: {error}")))?;
-        Ok(Self { client, timeouts })
+        let async_client = reqwest::Client::builder()
+            .connect_timeout(timeouts.connect)
+            .no_proxy()
+            .build()
+            .map_err(|error| RuntimeError::Connection(format!("HTTP client: {error}")))?;
+        Ok(Self {
+            client,
+            async_client,
+            timeouts,
+        })
     }
 
     pub fn get(&self, url: &str) -> Result<Response, RuntimeError> {
@@ -87,13 +98,188 @@ impl HttpTransport {
             self.timeouts.max_error_body,
         ))
     }
+
+    #[allow(dead_code)]
+    pub fn stream_get<F>(
+        &self,
+        url: &str,
+        headers: HeaderMap,
+        cancellation: RequestCancellation,
+        on_chunk: F,
+    ) -> Result<(), RuntimeError>
+    where
+        F: FnMut(&[u8]) -> Result<(), RuntimeError> + Send + 'static,
+    {
+        let client = self.async_client.clone();
+        let url = url.to_string();
+        let timeouts = self.timeouts;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|error| RuntimeError::Connection(format!("HTTP runtime: {error}")))?;
+        runtime.block_on(async move {
+            tokio::time::timeout(
+                timeouts.request,
+                stream_get_async(client, url, headers, cancellation, timeouts, on_chunk),
+            )
+            .await
+            .map_err(|_| RuntimeError::Timeout("cloud HTTP request timed out".into()))?
+        })
+    }
+
+    pub fn stream_post_json<T, F>(
+        &self,
+        url: &str,
+        headers: HeaderMap,
+        body: &T,
+        cancellation: RequestCancellation,
+        on_chunk: F,
+    ) -> Result<(), RuntimeError>
+    where
+        T: serde::Serialize,
+        F: FnMut(&[u8]) -> Result<(), RuntimeError> + Send + 'static,
+    {
+        let client = self.async_client.clone();
+        let url = url.to_string();
+        let body = serde_json::to_vec(body)
+            .map_err(|error| RuntimeError::InvalidInput(format!("request JSON: {error}")))?;
+        let timeouts = self.timeouts;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|error| RuntimeError::Connection(format!("HTTP runtime: {error}")))?;
+        runtime.block_on(async move {
+            tokio::time::timeout(
+                timeouts.request,
+                stream_post_json_async(
+                    client,
+                    url,
+                    headers,
+                    body,
+                    cancellation,
+                    timeouts,
+                    on_chunk,
+                ),
+            )
+            .await
+            .map_err(|_| RuntimeError::Timeout("cloud HTTP request timed out".into()))?
+        })
+    }
 }
 
+#[allow(dead_code)]
+async fn stream_get_async<F>(
+    client: reqwest::Client,
+    url: String,
+    headers: HeaderMap,
+    cancellation: RequestCancellation,
+    timeouts: HttpTimeouts,
+    mut on_chunk: F,
+) -> Result<(), RuntimeError>
+where
+    F: FnMut(&[u8]) -> Result<(), RuntimeError> + Send + 'static,
+{
+    let response = client
+        .get(url)
+        .headers(headers)
+        .send()
+        .await
+        .map_err(map_request_error)?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let headers = response.headers().clone();
+        let body = read_bounded_body(response, cancellation.clone(), timeouts).await?;
+        return Err(safe_http_error(status, &headers, &body));
+    }
+
+    let mut response = response;
+    loop {
+        if cancellation.is_cancelled() {
+            return Err(RuntimeError::Cancelled);
+        }
+        let chunk = tokio::select! {
+            _ = cancellation.cancelled() => return Err(RuntimeError::Cancelled),
+            result = tokio::time::timeout(timeouts.idle, response.chunk()) => result
+                .map_err(|_| RuntimeError::Timeout("cloud stream idle timeout".into()))?
+                .map_err(map_request_error)?,
+        };
+        let Some(chunk) = chunk else {
+            return Ok(());
+        };
+        on_chunk(&chunk)?;
+    }
+}
+
+async fn stream_post_json_async<F>(
+    client: reqwest::Client,
+    url: String,
+    headers: HeaderMap,
+    body: Vec<u8>,
+    cancellation: RequestCancellation,
+    timeouts: HttpTimeouts,
+    mut on_chunk: F,
+) -> Result<(), RuntimeError>
+where
+    F: FnMut(&[u8]) -> Result<(), RuntimeError> + Send + 'static,
+{
+    let response = client
+        .post(url)
+        .headers(headers)
+        .body(body)
+        .send()
+        .await
+        .map_err(map_request_error)?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let headers = response.headers().clone();
+        let body = read_bounded_body(response, cancellation.clone(), timeouts).await?;
+        return Err(safe_http_error(status, &headers, &body));
+    }
+    let mut response = response;
+    loop {
+        let chunk = tokio::select! {
+            _ = cancellation.cancelled() => return Err(RuntimeError::Cancelled),
+            result = tokio::time::timeout(timeouts.idle, response.chunk()) => result
+                .map_err(|_| RuntimeError::Timeout("cloud stream idle timeout".into()))?
+                .map_err(map_request_error)?,
+        };
+        let Some(chunk) = chunk else {
+            return Ok(());
+        };
+        on_chunk(&chunk)?;
+    }
+}
+
+async fn read_bounded_body(
+    mut response: reqwest::Response,
+    cancellation: RequestCancellation,
+    timeouts: HttpTimeouts,
+) -> Result<Vec<u8>, RuntimeError> {
+    let mut body = Vec::new();
+    while body.len() < timeouts.max_error_body {
+        let chunk = tokio::select! {
+            _ = cancellation.cancelled() => return Err(RuntimeError::Cancelled),
+            result = tokio::time::timeout(timeouts.idle, response.chunk()) => result
+                .map_err(|_| RuntimeError::Timeout("cloud HTTP error body timed out".into()))?
+                .map_err(map_request_error)?,
+        };
+        let Some(chunk) = chunk else { break };
+        let remaining = timeouts.max_error_body - body.len();
+        body.extend_from_slice(&chunk[..chunk.len().min(remaining)]);
+    }
+    Ok(body)
+}
+
+#[allow(dead_code)]
 pub fn read_sse_lines<R: BufRead, F: FnMut(&str) -> Result<(), RuntimeError>>(
     reader: R,
+    cancellation: &RequestCancellation,
     mut on_data: F,
 ) -> Result<(), RuntimeError> {
     for line in reader.lines() {
+        if cancellation.is_cancelled() {
+            return Err(RuntimeError::Cancelled);
+        }
         let line = line.map_err(|error| RuntimeError::Connection(format!("SSE read: {error}")))?;
         if let Some(data) = line.strip_prefix("data:") {
             let data = data.trim();
@@ -119,10 +305,8 @@ fn safe_http_error_with_cap(
     response: Response,
     cap: usize,
 ) -> RuntimeError {
-    let body = response
-        .bytes()
-        .map(|body| body.into_iter().take(cap).collect::<Vec<_>>())
-        .unwrap_or_default();
+    let mut body = Vec::new();
+    let _ = response.take(cap as u64).read_to_end(&mut body);
     safe_http_error_parts(status, headers, &body, cap)
 }
 
@@ -173,7 +357,7 @@ fn map_request_error(error: reqwest::Error) -> RuntimeError {
 mod tests {
     use super::*;
     use crate::domain::RuntimeError;
-    use std::io::Write;
+    use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
     use std::thread;
     use std::time::Duration;
@@ -194,7 +378,7 @@ mod tests {
         })
         .unwrap();
         let error = transport.get(&format!("http://{address}/")).unwrap_err();
-        assert!(matches!(error, RuntimeError::Timeout(_)));
+        assert!(matches!(error, RuntimeError::Timeout(_)), "{error:?}");
     }
 
     #[test]
@@ -264,15 +448,118 @@ mod tests {
     }
 
     #[test]
+    fn provider_error_details_are_bounded() {
+        let headers = reqwest::header::HeaderMap::new();
+        let body = format!("provider detail {}", "x".repeat(2_000));
+        let error = safe_http_error(reqwest::StatusCode::BAD_REQUEST, &headers, body.as_bytes());
+        let rendered = error.to_string();
+        assert_eq!(
+            rendered,
+            "runtime returned HTTP 400: provider returned HTTP 400"
+        );
+        assert!(!rendered.contains('x'));
+    }
+
+    #[test]
+    fn non_auth_provider_bodies_never_reach_user_errors() {
+        let headers = reqwest::header::HeaderMap::new();
+        for status in [
+            reqwest::StatusCode::BAD_REQUEST,
+            reqwest::StatusCode::TOO_MANY_REQUESTS,
+            reqwest::StatusCode::UNPROCESSABLE_ENTITY,
+        ] {
+            let error = safe_http_error(status, &headers, b"api_key=super-secret source text");
+            assert!(!error.to_string().contains("super-secret"));
+            assert!(!error.to_string().contains("source text"));
+        }
+    }
+
+    #[test]
     fn sse_reader_passes_only_data_lines_and_skips_done_marker() {
         let input = "event: message\ndata: {\"text\":\"one\"}\n\ndata: [DONE]\n";
         let mut events = Vec::new();
-        read_sse_lines(input.as_bytes(), |event| {
+        read_sse_lines(input.as_bytes(), &RequestCancellation::default(), |event| {
             events.push(event.to_string());
             Ok(())
         })
         .unwrap();
         assert_eq!(events, vec![r#"{"text":"one"}"#]);
+    }
+
+    #[test]
+    fn stalled_stream_returns_idle_timeout() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0_u8; 4096];
+            let _ = stream.read(&mut request);
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: 100\r\n\r\nx",
+                )
+                .unwrap();
+            stream.flush().unwrap();
+            thread::sleep(Duration::from_millis(200));
+        });
+        let transport = HttpTransport::with_timeouts(HttpTimeouts {
+            connect: Duration::from_millis(50),
+            idle: Duration::from_millis(50),
+            request: Duration::from_secs(1),
+            max_error_body: 1024,
+        })
+        .unwrap();
+        let error = transport
+            .stream_get(
+                &format!("http://{address}/"),
+                HeaderMap::new(),
+                RequestCancellation::default(),
+                |_| Ok(()),
+            )
+            .unwrap_err();
+        assert!(matches!(error, RuntimeError::Timeout(_)), "{error:?}");
+    }
+
+    #[test]
+    fn cancellation_stops_a_stalled_stream() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let (ready_sender, ready_receiver) = std::sync::mpsc::channel();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0_u8; 4096];
+            let _ = stream.read(&mut request);
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 100\r\n\r\nx")
+                .unwrap();
+            stream.flush().unwrap();
+            ready_sender.send(()).unwrap();
+            thread::sleep(Duration::from_millis(300));
+        });
+        let transport = std::sync::Arc::new(
+            HttpTransport::with_timeouts(HttpTimeouts {
+                connect: Duration::from_millis(50),
+                idle: Duration::from_secs(1),
+                request: Duration::from_secs(2),
+                max_error_body: 1024,
+            })
+            .unwrap(),
+        );
+        let cancellation = RequestCancellation::default();
+        let worker_cancellation = cancellation.clone();
+        let worker_transport = transport.clone();
+        let worker = thread::spawn(move || {
+            worker_transport.stream_get(
+                &format!("http://{address}/"),
+                HeaderMap::new(),
+                worker_cancellation,
+                |_| Ok(()),
+            )
+        });
+        ready_receiver.recv_timeout(Duration::from_secs(1)).unwrap();
+        cancellation.cancel();
+        let result = worker.join().unwrap();
+        assert!(matches!(result, Err(RuntimeError::Cancelled)), "{result:?}");
     }
 
     #[allow(dead_code)]
