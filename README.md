@@ -4,7 +4,7 @@
 
 ![License MIT](https://img.shields.io/badge/license-MIT-blue)
 ![Platform Windows](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4?logo=windows&logoColor=white)
-![Runs locally](https://img.shields.io/badge/runs-100%25%20locally-2ea44f)
+![Local or cloud](https://img.shields.io/badge/models-local%20%7C%20cloud%20%7C%20subscription-2ea44f)
 ![Tauri 2](https://img.shields.io/badge/Tauri-2-24c8db?logo=tauri&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-stable-b7410e?logo=rust&logoColor=white)
 ![React](https://img.shields.io/badge/React-TypeScript-3178c6?logo=react&logoColor=white)
@@ -12,7 +12,7 @@
 ![Documents](https://img.shields.io/badge/files-TXT%20%7C%20DOCX%20%7C%20EPUB%20%7C%20FB2%20%7C%20PDF-8a5cf5)
 ![Chrome extension](https://img.shields.io/badge/extension-Chromium%20MV3-4285f4?logo=googlechrome&logoColor=white)
 
-LingvoLoc is a Windows app for **private translation on your own computer**. You choose a translation model, and everything - text, documents, dictionary lookups - is processed locally. Nothing is sent to the internet, no account or subscription is needed, and it works offline once a model is downloaded.
+LingvoLoc is a Windows app for translation with the model you choose. Run models **on your own computer** - private, offline, and with no account or subscription - or connect a **cloud service** (OpenAI, Anthropic, Gemini, DeepL, DeepSeek, OpenRouter, xAI Grok or any OpenAI-compatible endpoint) with an API key, or use the models of your **ChatGPT Plus/Pro or SuperGrok subscription** by signing in through the browser. With a local model everything - text, documents, dictionary lookups - is processed on your computer and nothing is sent to the internet; with a cloud provider the text you translate goes to that provider.
 
 ![LingvoLoc Text mode](docs/screenshot-text.png)
 
@@ -26,16 +26,19 @@ LingvoLoc is a Windows app for **private translation on your own computer**. You
 - **Translate from the clipboard.** Press `Ctrl+Shift+T` anywhere in Windows and a small window shows the translation of what you copied.
 - **Translate in the browser.** A Chromium extension translates selected text on any web page through the desktop app.
 - **Look up words in your own dictionaries.** Point LingvoLoc at a folder of StarDict dictionaries; articles are shown as separate coloured cards with pronunciation, examples, and audio.
-- **Use the model you prefer.** LingvoLoc runs `.gguf` models (TranslateGemma, Gemma 3, Hunyuan-MT, Qwen and others) through its own built-in llama.cpp, or connects to LM Studio.
+- **Use the model you prefer - local or cloud.** LingvoLoc runs `.gguf` models (TranslateGemma, Gemma 3, Hunyuan-MT, Qwen and others) through its own built-in llama.cpp, or connects to LM Studio. Or switch to a cloud provider in one click: OpenAI, Anthropic, Gemini, DeepL, DeepSeek, OpenRouter, xAI Grok, or any OpenAI-compatible endpoint.
+- **Use your subscription.** Sign in with your **ChatGPT Plus/Pro** or **SuperGrok** account in the browser and translate with the models included in your plan, without an API key (see Cloud providers and subscriptions below).
 - **Stay in the background.** Closing the window hides LingvoLoc in the tray; it can start with Windows.
 
 ## System requirements
+
+Cloud providers and subscriptions need only Windows and an internet connection; the disk, memory and graphics card items below are for local models.
 
 - **Windows 10 or 11, 64-bit.** The installer adds the WebView2 runtime if it is missing (an internet connection is needed for that one step).
 - **Disk space:** under 100 MB for the app, 0.2-1 GB for llama.cpp (downloaded from Settings), and 4-9 GB per translation model (`.gguf` file; see the table below).
 - **Memory:** the model must fit in video memory (GPU) or in RAM (CPU). Count the file size plus 1-2 GB. A 12 GB video card runs the recommended 12B models comfortably (tested on an RTX 3060 12 GB); 6-8 GB cards fit TranslateGemma 4B or smaller quantizations of the 12B models; without a GPU, 16 GB of RAM or more is advisable and translation is several times slower.
 - **Graphics card (optional but strongly recommended):** NVIDIA (CUDA 12 build), any other GPU with Vulkan support (AMD, Intel), or no GPU at all (CPU build). LingvoLoc picks the build automatically.
-- **Internet:** only to download llama.cpp, models, and the installer itself. Translation works offline.
+- **Internet:** to download llama.cpp, models, and the installer itself, and whenever you use a cloud provider or a subscription. Translation with a local model works offline.
 - **Browser extension:** Chrome, Edge, or another Chromium-based browser (Manifest V3).
 - **PDF:** text PDFs of up to 3000 pages per file; scanned (image-only) PDFs are not supported.
 
@@ -57,7 +60,41 @@ The first translation is slower while the model loads. **Add to PATH** puts the 
 
 Prefer LM Studio? Switch **Mode** to `LM Studio` and start its OpenAI-compatible server at `http://127.0.0.1:1234/v1`.
 
+Prefer the cloud? Switch **Mode** to a provider and paste an API key, or sign in with your ChatGPT Plus/Pro or SuperGrok account - no download and no GPU needed. See the next section.
+
+## Cloud providers and subscriptions
+
+Besides local models, LingvoLoc can translate with cloud services. Choose one in **Settings → Model runtime → Mode**. Local and cloud modes are interchangeable: the same text, files, clipboard and browser-extension translation work with whichever mode is selected, and you can switch at any time.
+
+| Mode                 | How you connect                                          | Notes                                                                                          |
+| -------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| OpenAI               | API key                                                  | Models are loaded from your account.                                                           |
+| Anthropic            | API key                                                  | Claude models.                                                                                 |
+| Google Gemini        | API key                                                  | Text models only; Flash models are listed first.                                               |
+| DeepL                | API key (Free or Pro plan)                               | Reports billed characters instead of tokens.                                                   |
+| DeepSeek             | API key                                                  | `deepseek-chat` and `deepseek-reasoner`.                                                       |
+| OpenRouter           | API key                                                  | Hundreds of models; those with `free` in the id are highlighted with ★.                        |
+| xAI Grok             | API key from the xAI console                             | Grok models.                                                                                   |
+| OpenAI-compatible    | API key and **Endpoint** (for example `https://host/v1`) | Any service with an OpenAI-style API. Plain `http://` is accepted only for local addresses.    |
+| **ChatGPT Plus/Pro** | **Sign in with your ChatGPT account in the browser**     | Uses your plan allowance instead of an API key. Official OpenAI sign-in for open-source apps.  |
+| **SuperGrok**        | **Sign in with your xAI account (device code)**          | Uses your SuperGrok / X Premium+ subscription. Unofficial: xAI may refuse some accounts (403). |
+
+**Connecting with an API key.** Choose the provider, paste the key and press **Save key**. Keys are stored in Windows Credential Manager, never in settings files; once saved, the field shows a masked value and **Saved securely**. Press **Refresh models**, pick a model (or type its id), and tick the notice that cloud translation sends your text to the selected provider. Models whose id contains `free` are highlighted with ★ in every model list.
+
+**Using a subscription.** There is no key to paste:
+
+- **ChatGPT Plus/Pro.** Press **Sign in with ChatGPT**; your browser opens OpenAI's consent page ("Use your ChatGPT plan"). After you approve, LingvoLoc shows **Signed in as your@email**, loads the models available to your plan, and translates with them. Requests count against your ChatGPT plan limits; set a weekly cap for LingvoLoc in ChatGPT under **Settings → Usage**. The sign-in uses OpenAI's official "Sign in with ChatGPT" for open-source apps and is meant for personal use. It listens on `127.0.0.1:47835` for the return from the browser, so that port must be free. **Sign out** revokes the access.
+- **SuperGrok.** Press **Sign in with SuperGrok**; LingvoLoc opens xAI's page and shows a short code - approve it there. xAI does not document subscription sign-in for third-party apps, so this is unofficial: it may stop working, or xAI may refuse your account (HTTP 403). The consent screen may name the shared Grok client.
+
+In both cases only a small session record is kept in Credential Manager; access tokens live in memory and are refreshed automatically.
+
+**Proxy.** Every cloud provider has its own optional **Proxy** field (`http://host:port`, `https://…` or `socks5://host:port`). It is used for that provider's requests and sign-in, which helps where a service is blocked in your region. Leave it empty to connect directly.
+
+**What to expect.** Press **Cancel** while a translation is running to stop waiting. If a provider does not start answering within 30 seconds the request fails instead of hanging. For OpenAI-style gateways (DeepSeek, OpenRouter, xAI Grok, OpenAI-compatible) the provider's own message is shown with the error, for example "No endpoints found for this model". Token usage is shown when the provider reports it, and Settings aggregates usage for the current session. Cloud providers receive the text you translate; use a local model when the text must not leave your computer.
+
 ## Choosing a model
+
+This section is about local `.gguf` models; for cloud models see the section above.
 
 Names containing `gemma` use the TranslateGemma prompt, `hunyuan` uses Hunyuan-MT's official prompt, and any other instruction-tuned model (for example Qwen) uses a generic translator prompt, so the file name matters. After each translation the status line shows the response time and generation speed (`3779 ms · 30.7 tok/s`); the first request also includes model loading, so its speed is lower.
 
@@ -123,7 +160,7 @@ In **Settings → Dictionaries** choose the folder that contains your StarDict d
 The **Settings** window (gear icon) has runtime, cloud provider, dictionary, and browser extension sections:
 
 - **Model runtime**: Standalone or LM Studio mode, models folder, GPU support, and llama.cpp.
-- **Cloud provider**: OpenAI, Anthropic, Gemini, DeepL, DeepSeek, OpenRouter, xAI Grok, ChatGPT Plus/Pro (browser sign-in, uses your plan allowance), SuperGrok (unofficial subscription sign-in), or OpenAI-compatible mode (custom endpoint), model settings with models whose id contains `free` highlighted (★) in the lists, secure API-key storage, explicit network consent, an optional per-provider proxy (`http://`, `https://` or `socks5://`), and session usage.
+- **Cloud provider**: the provider, its model list (with free models highlighted), API key or **Sign in** button for ChatGPT Plus/Pro and SuperGrok, the **Endpoint** for OpenAI-compatible mode, an optional per-provider **Proxy**, the consent notice, and usage of the current session. See Cloud providers and subscriptions.
 - **Dictionaries**: the StarDict folder and the dictionaries to search.
 - **Browser extension**: **Copy token** copies the pairing token for the browser extension.
 
@@ -139,13 +176,13 @@ Left-click the tray icon to show or hide the main window. Right-click opens the 
 
 ## Browser extension
 
-The Chromium extension (`LingvoLoc-extension-x.y.z.zip` on the Releases page) translates selected text through the desktop app. Load it from `chrome://extensions` with Developer mode enabled, press **Copy token** in LingvoLoc Settings, and paste the token into the extension. After the desktop app restarts, pair it again.
+The Chromium extension (`LingvoLoc-extension-x.y.z.zip` on the Releases page) translates selected text through the desktop app. It uses whatever runtime, provider and model is selected in the desktop app, local or cloud. Load it from `chrome://extensions` with Developer mode enabled, press **Copy token** in LingvoLoc Settings, and paste the token into the extension. After the desktop app restarts, pair it again.
 
 Select text and use the toolbar button or the right-click menu **Translate selection with LingvoLoc**. The toolbar button opens and fills the in-page window without translating; the context-menu action opens it and translates automatically using the saved target language. While a translation is running, the result area shows a clear `Translating...` indicator. Translation paragraphs use a first-line indent for easier reading. Click **Original text** to collapse or expand the source field; that state is remembered. Use **Clear** to remove both fields, or drag the divider between them to change and remember their relative heights. The window can be dragged by its header and resized by its right edge, bottom edge, or corner; the size is remembered. The **⧉** button opens the content in a separate browser window that stays open when you switch tabs; on pages where extensions cannot inject content (such as `chrome://` pages) that window opens instead. See `docs/BROWSER_EXTENSION.md` for details.
 
 ## Privacy
 
-Translation, documents, dictionaries, and history stay on your computer. The only network access LingvoLoc itself makes is the optional download of llama.cpp from GitHub. The extension talks only to the desktop app on `127.0.0.1` with a pairing token.
+With a local model (Standalone or LM Studio), translation, documents, dictionaries, and history stay on your computer; the only network access is the optional download of llama.cpp from GitHub. With a cloud provider or a subscription, the text you translate is sent to that provider (and, for subscriptions, to the sign-in service of OpenAI or xAI) - nothing is sent until you select such a mode and accept the notice in Settings. API keys and sign-in sessions are kept in Windows Credential Manager, never in settings files. The extension talks only to the desktop app on `127.0.0.1` with a pairing token.
 
 The project is licensed under MIT; see `LICENSE`.
 
@@ -161,7 +198,9 @@ The sections below are for contributors and for readers who want to know how Lin
 - **Browser extension** (`apps/extension`): a thin Chromium MV3 client. It owns no model or data and uses the authenticated loopback API at `127.0.0.1:47831` (per-process bearer token, restricted CORS); see `docs/LOCAL_API.md`.
 - **Runtimes.** `ModelRuntime` implementations: `standalone` (spawns `llama-server.exe` on a free loopback port with a `.gguf` chosen from the models folder; llama.cpp is downloaded by `runtimes/llama_download.rs`, picking the CUDA 12, Vulkan or CPU archive from the detected GPU) and `lmStudio` (OpenAI-compatible API at `http://127.0.0.1:1234/v1`). One server process is kept and restarted when the model changes; it is killed on exit.
 - **Adapters.** `TranslationModelAdapter` is chosen from the model file name (`adapters::Family`): `gemma` → TranslateGemma, `hunyuan` → Hunyuan-MT, otherwise a generic chat translator (Qwen3 gets `/no_think` and `enable_thinking:false`). `llama-server` receives matching template flags.
-- **Inference coordinator.** All entry points (UI, API, clipboard, document blocks) share one in-process coordinator: one blocking model request at a time, interactive requests first, document callers acquire the slot per block. Lifecycle changes quiesce it. Chat completions stream (`stream: true`) on a dedicated thread with a 45 s idle timeout and a 900 s cap; Standalone restarts the server and retries once. Events go to `%TEMP%\lingvoloc-document-worker.log`.
+- **Cloud backends.** `TranslationBackend` implementations in `backends/`: `openai`, `anthropic`, `gemini`, `deepl`, `openai_compatible` (also serves DeepSeek, OpenRouter and xAI Grok through `for_provider`, with fixed endpoints) and `chatgpt` (the Responses API, used for ChatGPT Plus/Pro and for SuperGrok against `api.x.ai`). The OpenAI-compatible family and Gemini use blocking non-streamed requests on a helper thread that the Cancel button can abandon; OpenAI and Anthropic still stream with an idle timeout; the Responses API backends read the SSE stream with the blocking client. Waiting for response headers is capped at 30 s, and for OpenAI-style gateways the provider's `error.message` is appended to HTTP errors. `HttpTransport` (`backends/http.rs`) can route each provider through its own `http(s)`/`socks5` proxy (`cloud.<provider>.proxyUrl`). API keys live in Windows Credential Manager (`ProviderId::service_name`).
+- **Subscription sign-in.** `services/chatgpt_auth.rs` implements OpenAI's "Sign in with ChatGPT" plan usage for open-source apps (authorization code + PKCE at `auth.openai.com`, loopback redirect on `127.0.0.1:47835`, dynamic client, persistent host id, `resource=https://api.openai.com/v1`); `services/supergrok_auth.rs` implements the unofficial xAI device-code flow at `auth.x.ai`. Both keep only a small session record (refresh token, e-mail) in Credential Manager and cache access tokens in memory, refreshed under a lock because refresh tokens rotate. See `DECISIONS.md` for the exact scopes and constraints.
+- **Inference coordinator.** All entry points (UI, API, clipboard, document blocks) share one in-process coordinator: one blocking model request at a time, interactive requests first, document callers acquire the slot per block. Lifecycle changes quiesce it. Local-runtime chat completions stream (`stream: true`) on a dedicated thread with a 45 s idle timeout and a 900 s cap; Standalone restarts the server and retries once. Events go to `%TEMP%\lingvoloc-document-worker.log`.
 - **History** is SQLite (`lingoloc.sqlite`, schema versioned with `PRAGMA user_version`, 1,000 non-favourite rows kept). Settings live in `lingoloc.settings`. These legacy names and the bundle identifier `com.lingoloc.desktop` are intentionally unchanged so existing installs keep their data.
 - **Lexical lookup** reads only user-selected StarDict folders (parsed folders are cached by path and file fingerprint); there is no bundled or app-data dictionary fallback. `scripts/build-lexical-index.mjs` is an offline converter and is not part of runtime lookup.
 
