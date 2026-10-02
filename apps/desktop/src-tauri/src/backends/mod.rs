@@ -1,11 +1,34 @@
+pub mod anthropic;
+pub mod deepl;
+pub mod gemini;
 pub mod http;
 pub mod local;
+pub mod openai;
+pub mod openai_compatible;
 
+use crate::domain::TranslationStyle;
 use crate::domain::{
     BackendCapabilities, LocalModel, ProviderId, RuntimeError, RuntimeStatus, Settings,
     TranslationRequest, TranslationResult,
 };
+use crate::services::credentials::{map_error, CredentialStore};
 use crate::services::request_control::RequestCancellation;
+
+pub(crate) fn neutral_prompt(request: &TranslationRequest) -> (String, String) {
+    let style = match request.translation_style {
+        TranslationStyle::Neutral => "neutral",
+        TranslationStyle::Literary => "literary",
+        TranslationStyle::Technical => "technical",
+        TranslationStyle::Conversational => "conversational",
+    };
+    (
+        format!(
+            "You are a precise translator. Translate from {} to {}. Use a {} style. Return only the translation.",
+            request.source_language, request.target_language, style
+        ),
+        request.text.clone(),
+    )
+}
 
 pub trait TranslationBackend: Send + Sync {
     fn provider_id(&self) -> ProviderId;
@@ -20,13 +43,63 @@ pub trait TranslationBackend: Send + Sync {
 }
 
 pub fn for_settings(settings: &Settings) -> Result<Box<dyn TranslationBackend>, RuntimeError> {
+    for_settings_with_key(settings, String::new())
+}
+
+pub fn for_settings_with_credentials(
+    settings: &Settings,
+    credentials: &CredentialStore,
+) -> Result<Box<dyn TranslationBackend>, RuntimeError> {
+    let key = match settings.runtime_mode {
+        crate::domain::RuntimeMode::OpenAi => credentials.get(crate::domain::ProviderId::OpenAi),
+        crate::domain::RuntimeMode::Anthropic => {
+            credentials.get(crate::domain::ProviderId::Anthropic)
+        }
+        crate::domain::RuntimeMode::Gemini => credentials.get(crate::domain::ProviderId::Gemini),
+        crate::domain::RuntimeMode::DeepL => credentials.get(crate::domain::ProviderId::DeepL),
+        crate::domain::RuntimeMode::OpenAiCompatible => {
+            credentials.get(crate::domain::ProviderId::OpenAiCompatible)
+        }
+        crate::domain::RuntimeMode::LmStudio | crate::domain::RuntimeMode::Standalone => {
+            Ok(String::new())
+        }
+    }
+    .map_err(map_error)?;
+    for_settings_with_key(settings, key)
+}
+
+fn for_settings_with_key(
+    settings: &Settings,
+    key: String,
+) -> Result<Box<dyn TranslationBackend>, RuntimeError> {
     match settings.runtime_mode {
         crate::domain::RuntimeMode::LmStudio | crate::domain::RuntimeMode::Standalone => {
             Ok(Box::new(local::LocalBackend::new(settings.clone())))
         }
-        _ => Err(RuntimeError::UnsupportedAdapter(
-            "cloud backend is not registered yet".into(),
-        )),
+        crate::domain::RuntimeMode::OpenAi => Ok(Box::new(openai::OpenAiBackend::new(
+            settings.endpoint.clone(),
+            settings.cloud.open_ai.model_id.clone(),
+            key,
+        )?)),
+        crate::domain::RuntimeMode::Anthropic => Ok(Box::new(anthropic::AnthropicBackend::new(
+            settings.cloud.anthropic.model_id.clone(),
+            key,
+        )?)),
+        crate::domain::RuntimeMode::Gemini => Ok(Box::new(gemini::GeminiBackend::new(
+            settings.cloud.gemini.model_id.clone(),
+            key,
+        )?)),
+        crate::domain::RuntimeMode::DeepL => Ok(Box::new(deepl::DeepLBackend::new(
+            &settings.cloud.deep_l.plan,
+            key,
+        )?)),
+        crate::domain::RuntimeMode::OpenAiCompatible => {
+            Ok(Box::new(openai_compatible::OpenAiCompatibleBackend::new(
+                settings.cloud.open_ai_compatible.endpoint.clone(),
+                settings.cloud.open_ai_compatible.model_id.clone(),
+                key,
+            )?))
+        }
     }
 }
 
