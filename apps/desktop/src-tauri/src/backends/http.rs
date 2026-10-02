@@ -45,23 +45,64 @@ impl HttpTransport {
     }
 
     pub fn with_timeouts(timeouts: HttpTimeouts) -> Result<Self, RuntimeError> {
-        let client = Client::builder()
-            .connect_timeout(timeouts.connect)
-            .timeout(timeouts.request)
-            .no_proxy()
+        Self::build(timeouts, "", false)
+    }
+
+    /// Rebuilds the clients so every request goes through `proxy` (an `http://` or
+    /// `https://` URL). An empty value keeps direct connections.
+    pub fn with_proxy(&self, proxy: &str) -> Result<Self, RuntimeError> {
+        Self::build(self.timeouts, proxy.trim(), self.provider_messages)
+    }
+
+    fn build(
+        timeouts: HttpTimeouts,
+        proxy: &str,
+        provider_messages: bool,
+    ) -> Result<Self, RuntimeError> {
+        let proxy = if proxy.is_empty() {
+            None
+        } else {
+            let parsed = reqwest::Url::parse(proxy)
+                .ok()
+                .filter(|url| matches!(url.scheme(), "http" | "https") && url.host_str().is_some())
+                .ok_or_else(|| {
+                    RuntimeError::InvalidInput(
+                        "proxy must be an http:// or https:// URL, e.g. http://192.168.0.12:9102"
+                            .into(),
+                    )
+                })?;
+            Some(
+                reqwest::Proxy::all(parsed.as_str())
+                    .map_err(|_| RuntimeError::InvalidInput("proxy address is invalid".into()))?,
+            )
+        };
+        let client = {
+            let builder = Client::builder()
+                .connect_timeout(timeouts.connect)
+                .timeout(timeouts.request);
+            match proxy.clone() {
+                Some(proxy) => builder.proxy(proxy),
+                None => builder.no_proxy(),
+            }
             .build()
-            .map_err(|error| RuntimeError::Connection(format!("HTTP client: {error}")))?;
-        let async_client = reqwest::Client::builder()
-            .connect_timeout(timeouts.connect)
-            .timeout(timeouts.request)
-            .no_proxy()
+            .map_err(|error| RuntimeError::Connection(format!("HTTP client: {error}")))?
+        };
+        let async_client = {
+            let builder = reqwest::Client::builder()
+                .connect_timeout(timeouts.connect)
+                .timeout(timeouts.request);
+            match proxy {
+                Some(proxy) => builder.proxy(proxy),
+                None => builder.no_proxy(),
+            }
             .build()
-            .map_err(|error| RuntimeError::Connection(format!("HTTP client: {error}")))?;
+            .map_err(|error| RuntimeError::Connection(format!("HTTP client: {error}")))?
+        };
         Ok(Self {
             client,
             async_client,
             timeouts,
-            provider_messages: false,
+            provider_messages,
         })
     }
 
@@ -600,6 +641,15 @@ mod tests {
             assert!(!error.to_string().contains("super-secret"));
             assert!(!error.to_string().contains("source text"));
         }
+    }
+
+    #[test]
+    fn proxy_must_be_an_http_url() {
+        let transport = HttpTransport::new().unwrap();
+        assert!(transport.with_proxy("http://192.168.0.12:9102").is_ok());
+        assert!(transport.with_proxy("").is_ok());
+        assert!(transport.with_proxy("not a url").is_err());
+        assert!(transport.with_proxy("ftp://host:1").is_err());
     }
 
     #[test]

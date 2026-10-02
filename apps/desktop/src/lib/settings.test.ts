@@ -21,6 +21,7 @@ const fallback: Settings = {
   translationStyle: 'neutral',
   cloud: {
     consentAccepted: false,
+    proxyUrl: '',
     openAi: {
       modelId: 'gpt-4o-mini',
       availableModels: [],

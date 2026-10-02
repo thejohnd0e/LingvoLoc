@@ -25,6 +25,7 @@ export interface CloudModelConfig {
 
 export interface CloudSettings {
   consentAccepted: boolean;
+  proxyUrl: string;
   openAi: CloudModelConfig;
   anthropic: CloudModelConfig;
   gemini: CloudModelConfig;
@@ -62,6 +63,7 @@ export interface Settings {
 
 export const defaultCloudSettings: CloudSettings = {
   consentAccepted: false,
+  proxyUrl: '',
   openAi: {
     modelId: 'gpt-4o-mini',
     availableModels: [],
