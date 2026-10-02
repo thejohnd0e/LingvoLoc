@@ -21,6 +21,11 @@ pub struct OpenAiCompatibleBackend {
 }
 
 impl OpenAiCompatibleBackend {
+    pub fn with_proxy(mut self, proxy: &str) -> Result<Self, RuntimeError> {
+        self.transport = self.transport.with_proxy(proxy)?;
+        Ok(self)
+    }
+
     pub fn new(base_url: String, model_id: String, api_key: String) -> Result<Self, RuntimeError> {
         Self::for_provider(ProviderId::OpenAiCompatible, base_url, model_id, api_key)
     }
@@ -441,5 +446,26 @@ Connection: close
             .translate(&sample_request(), &RequestCancellation::default())
             .unwrap_err();
         assert!(error.to_string().contains("rate limited"), "{error}");
+    }
+
+    /// Manual check against the real gateway: `LINGVOLOC_TEST_PROXY=http://host:port`.
+    #[test]
+    #[ignore]
+    fn openrouter_rejects_an_invalid_key_through_the_proxy() {
+        let proxy = std::env::var("LINGVOLOC_TEST_PROXY").expect("proxy env var");
+        let backend = OpenAiCompatibleBackend::for_provider(
+            ProviderId::OpenRouter,
+            OPENROUTER_ENDPOINT.into(),
+            "qwen/qwen3-coder:free".into(),
+            "sk-or-v1-invalid".into(),
+        )
+        .unwrap()
+        .with_proxy(&proxy)
+        .unwrap();
+        let error = backend
+            .translate(&sample_request(), &RequestCancellation::default())
+            .unwrap_err();
+        println!("{error}");
+        assert!(error.to_string().contains("User not found"), "{error}");
     }
 }

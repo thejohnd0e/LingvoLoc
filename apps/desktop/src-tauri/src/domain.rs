@@ -142,6 +142,9 @@ pub struct DeepLSettings {
 pub struct CloudSettings {
     #[serde(default)]
     pub consent_accepted: bool,
+    /// Optional `http://host:port` proxy used for every cloud request.
+    #[serde(default)]
+    pub proxy_url: String,
     pub open_ai: CloudModelConfig,
     pub anthropic: CloudModelConfig,
     pub gemini: CloudModelConfig,
@@ -165,6 +168,7 @@ impl Default for CloudSettings {
     fn default() -> Self {
         Self {
             consent_accepted: false,
+            proxy_url: String::new(),
             open_ai: CloudModelConfig::new("gpt-4o-mini"),
             anthropic: CloudModelConfig::new("claude-3-5-haiku-latest"),
             gemini: CloudModelConfig::new("gemini-2.0-flash"),
