@@ -1208,3 +1208,8 @@ textarea:focus {
   color: #93a7a5;
   font-style: italic;
 }
+
+option.free-model {
+  color: #7fe39a;
+  font-weight: 600;
+}

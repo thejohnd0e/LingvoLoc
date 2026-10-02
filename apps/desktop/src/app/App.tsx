@@ -91,6 +91,19 @@ const cloudProviders: Array<{ id: ProviderId; label: string }> = [
 
 function isCloudProvider(
   value: Settings['runtimeMode'],
+function isFreeModel(id: string): boolean {
+  return /free/i.test(id);
+}
+
+function ModelOption({ id }: { id: string }) {
+  const free = isFreeModel(id);
+  return (
+    <option value={id} className={free ? 'free-model' : undefined}>
+      {free ? `★ ${id}` : id}
+    </option>
+  );
+}
+
 ): value is Exclude<ProviderId, 'llamaCpp' | 'lmStudio'> {
   // ProviderId also contains local runtime identifiers.
   return value !== 'standalone' && value !== 'lmStudio';
@@ -1365,9 +1378,7 @@ export default function App() {
                 ? settings.cloud[settings.runtimeMode].availableModels
                 : models
               ).map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.id}
-                </option>
+                <ModelOption key={model.id} id={model.id} />
               ))}
             </select>
             <button
@@ -1636,9 +1647,7 @@ export default function App() {
                 </label>
               )}
                     {cloudModelOptions.map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.id}
-                      </option>
+                      <ModelOption key={model.id} id={model.id} />
                     ))}
                   </select>
                 ) : (
