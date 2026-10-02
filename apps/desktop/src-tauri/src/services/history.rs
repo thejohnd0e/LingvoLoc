@@ -265,6 +265,8 @@ mod tests {
             prompt_tokens: None,
             completion_tokens: None,
             total_tokens: None,
+            provider_id: None,
+            billed_characters: None,
         };
         store.add("Hello", &request(), &result).unwrap();
         assert_eq!(store.list().unwrap()[0].translated_text, "Hallo");
@@ -290,6 +292,8 @@ mod tests {
             prompt_tokens: None,
             completion_tokens: None,
             total_tokens: None,
+            provider_id: None,
+            billed_characters: None,
         };
         store.add(&request.text, &request, &result).unwrap();
         assert!(store
@@ -344,6 +348,8 @@ mod tests {
             prompt_tokens: None,
             completion_tokens: None,
             total_tokens: None,
+            provider_id: None,
+            billed_characters: None,
         };
         for index in 0..=HISTORY_RETENTION_LIMIT {
             store

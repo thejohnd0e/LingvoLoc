@@ -15,6 +15,13 @@ pub fn runtime(settings: &Settings) -> Result<Box<dyn ModelRuntime>, RuntimeErro
             &settings.llama_server_path,
             &settings.model_id,
         ))),
+        RuntimeMode::OpenAi
+        | RuntimeMode::Anthropic
+        | RuntimeMode::Gemini
+        | RuntimeMode::DeepL
+        | RuntimeMode::OpenAiCompatible => Err(RuntimeError::UnsupportedAdapter(
+            "cloud backend is not registered yet".into(),
+        )),
     }
 }
 
@@ -58,5 +65,7 @@ pub fn translate(
         total_tokens: usage
             .as_ref()
             .map(|usage| usage.input_tokens + usage.output_tokens),
+        provider_id: None,
+        billed_characters: None,
     })
 }
