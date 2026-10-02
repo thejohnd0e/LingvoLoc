@@ -29,7 +29,12 @@ impl GeminiBackend {
     ) -> Result<Self, RuntimeError> {
         let url = reqwest::Url::parse(base_url)
             .map_err(|_| RuntimeError::InvalidInput("Gemini endpoint is invalid".into()))?;
-        if url.scheme() != "https"
+        let scheme = url.scheme();
+        let loopback = url
+            .host_str()
+            .is_some_and(|host| matches!(host, "localhost" | "127.0.0.1" | "::1"));
+        if !matches!(scheme, "https" | "http")
+            || (scheme == "http" && !loopback)
             || !url.username().is_empty()
             || url.password().is_some()
             || url.fragment().is_some()
@@ -39,7 +44,12 @@ impl GeminiBackend {
             ));
         }
         Ok(Self {
-            transport: HttpTransport::new()?,
+            transport: HttpTransport::with_timeouts(super::http::HttpTimeouts {
+                connect: std::time::Duration::from_secs(3),
+                idle: std::time::Duration::from_secs(45),
+                request: std::time::Duration::from_secs(120),
+                max_error_body: super::http::MAX_ERROR_BODY,
+            })?,
             base_url: base_url.trim_end_matches('/').into(),
             model_id,
             api_key,
@@ -83,7 +93,9 @@ impl TranslationBackend for GeminiBackend {
         })
     }
     fn list_models(&self) -> Result<Vec<LocalModel>, RuntimeError> {
-        let response = self.transport.get(&format!("{}/models", self.base_url))?;
+        let response = self
+            .transport
+            .get_with_headers(&format!("{}/models", self.base_url), self.headers()?)?;
         let value: Value = response.json().map_err(|_| {
             RuntimeError::MalformedResponse("Gemini models response is not valid JSON".into())
         })?;
@@ -92,70 +104,50 @@ impl TranslationBackend for GeminiBackend {
     fn translate(
         &self,
         request: &TranslationRequest,
-        cancellation: &RequestCancellation,
+        _cancellation: &RequestCancellation,
     ) -> Result<TranslationResult, RuntimeError> {
         let started = Instant::now();
-        let output = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
-        let usage = std::sync::Arc::new(std::sync::Mutex::new(None));
-        let output_ref = output.clone();
-        let usage_ref = usage.clone();
-        let mut buffer = String::new();
-        self.transport.stream_post_json(
-            &format!(
-                "{}/models/{}:streamGenerateContent?alt=sse",
-                self.base_url, self.model_id
-            ),
+        let model_id = if request.model_id.trim().is_empty() {
+            self.model_id.as_str()
+        } else {
+            request.model_id.trim()
+        };
+        let response = self.transport.post_json(
+            &format!("{}/models/{model_id}:generateContent", self.base_url),
             self.headers()?,
             &self.body(request),
-            cancellation.clone(),
-            move |chunk| {
-                buffer.push_str(&String::from_utf8_lossy(chunk));
-                consume_sse(&mut buffer, |value| {
-                    if let Some(reason) = value
-                        .pointer("/promptFeedback/blockReason")
-                        .and_then(Value::as_str)
-                    {
-                        return Err(RuntimeError::ContentRejected(format!(
-                            "Gemini safety block: {reason}"
-                        )));
-                    }
-                    if let Some(text) = value
-                        .pointer("/candidates/0/content/parts/0/text")
-                        .and_then(Value::as_str)
-                    {
-                        output_ref
-                            .lock()
-                            .map_err(|_| {
-                                RuntimeError::Connection(
-                                    "translation output lock is poisoned".into(),
-                                )
-                            })?
-                            .push_str(text);
-                    }
-                    if let Some(metadata) = value.get("usageMetadata") {
-                        *usage_ref.lock().map_err(|_| {
-                            RuntimeError::Connection("translation usage lock is poisoned".into())
-                        })? = Some(parse_usage(metadata)?);
-                    }
-                    Ok(())
-                })
-            },
         )?;
-        let text = output
-            .lock()
-            .map_err(|_| RuntimeError::Connection("translation output lock is poisoned".into()))?
-            .clone();
-        if text.is_empty() {
-            return Err(RuntimeError::MalformedResponse(
-                "Gemini response contained no translation".into(),
-            ));
+        let value: Value = response.json().map_err(|_| {
+            RuntimeError::MalformedResponse("Gemini response is not valid JSON".into())
+        })?;
+        if let Some(reason) = value
+            .pointer("/promptFeedback/blockReason")
+            .and_then(Value::as_str)
+        {
+            return Err(RuntimeError::ContentRejected(format!(
+                "Gemini safety block: {reason}"
+            )));
         }
-        let usage = *usage
-            .lock()
-            .map_err(|_| RuntimeError::Connection("translation usage lock is poisoned".into()))?;
+        if let Some(reason) = value
+            .pointer("/candidates/0/finishReason")
+            .and_then(Value::as_str)
+        {
+            if !matches!(reason, "STOP" | "MAX_TOKENS" | "FINISH_REASON_UNSPECIFIED") {
+                return Err(RuntimeError::ContentRejected(format!(
+                    "Gemini finish reason: {reason}"
+                )));
+            }
+        }
+        let text = extract_candidate_text(&value).ok_or_else(|| {
+            RuntimeError::MalformedResponse("Gemini response contained no translation".into())
+        })?;
+        let usage = value
+            .get("usageMetadata")
+            .map(parse_usage)
+            .transpose()?;
         Ok(TranslationResult {
             text,
-            model_id: request.model_id.clone(),
+            model_id: model_id.to_string(),
             adapter_id: "gemini-generate-content".into(),
             latency_ms: started.elapsed().as_millis(),
             prompt_tokens: usage.map(|u| u.0),
@@ -167,6 +159,17 @@ impl TranslationBackend for GeminiBackend {
     }
 }
 
+fn extract_candidate_text(value: &Value) -> Option<String> {
+    let parts = value.pointer("/candidates/0/content/parts")?.as_array()?;
+    let mut text = String::new();
+    for part in parts {
+        if let Some(piece) = part.get("text").and_then(Value::as_str) {
+            text.push_str(piece);
+        }
+    }
+    (!text.is_empty()).then_some(text)
+}
+
 fn parse_models(value: &Value) -> Result<Vec<LocalModel>, RuntimeError> {
     value
         .get("models")
@@ -175,7 +178,7 @@ fn parse_models(value: &Value) -> Result<Vec<LocalModel>, RuntimeError> {
             RuntimeError::MalformedResponse("Gemini models response has no models array".into())
         })
         .map(|items| {
-            items
+            let mut models: Vec<LocalModel> = items
                 .iter()
                 .filter(|item| {
                     item.get("supportedGenerationMethods")
@@ -189,14 +192,61 @@ fn parse_models(value: &Value) -> Result<Vec<LocalModel>, RuntimeError> {
                 .filter_map(|item| {
                     item.get("name")
                         .and_then(Value::as_str)
-                        .map(|name| LocalModel {
-                            id: name.strip_prefix("models/").unwrap_or(name).into(),
+                        .map(|name| name.strip_prefix("models/").unwrap_or(name))
+                        .filter(|id| is_text_generation_model(id))
+                        .map(|id| LocalModel {
+                            id: id.into(),
                             owned_by: Some("google".into()),
                             quantization: None,
                         })
                 })
-                .collect()
+                .collect();
+            models.sort_by(|left, right| {
+                model_rank(&left.id)
+                    .cmp(&model_rank(&right.id))
+                    .then_with(|| left.id.cmp(&right.id))
+            });
+            models
         })
+}
+
+fn is_text_generation_model(id: &str) -> bool {
+    let id = id.to_ascii_lowercase();
+    let banned = [
+        "embed",
+        "embedding",
+        "imagen",
+        "veo",
+        "tts",
+        "audio",
+        "robot",
+        "computer",
+        "aqa",
+        "gecko",
+        "vision",
+        "image",
+        "native-audio",
+        "live",
+    ];
+    if banned.iter().any(|part| id.contains(part)) {
+        return false;
+    }
+    id.starts_with("gemini-") || id.starts_with("gemma-")
+}
+
+fn model_rank(id: &str) -> u8 {
+    let id = id.to_ascii_lowercase();
+    if id.contains("flash-lite") {
+        0
+    } else if id.contains("flash") {
+        1
+    } else if id.contains("pro") {
+        2
+    } else if id.starts_with("gemini-") {
+        3
+    } else {
+        4
+    }
 }
 
 fn parse_usage(value: &Value) -> Result<(u64, u64, u64), RuntimeError> {
@@ -222,35 +272,29 @@ fn parse_usage(value: &Value) -> Result<(u64, u64, u64), RuntimeError> {
     ))
 }
 
-fn consume_sse(
-    buffer: &mut String,
-    mut on_event: impl FnMut(&Value) -> Result<(), RuntimeError>,
-) -> Result<(), RuntimeError> {
-    while let Some(index) = buffer.find("\n\n") {
-        let frame = buffer[..index].to_string();
-        buffer.drain(..index + 2);
-        if let Some(data) = frame
-            .lines()
-            .find_map(|line| line.strip_prefix("data:"))
-            .map(str::trim)
-        {
-            let value: Value = serde_json::from_str(data).map_err(|_| {
-                RuntimeError::MalformedResponse("Gemini stream event is not valid JSON".into())
-            })?;
-            on_event(&value)?;
-        }
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn filters_models_and_parses_usage() {
-        let models = parse_models(&json!({"models":[{"name":"models/gemini-2.0-flash","supportedGenerationMethods":["generateContent"]},{"name":"models/embed","supportedGenerationMethods":["embedContent"]}]})).unwrap();
-        assert_eq!(models.len(), 1);
-        assert_eq!(models[0].id, "gemini-2.0-flash");
+        let models = parse_models(&json!({
+            "models":[
+                {"name":"models/gemini-2.0-flash","supportedGenerationMethods":["generateContent"]},
+                {"name":"models/gemini-2.5-flash-lite","supportedGenerationMethods":["generateContent"]},
+                {"name":"models/gemma-4-31b-it","supportedGenerationMethods":["generateContent"]},
+                {"name":"models/embed","supportedGenerationMethods":["embedContent"]},
+                {"name":"models/imagen-3","supportedGenerationMethods":["generateContent"]},
+                {"name":"models/gemini-robotics-er-1.5-preview","supportedGenerationMethods":["generateContent"]}
+            ]
+        })).unwrap();
+        assert_eq!(
+            models.iter().map(|model| model.id.as_str()).collect::<Vec<_>>(),
+            vec![
+                "gemini-2.5-flash-lite",
+                "gemini-2.0-flash",
+                "gemma-4-31b-it"
+            ]
+        );
         assert_eq!(
             parse_usage(
                 &json!({"promptTokenCount":2,"candidatesTokenCount":3,"totalTokenCount":5})
@@ -259,18 +303,75 @@ mod tests {
             (2, 3, 5)
         );
     }
+
+    #[test]
+    fn translate_posts_generate_content_and_returns_text() {
+        use crate::services::request_control::RequestCancellation;
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::thread;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buffer = [0_u8; 8192];
+            let count = stream.read(&mut buffer).unwrap();
+            let request = String::from_utf8_lossy(&buffer[..count]).into_owned();
+            let body = br#"{"candidates":[{"content":{"parts":[{"text":"mom"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":2,"candidatesTokenCount":1,"totalTokenCount":3}}"#;
+            stream
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        String::from_utf8_lossy(body)
+                    )
+                    .as_bytes(),
+                )
+                .unwrap();
+            request
+        });
+
+        let backend = GeminiBackend::with_base_url(
+            &format!("http://{address}"),
+            "gemini-2.0-flash".into(),
+            "secret".into(),
+        )
+        .unwrap();
+        let result = backend
+            .translate(
+                &TranslationRequest {
+                    model_id: "gemini-2.5-flash-lite".into(),
+                    adapter_id: String::new(),
+                    source_language: "ru".into(),
+                    target_language: "en".into(),
+                    text: "мама".into(),
+                    translation_style: Default::default(),
+                },
+                &RequestCancellation::default(),
+            )
+            .unwrap();
+        let request = server.join().unwrap().to_ascii_lowercase();
+        assert!(request.contains("post /models/gemini-2.5-flash-lite:generatecontent"));
+        assert!(request.contains("x-goog-api-key: secret"));
+        assert_eq!(result.text, "mom");
+        assert_eq!(result.model_id, "gemini-2.5-flash-lite");
+        assert_eq!(result.prompt_tokens, Some(2));
+    }
+
     #[test]
     fn detects_safety_block_and_uses_native_auth_header() {
         let backend =
             GeminiBackend::with_base_url(GEMINI_BASE, "gemini-2.0-flash".into(), "secret".into())
                 .unwrap();
         assert_eq!(backend.headers().unwrap()["x-goog-api-key"], "secret");
-        let mut buffer = "data: {\"promptFeedback\":{\"blockReason\":\"SAFETY\"}}\n\n".into();
-        let error: Result<(), RuntimeError> = consume_sse(&mut buffer, |_| Ok(())).and_then(|_| {
-            Err(RuntimeError::ContentRejected(
-                "Gemini safety block: SAFETY".into(),
-            ))
-        });
-        assert!(matches!(error, Err(RuntimeError::ContentRejected(_))));
+        let blocked = json!({"promptFeedback":{"blockReason":"SAFETY"}});
+        assert_eq!(
+            blocked
+                .pointer("/promptFeedback/blockReason")
+                .and_then(Value::as_str),
+            Some("SAFETY")
+        );
+        assert!(extract_candidate_text(&blocked).is_none());
     }
 }
