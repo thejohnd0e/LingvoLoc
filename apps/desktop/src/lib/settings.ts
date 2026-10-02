@@ -132,19 +132,33 @@ function normalizeCloudSettings(
 ): CloudSettings {
   if (!value || typeof value !== 'object') return fallbackCloud;
   const candidate = value as Partial<CloudSettings>;
-  if (typeof candidate.consentAccepted !== 'boolean') return fallbackCloud;
-  if (!candidate.openAi || !candidate.anthropic || !candidate.gemini) {
-    return fallbackCloud;
-  }
   return {
     ...fallbackCloud,
     ...candidate,
+    consentAccepted:
+      typeof candidate.consentAccepted === 'boolean'
+        ? candidate.consentAccepted
+        : fallbackCloud.consentAccepted,
+    openAi: normalizeCloudModelConfig(candidate.openAi, fallbackCloud.openAi),
+    anthropic: normalizeCloudModelConfig(
+      candidate.anthropic,
+      fallbackCloud.anthropic,
+    ),
+    gemini: normalizeCloudModelConfig(candidate.gemini, fallbackCloud.gemini),
     deepL: { ...fallbackCloud.deepL, ...(candidate.deepL ?? {}) },
     openAiCompatible: {
       ...fallbackCloud.openAiCompatible,
       ...(candidate.openAiCompatible ?? {}),
     },
   };
+}
+
+function normalizeCloudModelConfig(
+  value: unknown,
+  fallback: CloudModelConfig,
+): CloudModelConfig {
+  if (!value || typeof value !== 'object') return fallback;
+  return { ...fallback, ...(value as Partial<CloudModelConfig>) };
 }
 
 export function saveSettings(settings: Settings): void {

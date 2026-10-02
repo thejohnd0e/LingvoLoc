@@ -109,12 +109,30 @@ describe('settings persistence', () => {
     expect(loadSettings(fallback).runtimeMode).toBe(runtimeMode);
   });
 
-  it('rejects invalid cloud provider data without changing the fallback contract', () => {
+  it('keeps cloud defaults when stored cloud fields are invalid', () => {
     localStorage.setItem(
       'lingvoloc.settings',
       JSON.stringify({ cloud: { consentAccepted: 'yes', openAi: null } }),
     );
     expect(loadSettings(fallback).cloud).toEqual(fallback.cloud);
+  });
+
+  it('fills missing nested cloud model fields from defaults', () => {
+    localStorage.setItem(
+      'lingvoloc.settings',
+      JSON.stringify({
+        cloud: {
+          ...fallback.cloud,
+          openAi: { modelId: 'gpt-4.1' },
+        },
+      }),
+    );
+
+    expect(loadSettings(fallback).cloud.openAi).toEqual({
+      modelId: 'gpt-4.1',
+      availableModels: [],
+      modelsRefreshedAt: null,
+    });
   });
 
   it('persists and clamps the text scale', () => {
