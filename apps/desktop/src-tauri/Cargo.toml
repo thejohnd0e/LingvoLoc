@@ -1,6 +1,6 @@
 [package]
 name = "lingvoloc"
-version = "4.0.1"
+version = "4.1.0"
 description = "Private local translation desktop application"
 authors = ["LingvoLoc"]
 license = "MIT"

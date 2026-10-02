@@ -98,7 +98,7 @@ const cloudProviders: Array<{ id: ProviderId; label: string }> = [
   { id: 'openRouter', label: 'OpenRouter' },
   { id: 'xai', label: 'xAI Grok' },
   { id: 'chatGpt', label: 'ChatGPT Plus/Pro' },
-  { id: 'superGrok', label: 'SuperGrok (experimental)' },
+  { id: 'superGrok', label: 'SuperGrok' },
 ];
 
 function credentialPrompt(mode: Settings['runtimeMode']): string {

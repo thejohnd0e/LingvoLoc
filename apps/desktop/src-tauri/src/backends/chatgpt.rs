@@ -117,7 +117,7 @@ impl TranslationBackend for ChatGptBackend {
             available: !self.access_token.is_empty(),
             endpoint: self.base_url.clone(),
             detail: if self.provider == ProviderId::SuperGrok {
-                "SuperGrok (experimental)"
+                "SuperGrok"
             } else {
                 "ChatGPT Plus/Pro"
             }

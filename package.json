@@ -1,7 +1,7 @@
 {
   "name": "lingvoloc",
   "private": true,
-  "version": "4.0.1",
+  "version": "4.1.0",
   "workspaces": [
     "apps/*",
     "packages/*"
