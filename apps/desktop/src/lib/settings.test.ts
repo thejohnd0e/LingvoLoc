@@ -19,6 +19,14 @@ const fallback: Settings = {
   primaryLanguage: 'en',
   secondaryLanguage: 'ru',
   translationStyle: 'neutral',
+  cloud: {
+    consentAccepted: false,
+    openAi: { modelId: 'gpt-4o-mini', availableModels: [], modelsRefreshedAt: null },
+    anthropic: { modelId: 'claude-3-5-haiku-latest', availableModels: [], modelsRefreshedAt: null },
+    gemini: { modelId: 'gemini-2.0-flash', availableModels: [], modelsRefreshedAt: null },
+    deepL: { plan: 'free', availableLanguages: [], languagesRefreshedAt: null },
+    openAiCompatible: { modelId: '', availableModels: [], modelsRefreshedAt: null, endpoint: '' },
+  },
 };
 
 beforeEach(() => localStorage.clear());
@@ -57,6 +65,34 @@ describe('settings persistence', () => {
       JSON.stringify({ ...fallback, translationStyle: 'custom' }),
     );
     expect(loadSettings(fallback).translationStyle).toBe('neutral');
+  });
+
+  it('loads old local settings with cloud defaults', () => {
+    localStorage.setItem(
+      'lingoloc.settings',
+      JSON.stringify({ runtimeMode: 'standalone', modelId: 'old.gguf' }),
+    );
+    expect(loadSettings(fallback)).toMatchObject({
+      runtimeMode: 'standalone',
+      modelId: 'old.gguf',
+      cloud: { consentAccepted: false },
+    });
+  });
+
+  it.each(['lmStudio', 'standalone', 'openAi', 'anthropic', 'gemini', 'deepL', 'openAiCompatible'] as const)(
+    'accepts runtime mode %s',
+    (runtimeMode) => {
+      localStorage.setItem('lingvoloc.settings', JSON.stringify({ runtimeMode }));
+      expect(loadSettings(fallback).runtimeMode).toBe(runtimeMode);
+    },
+  );
+
+  it('rejects invalid cloud provider data without changing the fallback contract', () => {
+    localStorage.setItem(
+      'lingvoloc.settings',
+      JSON.stringify({ cloud: { consentAccepted: 'yes', openAi: null } }),
+    );
+    expect(loadSettings(fallback).cloud).toEqual(fallback.cloud);
   });
 
   it('persists and clamps the text scale', () => {

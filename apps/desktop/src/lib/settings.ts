@@ -1,6 +1,38 @@
-export type RuntimeMode = 'lmStudio' | 'standalone';
+export type RuntimeMode =
+  | 'lmStudio'
+  | 'standalone'
+  | 'openAi'
+  | 'anthropic'
+  | 'gemini'
+  | 'deepL'
+  | 'openAiCompatible';
 export type TranslationStyle =
   'neutral' | 'literary' | 'technical' | 'conversational';
+
+export interface LocalModel {
+  id: string;
+  owned_by?: string;
+  quantization?: string;
+}
+
+export interface CloudModelConfig {
+  modelId: string;
+  availableModels: LocalModel[];
+  modelsRefreshedAt: number | null;
+}
+
+export interface CloudSettings {
+  consentAccepted: boolean;
+  openAi: CloudModelConfig;
+  anthropic: CloudModelConfig;
+  gemini: CloudModelConfig;
+  deepL: {
+    plan: 'free' | 'pro';
+    availableLanguages: string[];
+    languagesRefreshedAt: number | null;
+  };
+  openAiCompatible: CloudModelConfig & { endpoint: string };
+}
 
 const translationStyles: readonly TranslationStyle[] = [
   'neutral',
@@ -21,7 +53,26 @@ export interface Settings {
   primaryLanguage: string;
   secondaryLanguage: string;
   translationStyle: TranslationStyle;
+  cloud: CloudSettings;
 }
+
+export const defaultCloudSettings: CloudSettings = {
+  consentAccepted: false,
+  openAi: { modelId: 'gpt-4o-mini', availableModels: [], modelsRefreshedAt: null },
+  anthropic: {
+    modelId: 'claude-3-5-haiku-latest',
+    availableModels: [],
+    modelsRefreshedAt: null,
+  },
+  gemini: { modelId: 'gemini-2.0-flash', availableModels: [], modelsRefreshedAt: null },
+  deepL: { plan: 'free', availableLanguages: [], languagesRefreshedAt: null },
+  openAiCompatible: {
+    modelId: '',
+    availableModels: [],
+    modelsRefreshedAt: null,
+    endpoint: '',
+  },
+};
 
 const storageKey = 'lingvoloc.settings';
 const legacyStorageKey = 'lingoloc.settings';
@@ -44,6 +95,7 @@ export function loadSettings(fallback: Settings): Settings {
     const parsed = {
       ...fallback,
       ...stored,
+      cloud: normalizeCloudSettings(stored.cloud, fallback.cloud),
       translationStyle: translationStyles.includes(
         stored.translationStyle as TranslationStyle,
       )
@@ -64,6 +116,27 @@ export function loadSettings(fallback: Settings): Settings {
       translationStyle: fallback.translationStyle ?? 'neutral',
     };
   }
+}
+
+function normalizeCloudSettings(
+  value: unknown,
+  fallbackCloud: CloudSettings,
+): CloudSettings {
+  if (!value || typeof value !== 'object') return fallbackCloud;
+  const candidate = value as Partial<CloudSettings>;
+  if (typeof candidate.consentAccepted !== 'boolean') return fallbackCloud;
+  if (!candidate.openAi || !candidate.anthropic || !candidate.gemini) {
+    return fallbackCloud;
+  }
+  return {
+    ...fallbackCloud,
+    ...candidate,
+    deepL: { ...fallbackCloud.deepL, ...(candidate.deepL ?? {}) },
+    openAiCompatible: {
+      ...fallbackCloud.openAiCompatible,
+      ...(candidate.openAiCompatible ?? {}),
+    },
+  };
 }
 
 export function saveSettings(settings: Settings): void {
