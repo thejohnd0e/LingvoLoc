@@ -6,6 +6,10 @@ import { useEffect, useRef, useState } from 'react';
 import {
   getRuntimeStatus,
   getApiToken,
+  getProviderCredentialStatus,
+  saveProviderCredential,
+  deleteProviderCredential,
+  getSessionUsage,
   checkLlamaServer,
   downloadLlamaCpp,
   getGpuInfo,
@@ -34,6 +38,9 @@ import {
   type HistoryEntry,
   type LexicalEntry,
   type LocalModel,
+  type ProviderId,
+  type CredentialStatus,
+  type SessionUsageEntry,
   type UserDictionary,
 } from '../lib/commands';
 import {
@@ -72,6 +79,28 @@ const defaultSettings: Settings = {
 
 const enabledDictionariesKey = 'lingvoloc.enabled-dictionaries';
 const dictionaryPathKey = 'lingvoloc.dictionary-path';
+
+const cloudProviders: Array<{ id: ProviderId; label: string }> = [
+  { id: 'openAi', label: 'OpenAI' },
+  { id: 'anthropic', label: 'Anthropic' },
+  { id: 'gemini', label: 'Google Gemini' },
+  { id: 'deepL', label: 'DeepL' },
+  { id: 'openAiCompatible', label: 'OpenAI-compatible' },
+];
+
+function isCloudProvider(
+  value: Settings['runtimeMode'],
+): value is Exclude<ProviderId, 'llamaCpp' | 'lmStudio'> {
+  // ProviderId also contains local runtime identifiers.
+  return value !== 'standalone' && value !== 'lmStudio';
+}
+
+function activeModelId(settings: Settings): string {
+  if (!isCloudProvider(settings.runtimeMode)) return settings.modelId;
+  return settings.runtimeMode === 'deepL'
+    ? 'deepL'
+    : settings.cloud[settings.runtimeMode].modelId;
+}
 
 function loadEnabledDictionaries(): string[] {
   try {
@@ -155,6 +184,11 @@ export default function App() {
   });
   const [fileProgress, setFileProgress] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [credentialStatus, setCredentialStatus] =
+    useState<CredentialStatus | null>(null);
+  const [credentialInput, setCredentialInput] = useState('');
+  const [usageEntries, setUsageEntries] = useState<SessionUsageEntry[]>([]);
+  const [usageBusy, setUsageBusy] = useState(false);
   const [additionalOpen, setAdditionalOpen] = useState(false);
   const [lexicalBusy, setLexicalBusy] = useState(false);
   const [dictionariesBusy, setDictionariesBusy] = useState(false);
@@ -246,6 +280,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (settingsOpen) void refreshCloudSettings();
+    // The settings modal is the explicit refresh boundary for session usage.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsOpen, settings.runtimeMode]);
+
+  useEffect(() => {
     let active = true;
     const media = document.querySelectorAll<HTMLElement>(
       '.dictionary-definition-html [data-dictionary-media-resource]',
@@ -275,6 +315,47 @@ export default function App() {
     void updateNativeSettings(next).catch(() => undefined);
   }
 
+  async function refreshCloudSettings() {
+    if (!isCloudProvider(settings.runtimeMode)) return;
+    setUsageBusy(true);
+    try {
+      const [credentials, usage] = await Promise.all([
+        getProviderCredentialStatus(settings.runtimeMode),
+        getSessionUsage(),
+      ]);
+      setCredentialStatus(credentials);
+      setUsageEntries(usage);
+    } catch {
+      setCredentialStatus(null);
+      setUsageEntries([]);
+    } finally {
+      setUsageBusy(false);
+    }
+  }
+
+  async function saveCloudKey() {
+    if (!isCloudProvider(settings.runtimeMode) || !credentialInput.trim())
+      return;
+    try {
+      const next = await saveProviderCredential(
+        settings.runtimeMode,
+        credentialInput.trim(),
+      );
+      setCredentialStatus(next);
+      setCredentialInput('');
+      setNotice('Provider key saved securely.');
+    } catch (reason) {
+      setNotice(`Provider key was not saved · ${errorDetail(reason)}`);
+    }
+  }
+
+  async function removeCloudKey() {
+    if (!isCloudProvider(settings.runtimeMode)) return;
+    await deleteProviderCredential(settings.runtimeMode);
+    setCredentialStatus({ configured: false, hint: null });
+    setNotice('Provider key removed.');
+  }
+
   async function runTranslation(input = source) {
     if (!input.trim()) return;
     setLoading(true);
@@ -298,7 +379,7 @@ export default function App() {
         setDetectedLanguage(sourceLanguage);
       }
       const result = await translate({
-        model_id: settings.modelId,
+        model_id: activeModelId(settings),
         adapter_id: settings.adapterId,
         source_language: sourceLanguage,
         target_language: targetLanguage,
@@ -733,7 +814,7 @@ export default function App() {
               )
             : settings.targetLanguage;
         const result = await translateWord({
-          model_id: settings.modelId,
+          model_id: activeModelId(settings),
           adapter_id: settings.adapterId,
           source_language: sourceLanguage,
           target_language: targetLanguage,
@@ -755,7 +836,7 @@ export default function App() {
             ? settings.primaryLanguage
             : settings.sourceLanguage);
         const result = await translateWord({
-          model_id: settings.modelId,
+          model_id: activeModelId(settings),
           adapter_id: settings.adapterId,
           source_language: selectedLanguage,
           target_language: sourceLanguage,
@@ -823,14 +904,14 @@ export default function App() {
       historyMessage ||
       (timing === null
         ? 'Local runtime · no request yet'
-        : `Local runtime · ${timing} · ${settings.modelId}`);
+        : `${runtimeLabel} · ${timing} · ${activeModelId(settings)}`);
   const usageMarker = ' · Used tokens: ';
   const usageStart = feedbackMessage.indexOf(usageMarker);
   const hasUsage = usageStart >= 0;
   const usagePrefix = hasUsage
     ? feedbackMessage.slice(0, usageStart)
     : feedbackMessage;
-  const modelSuffix = ` · ${settings.modelId}`;
+  const modelSuffix = ` · ${activeModelId(settings)}`;
   const modelSuffixStart = hasUsage
     ? feedbackMessage.lastIndexOf(modelSuffix)
     : -1;
@@ -840,6 +921,7 @@ export default function App() {
     ? feedbackMessage.slice(usageStart + usageMarker.length, usageEnd)
     : '';
   const usageSuffix = modelSuffixStart > usageStart ? modelSuffix : '';
+  const selectedCloudModel = activeModelId(settings);
 
   return (
     <main className="shell">
@@ -1125,9 +1207,20 @@ export default function App() {
           <span className="model-label">Model</span>
           <div className="model-row">
             <select
-              value={settings.modelId}
+              value={activeModelId(settings)}
               onChange={(event) =>
-                updateSettings({ modelId: event.target.value })
+                isCloudProvider(settings.runtimeMode) &&
+                settings.runtimeMode !== 'deepL'
+                  ? updateSettings({
+                      cloud: {
+                        ...settings.cloud,
+                        [settings.runtimeMode]: {
+                          ...settings.cloud[settings.runtimeMode],
+                          modelId: event.target.value,
+                        },
+                      },
+                    })
+                  : updateSettings({ modelId: event.target.value })
               }
             >
               <option value="">
@@ -1155,7 +1248,7 @@ export default function App() {
         </div>
         <button
           className="translate"
-          disabled={loading || !settings.modelId}
+          disabled={loading || !activeModelId(settings)}
           onClick={() => void runTranslation()}
         >
           {loading && <Spinner />}
@@ -1186,7 +1279,7 @@ export default function App() {
         targetLanguage={
           settings.sourceLanguage === 'auto' ? 'auto' : settings.targetLanguage
         }
-        modelId={settings.modelId}
+        modelId={activeModelId(settings)}
         translationStyle={settings.translationStyle}
       />
       {settingsOpen && (
@@ -1208,6 +1301,11 @@ export default function App() {
               >
                 <option value="lmStudio">LM Studio</option>
                 <option value="standalone">Standalone (llama.cpp)</option>
+                {cloudProviders.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.label}
+                  </option>
+                ))}
               </select>
             </label>
             {settings.runtimeMode === 'standalone' ? (
@@ -1340,6 +1438,10 @@ export default function App() {
                   </ol>
                 </div>
               </>
+            ) : isCloudProvider(settings.runtimeMode) ? (
+              <p className="runtime-note">
+                Cloud provider configuration is shown below.
+              </p>
             ) : (
               <p className="runtime-note">
                 Translation uses the model loaded in LM Studio at{' '}
@@ -1347,6 +1449,138 @@ export default function App() {
               </p>
             )}
           </section>
+          {isCloudProvider(settings.runtimeMode) && (
+            <section
+              className="runtime-panel settings-section"
+              aria-label="Cloud provider"
+            >
+              <span className="panel-label">CLOUD PROVIDER</span>
+              <label className="runtime-mode">
+                <b>Provider</b>
+                <select
+                  aria-label="Cloud provider"
+                  value={settings.runtimeMode}
+                  onChange={(event) =>
+                    changeRuntimeMode(
+                      event.target.value as Settings['runtimeMode'],
+                    )
+                  }
+                >
+                  {cloudProviders.map((provider) => (
+                    <option key={provider.id} value={provider.id}>
+                      {provider.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="runtime-row">
+                <b>Model</b>
+                <input
+                  aria-label="Cloud model"
+                  value={selectedCloudModel}
+                  disabled={settings.runtimeMode === 'deepL'}
+                  onChange={(event) => {
+                    const provider = settings.runtimeMode;
+                    if (provider === 'deepL' || !isCloudProvider(provider))
+                      return;
+                    updateSettings({
+                      cloud: {
+                        ...settings.cloud,
+                        [provider]: {
+                          ...settings.cloud[provider],
+                          modelId: event.target.value,
+                        },
+                      },
+                    });
+                  }}
+                />
+              </label>
+              <div className="runtime-row">
+                <div>
+                  <b>
+                    {cloudProviders.find(
+                      (provider) => provider.id === settings.runtimeMode,
+                    )?.label ?? 'Provider'}{' '}
+                    API key
+                  </b>
+                  <span className="runtime-note">
+                    {credentialStatus?.configured
+                      ? `Configured (${credentialStatus.hint ?? 'stored securely'})`
+                      : 'Not configured'}
+                  </span>
+                </div>
+                <div className="runtime-buttons">
+                  <input
+                    aria-label="Provider API key"
+                    type="password"
+                    value={credentialInput}
+                    placeholder="Enter key"
+                    onChange={(event) => setCredentialInput(event.target.value)}
+                  />
+                  <button
+                    className="quiet"
+                    type="button"
+                    onClick={() => void saveCloudKey()}
+                  >
+                    Save key
+                  </button>
+                  {credentialStatus?.configured && (
+                    <button
+                      className="quiet"
+                      type="button"
+                      onClick={() => void removeCloudKey()}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={settings.cloud.consentAccepted}
+                  onChange={(event) =>
+                    updateSettings({
+                      cloud: {
+                        ...settings.cloud,
+                        consentAccepted: event.target.checked,
+                      },
+                    })
+                  }
+                />{' '}
+                I understand that cloud translation sends text to the selected
+                provider.
+              </label>
+              <div className="runtime-row" aria-label="Session usage">
+                <div>
+                  <b>Session usage</b>
+                  {usageBusy && (
+                    <span className="runtime-note">Refreshing…</span>
+                  )}
+                </div>
+                <div>
+                  {usageEntries.length === 0 ? (
+                    <span className="runtime-note">No requests yet.</span>
+                  ) : (
+                    usageEntries.map((entry) => (
+                      <div key={`${entry.providerId}-${entry.modelId}`}>
+                        {entry.totalTokens != null && (
+                          <span>{entry.totalTokens} tokens</span>
+                        )}
+                        {entry.billedCharacters != null && (
+                          <span>{entry.billedCharacters} characters</span>
+                        )}
+                        <span className="runtime-note">
+                          {entry.requests} requests · {entry.failedRequests}{' '}
+                          failed
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
           <section
             className="runtime-panel settings-section"
             aria-label="Dictionaries"

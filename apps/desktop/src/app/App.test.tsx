@@ -38,6 +38,37 @@ vi.mock('../lib/commands', () => ({
   exportHistory: vi.fn().mockResolvedValue('history.csv'),
   detectLanguage: vi.fn().mockResolvedValue({ code: 'en', confidence: 1 }),
   updateSettings: vi.fn().mockResolvedValue(undefined),
+  getProviderCredentialStatus: vi.fn().mockResolvedValue({
+    configured: false,
+    hint: null,
+  }),
+  saveProviderCredential: vi.fn().mockResolvedValue({
+    configured: true,
+    hint: '••••1234',
+  }),
+  deleteProviderCredential: vi.fn().mockResolvedValue(undefined),
+  getSessionUsage: vi.fn().mockResolvedValue([
+    {
+      providerId: 'openAi',
+      modelId: 'gpt-4o-mini',
+      requests: 2,
+      failedRequests: 1,
+      inputTokens: 120,
+      outputTokens: 80,
+      totalTokens: 200,
+      billedCharacters: null,
+    },
+    {
+      providerId: 'deepL',
+      modelId: 'deepL',
+      requests: 1,
+      failedRequests: 0,
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+      billedCharacters: 450,
+    },
+  ]),
   translate: vi.fn(),
   translateWord: vi.fn(),
   analyzeTxt: vi.fn(),
@@ -157,6 +188,66 @@ describe('translation workspace', () => {
     expect(
       screen.getByRole('button', { name: 'Refresh models' }),
     ).toBeInTheDocument();
+  });
+
+  it('shows cloud provider settings and aggregated session usage', async () => {
+    localStorage.setItem(
+      'lingvoloc.settings',
+      JSON.stringify({
+        runtimeMode: 'openAi',
+        cloud: {
+          consentAccepted: true,
+          openAi: {
+            modelId: 'gpt-4o-mini',
+            availableModels: [],
+            modelsRefreshedAt: null,
+          },
+        },
+      }),
+    );
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(
+      screen.getByRole('combobox', { name: 'Cloud provider' }),
+    ).toHaveValue('openAi');
+    expect(screen.getByText('OpenAI API key')).toBeInTheDocument();
+    expect(await screen.findByText('Session usage')).toBeInTheDocument();
+    expect(screen.getByText('200 tokens')).toBeInTheDocument();
+    expect(screen.getByText('450 characters')).toBeInTheDocument();
+  });
+
+  it('uses the selected cloud model for the main translation action', async () => {
+    localStorage.setItem(
+      'lingvoloc.settings',
+      JSON.stringify({
+        runtimeMode: 'openAi',
+        cloud: {
+          consentAccepted: true,
+          openAi: {
+            modelId: 'gpt-4o-mini',
+            availableModels: [],
+            modelsRefreshedAt: null,
+          },
+        },
+      }),
+    );
+    vi.mocked(commands.translate).mockResolvedValue({
+      text: 'Translated',
+      model_id: 'gpt-4o-mini',
+      adapter_id: 'generic',
+      latency_ms: 10,
+    });
+    render(<App />);
+    const input = screen.getByPlaceholderText('Write something to translate…');
+    fireEvent.change(input, { target: { value: 'Hello' } });
+    const button = screen.getByRole('button', { name: /Translate/ });
+    expect(button).not.toBeDisabled();
+    fireEvent.click(button);
+    await waitFor(() =>
+      expect(commands.translate).toHaveBeenCalledWith(
+        expect.objectContaining({ model_id: 'gpt-4o-mini' }),
+      ),
+    );
   });
 
   it('sends the saved translation style and neutral word alignment requests', async () => {
