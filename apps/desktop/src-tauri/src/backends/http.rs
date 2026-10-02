@@ -44,10 +44,12 @@ impl HttpTransport {
         let client = Client::builder()
             .connect_timeout(timeouts.connect)
             .timeout(timeouts.request)
+            .no_proxy()
             .build()
             .map_err(|error| RuntimeError::Connection(format!("HTTP client: {error}")))?;
         let async_client = reqwest::Client::builder()
             .connect_timeout(timeouts.connect)
+            .timeout(timeouts.request)
             .no_proxy()
             .build()
             .map_err(|error| RuntimeError::Connection(format!("HTTP client: {error}")))?;
@@ -59,7 +61,20 @@ impl HttpTransport {
     }
 
     pub fn get(&self, url: &str) -> Result<Response, RuntimeError> {
-        let response = self.client.get(url).send().map_err(map_request_error)?;
+        self.get_with_headers(url, HeaderMap::new())
+    }
+
+    pub fn get_with_headers(
+        &self,
+        url: &str,
+        headers: HeaderMap,
+    ) -> Result<Response, RuntimeError> {
+        let response = self
+            .client
+            .get(url)
+            .headers(headers)
+            .send()
+            .map_err(map_request_error)?;
         if response.status().is_success() {
             return Ok(response);
         }
@@ -379,6 +394,35 @@ mod tests {
         .unwrap();
         let error = transport.get(&format!("http://{address}/")).unwrap_err();
         assert!(matches!(error, RuntimeError::Timeout(_)), "{error:?}");
+    }
+
+    #[test]
+    fn get_with_headers_sends_provider_authentication() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buffer = [0_u8; 4096];
+            let count = stream.read(&mut buffer).unwrap();
+            let request = String::from_utf8_lossy(&buffer[..count]).into_owned();
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 13\r\nConnection: close\r\n\r\n{\"models\":[]}",
+                )
+                .unwrap();
+            request
+        });
+
+        let transport = HttpTransport::new().unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert("x-goog-api-key", "secret".parse().unwrap());
+        let response = transport
+            .get_with_headers(&format!("http://{address}/models"), headers)
+            .unwrap();
+        let _ = response.text();
+
+        let request = server.join().unwrap();
+        assert!(request.contains("x-goog-api-key: secret"));
     }
 
     #[test]
