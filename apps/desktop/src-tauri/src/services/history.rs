@@ -262,7 +262,9 @@ mod tests {
             model_id: "model".into(),
             adapter_id: "translategemma".into(),
             latency_ms: 10,
+            prompt_tokens: None,
             completion_tokens: None,
+            total_tokens: None,
         };
         store.add("Hello", &request(), &result).unwrap();
         assert_eq!(store.list().unwrap()[0].translated_text, "Hallo");
@@ -285,7 +287,9 @@ mod tests {
             model_id: "model".into(),
             adapter_id: "translategemma".into(),
             latency_ms: 10,
+            prompt_tokens: None,
             completion_tokens: None,
+            total_tokens: None,
         };
         store.add(&request.text, &request, &result).unwrap();
         assert!(store
@@ -337,7 +341,9 @@ mod tests {
             model_id: "model".into(),
             adapter_id: "translategemma".into(),
             latency_ms: 10,
+            prompt_tokens: None,
             completion_tokens: None,
+            total_tokens: None,
         };
         for index in 0..=HISTORY_RETENTION_LIMIT {
             store
