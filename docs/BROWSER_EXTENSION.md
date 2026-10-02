@@ -17,7 +17,7 @@ For a distributable artifact, run:
 npm run extension:package
 ```
 
-This creates `apps/extension/LingvoLoc-extension-3.1.4.zip`.
+This creates `apps/extension/LingvoLoc-extension-4.0.1.zip`.
 
 ## Pairing
 
@@ -31,7 +31,7 @@ Use the `−` and `+` controls in the popup header to adjust text size from 12px
 
 The extension keeps its source and target languages independently from desktop settings. Click **Original text** to collapse or expand the source field; that state is remembered for the next popup. Press **Clear** to remove both the selected text and translation result without changing the languages or pairing. The in-page window can be moved by its brand header and resized from its right edge, bottom edge, or lower-right corner; the fields grow with the window and the size is remembered. Drag the divider between the fields to give the source or result more room; that split is remembered too. Its translation can be copied with `Copy`.
 
-While a translation is running, the result area shows `Translating...` and an animated progress indicator. Each source paragraph is translated separately so the result keeps the paragraph boundaries. Translation paragraphs are displayed with a first-line indent for easier reading; the indent is visual and does not change the text sent to the model.
+While a translation is running, the result area shows `Translating...` and an animated progress indicator. Each source paragraph is translated separately so the result keeps the paragraph boundaries. Translation paragraphs are displayed with a first-line indent for easier reading; the indent is visual and does not change the text sent to the model. The popup carries provider usage metadata from the desktop API and displays billed characters for DeepL.
 
 The `⧉` button in the header opens the current text, languages, and translation in a separate browser window. That window is movable and resizable, stays open, and keeps its content when you switch tabs.
 

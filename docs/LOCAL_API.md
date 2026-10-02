@@ -29,7 +29,7 @@ Translation body:
 }
 ```
 
-The API uses the model and adapter selected in the desktop application. Successful API translations are added to local history just like desktop translations.
+The API uses the runtime, cloud provider, model, adapter, and translation style selected in the desktop application. Cloud API keys are resolved from Windows Credential Manager and are never accepted in the request body. Successful API translations are added to local history just like desktop translations and contribute to the in-memory session usage panel.
 
 Successful translations include exact provider usage when available:
 
@@ -37,8 +37,10 @@ Successful translations include exact provider usage when available:
 {
   "prompt_tokens": 214,
   "completion_tokens": 118,
-  "total_tokens": 332
+  "total_tokens": 332,
+  "provider_id": "openAi",
+  "billed_characters": null
 }
 ```
 
-When the provider omits usage, these fields are unavailable rather than estimated. Usage is not persisted and aggregate statistics are not exposed.
+When the provider omits usage, these fields are unavailable rather than estimated. DeepL may return `billed_characters` instead of token counts. Session aggregates are exposed only in the desktop Settings surface and are not persisted.
