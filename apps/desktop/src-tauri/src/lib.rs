@@ -203,6 +203,11 @@ fn translate(
 }
 
 #[tauri::command]
+fn cancel_translation(state: tauri::State<'_, AppState>) -> usize {
+    state.request_registry.cancel_prefix("interactive-")
+}
+
+#[tauri::command]
 fn get_session_usage(state: tauri::State<'_, AppState>) -> Vec<SessionUsageEntry> {
     state.session_usage.list()
 }
@@ -650,6 +655,7 @@ pub fn run() {
             test_provider_connection,
             get_session_usage,
             translate,
+            cancel_translation,
             get_settings,
             get_api_token,
             write_clipboard,

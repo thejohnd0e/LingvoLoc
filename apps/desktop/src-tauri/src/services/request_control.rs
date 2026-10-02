@@ -84,6 +84,21 @@ impl RequestRegistry {
         true
     }
 
+    /// Cancels every active request whose id starts with `prefix`.
+    pub fn cancel_prefix(&self, prefix: &str) -> usize {
+        let Ok(active) = self.active.lock() else {
+            return 0;
+        };
+        let mut count = 0;
+        for (id, cancellation) in active.iter() {
+            if id.starts_with(prefix) {
+                cancellation.cancel();
+                count += 1;
+            }
+        }
+        count
+    }
+
     pub fn finish(&self, request_id: &str) {
         if let Ok(mut active) = self.active.lock() {
             active.remove(request_id);
@@ -104,6 +119,16 @@ mod tests {
         assert!(request.is_cancelled());
         registry.finish("job-1");
         assert!(!registry.cancel("job-1"));
+    }
+
+    #[test]
+    fn cancel_prefix_only_cancels_matching_requests() {
+        let registry = RequestRegistry::default();
+        let (_, interactive) = registry.start_generated("interactive");
+        let (_, api) = registry.start_generated("api");
+        assert_eq!(registry.cancel_prefix("interactive-"), 1);
+        assert!(interactive.is_cancelled());
+        assert!(!api.is_cancelled());
     }
 
     #[test]

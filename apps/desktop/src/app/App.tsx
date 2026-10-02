@@ -33,6 +33,7 @@ import {
   lookupLexicon,
   setHistoryFavorite,
   translate,
+  cancelTranslation,
   translateWord,
   writeClipboard,
   updateSettings as updateNativeSettings,
@@ -227,6 +228,7 @@ export default function App() {
     useState<CredentialStatus | null>(null);
   const [credentialInput, setCredentialInput] = useState('');
   const [credentialFocused, setCredentialFocused] = useState(false);
+  const translationRunRef = useRef(0);
   const [usageEntries, setUsageEntries] = useState<SessionUsageEntry[]>([]);
   const [usageBusy, setUsageBusy] = useState(false);
   const [cloudModelsMessage, setCloudModelsMessage] = useState('');
@@ -450,6 +452,13 @@ export default function App() {
     setNotice('Provider key removed.');
   }
 
+  function cancelCurrentTranslation() {
+    translationRunRef.current += 1;
+    setLoading(false);
+    setNotice('Translation cancelled.');
+    void cancelTranslation().catch(() => undefined);
+  }
+
   async function runTranslation(input = source) {
     if (!input.trim()) return;
     if (
@@ -469,6 +478,8 @@ export default function App() {
       setError('Select a cloud model before translating.');
       return;
     }
+    const runId = ++translationRunRef.current;
+    const stale = () => translationRunRef.current !== runId;
     setLoading(true);
     setError('');
     setNotice('');
@@ -498,6 +509,7 @@ export default function App() {
         text: input,
         translation_style: settings.translationStyle,
       });
+      if (stale()) return;
       setTranslation(result.text);
       setTiming(formatTiming(result));
       void getRuntimeStatus()
@@ -521,9 +533,9 @@ export default function App() {
         );
       }
     } catch (reason) {
-      setError(`Translation failed · ${errorDetail(reason)}`);
+      if (!stale()) setError(`Translation failed · ${errorDetail(reason)}`);
     } finally {
-      setLoading(false);
+      if (!stale()) setLoading(false);
     }
   }
 
@@ -1402,11 +1414,13 @@ export default function App() {
         </div>
         <button
           className="translate"
-          disabled={loading || !activeModelId(settings)}
-          onClick={() => void runTranslation()}
+          disabled={!loading && !activeModelId(settings)}
+          onClick={() =>
+            loading ? cancelCurrentTranslation() : void runTranslation()
+          }
         >
           {loading && <Spinner />}
-          {loading ? 'Translating…' : 'Translate'} <span>Enter</span>
+          {loading ? 'Cancel' : 'Translate'} {!loading && <span>Enter</span>}
         </button>
       </section>
       <div className="feedback" role="status" hidden={mode !== 'text'}>

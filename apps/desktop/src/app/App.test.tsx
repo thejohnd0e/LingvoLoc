@@ -72,6 +72,7 @@ vi.mock('../lib/commands', () => ({
     },
   ]),
   translate: vi.fn(),
+  cancelTranslation: vi.fn().mockResolvedValue(0),
   translateWord: vi.fn(),
   analyzeTxt: vi.fn(),
   analyzeDocx: vi.fn(),
@@ -337,6 +338,30 @@ describe('translation workspace', () => {
     expect(commands.translate).toHaveBeenCalledWith(
       expect.objectContaining({ translation_style: 'technical' }),
     );
+  });
+
+  it('cancels a pending translation from the Cancel button', async () => {
+    localStorage.setItem(
+      'lingvoloc.settings',
+      JSON.stringify({ modelId: 'model' }),
+    );
+    vi.mocked(commands.detectLanguage).mockResolvedValue({
+      code: 'en',
+      confidence: 1,
+    });
+    vi.mocked(commands.translate).mockReturnValue(new Promise(() => undefined));
+    const { container } = render(<App />);
+    const action = () =>
+      container.querySelector('button.translate') as HTMLButtonElement;
+    fireEvent.change(
+      screen.getByPlaceholderText('Write something to translate…'),
+      { target: { value: 'Hello' } },
+    );
+    fireEvent.click(action());
+    await waitFor(() => expect(action()).toHaveTextContent('Cancel'));
+    fireEvent.click(action());
+    await waitFor(() => expect(commands.cancelTranslation).toHaveBeenCalled());
+    await waitFor(() => expect(action()).toHaveTextContent('Translate'));
   });
 
   it('uses neutral style when aligning a selected source word', async () => {

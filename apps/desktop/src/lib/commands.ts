@@ -207,6 +207,9 @@ export const saveProviderCredential = (
   });
 export const deleteProviderCredential = (providerId: ProviderId) =>
   invokeNative<void>('delete_provider_credential', { providerId });
+export const cancelTranslation = () =>
+  invokeNative<number>('cancel_translation');
+
 export const translate = (request: TranslationRequest) =>
   invokeNative<TranslationResult>('translate', { request });
 export const detectLanguage = (text: string) =>
