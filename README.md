@@ -12,7 +12,19 @@
 ![Documents](https://img.shields.io/badge/files-TXT%20%7C%20DOCX%20%7C%20EPUB%20%7C%20FB2%20%7C%20PDF-8a5cf5)
 ![Chrome extension](https://img.shields.io/badge/extension-Chromium%20MV3-4285f4?logo=googlechrome&logoColor=white)
 
-LingvoLoc is a Windows app for translation with the model you choose. Run models **on your own computer** - private, offline, and with no account or subscription - or connect a **cloud service** (OpenAI, Anthropic, Gemini, DeepL, DeepSeek, OpenRouter, xAI Grok or any OpenAI-compatible endpoint) with an API key, or use the models of your **ChatGPT Plus/Pro or SuperGrok subscription** by signing in through the browser. With a local model everything - text, documents, dictionary lookups - is processed on your computer and nothing is sent to the internet; with a cloud provider the text you translate goes to that provider.
+LingvoLoc is a Windows app for translation with the model you choose. It works both with **local models** - completely private, offline, with no account or subscription - and with **any cloud AI provider**:
+
+- OpenAI
+- Anthropic
+- Google Gemini
+- DeepL
+- DeepSeek
+- OpenRouter
+- xAI Grok
+- any OpenAI-compatible endpoint
+- ChatGPT Plus/Pro and SuperGrok subscriptions (sign in through the browser, no API key)
+
+With a local model everything - text, documents, dictionary lookups - is processed on your computer and nothing is sent to the internet.
 
 ![LingvoLoc Text mode](docs/screenshot-text.png)
 
@@ -79,7 +91,7 @@ Besides local models, LingvoLoc can translate with cloud services. Choose one in
 | **ChatGPT Plus/Pro** | **Sign in with your ChatGPT account in the browser**     | Uses your plan allowance instead of an API key. Official OpenAI sign-in for open-source apps.  |
 | **SuperGrok**        | **Sign in with your xAI account (device code)**          | Uses your SuperGrok / X Premium+ subscription. Unofficial: xAI may refuse some accounts (403). |
 
-**Connecting with an API key.** Choose the provider, paste the key and press **Save key**. Keys are stored in Windows Credential Manager, never in settings files; once saved, the field shows a masked value and **Saved securely**. Press **Refresh models**, pick a model (or type its id), and tick the notice that cloud translation sends your text to the selected provider. Models whose id contains `free` are highlighted with ★ in every model list.
+**Connecting with an API key.** Choose the provider, paste the key and press **Save key**. Keys are stored in Windows Credential Manager, never in settings files; once saved, the field shows a masked value and **Saved securely**. Press **Refresh models**, pick a model (or type its id), and tick the consent notice. Models whose id contains `free` are highlighted with ★ in every model list.
 
 **Using a subscription.** There is no key to paste:
 
@@ -182,7 +194,7 @@ Select text and use the toolbar button or the right-click menu **Translate selec
 
 ## Privacy
 
-With a local model (Standalone or LM Studio), translation, documents, dictionaries, and history stay on your computer; the only network access is the optional download of llama.cpp from GitHub. With a cloud provider or a subscription, the text you translate is sent to that provider (and, for subscriptions, to the sign-in service of OpenAI or xAI) - nothing is sent until you select such a mode and accept the notice in Settings. API keys and sign-in sessions are kept in Windows Credential Manager, never in settings files. The extension talks only to the desktop app on `127.0.0.1` with a pairing token.
+With a local model (Standalone or LM Studio), translation, documents, dictionaries, and history stay on your computer; the only network access is the optional download of llama.cpp from GitHub. Nothing is sent to a cloud provider or a subscription service until you select such a mode and accept the notice in Settings. API keys and sign-in sessions are kept in Windows Credential Manager, never in settings files. The extension talks only to the desktop app on `127.0.0.1` with a pairing token.
 
 The project is licensed under MIT; see `LICENSE`.
 
