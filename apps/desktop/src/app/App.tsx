@@ -1610,6 +1610,28 @@ export default function App() {
                       });
                     }}
                   >
+              {settings.runtimeMode === 'openAiCompatible' && (
+                <label className="runtime-row">
+                  <b>Endpoint</b>
+                  <input
+                    aria-label="OpenAI-compatible endpoint"
+                    value={settings.cloud.openAiCompatible.endpoint}
+                    placeholder="https://host/v1"
+                    spellCheck={false}
+                    onChange={(event) =>
+                      updateSettings({
+                        cloud: {
+                          ...settings.cloud,
+                          openAiCompatible: {
+                            ...settings.cloud.openAiCompatible,
+                            endpoint: event.target.value,
+                          },
+                        },
+                      })
+                    }
+                  />
+                </label>
+              )}
                     {cloudModelOptions.map((model) => (
                       <option key={model.id} value={model.id}>
                         {model.id}
