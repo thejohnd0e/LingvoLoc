@@ -31,6 +31,7 @@ whatlang = "0.16"
 rusqlite = { version = "0.32", features = ["bundled"] }
 rand = "0.9"
 keyring = { version = "4.2", default-features = false, features = ["v1", "windows-native-keyring-store"] }
+httpdate = "1"
 flate2 = "1"
 sha2 = "0.10"
 ttf-parser = "0.25"
