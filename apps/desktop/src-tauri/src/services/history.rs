@@ -1,4 +1,4 @@
-use crate::domain::{RuntimeError, TranslationResult};
+use crate::domain::{ProviderId, RuntimeError, TranslationResult};
 use rusqlite::{params, Connection};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -15,6 +15,7 @@ pub struct HistoryEntry {
     pub model_id: String,
     pub created_at: i64,
     pub favorite: bool,
+    pub provider_id: Option<ProviderId>,
 }
 
 pub struct HistoryStore {
@@ -66,8 +67,22 @@ impl HistoryStore {
                 )
                 .map_err(|error| RuntimeError::Connection(format!("history migration: {error}")))?;
         }
+        let has_provider = self
+            .connection
+            .prepare("SELECT provider_id FROM translation_history LIMIT 0")
+            .is_ok();
+        if !has_provider {
+            self.connection
+                .execute(
+                    "ALTER TABLE translation_history ADD COLUMN provider_id TEXT",
+                    [],
+                )
+                .map_err(|error| {
+                    RuntimeError::Connection(format!("history provider migration: {error}"))
+                })?;
+        }
         self.connection
-            .execute_batch("PRAGMA user_version = 2;")
+            .execute_batch("PRAGMA user_version = 3;")
             .map_err(|error| RuntimeError::Connection(format!("history version: {error}")))?;
         Ok(())
     }
@@ -85,15 +100,16 @@ impl HistoryStore {
         self.connection
             .execute(
                 "INSERT INTO translation_history
-                 (source_text, translated_text, source_language, target_language, model_id, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                 (source_text, translated_text, source_language, target_language, model_id, created_at, provider_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
                     source_text,
                     result.text,
                     request.source_language,
                     request.target_language,
                     request.model_id,
-                    created_at
+                    created_at,
+                    result.provider_id.map(|provider| serde_json::to_string(&provider).unwrap().trim_matches('"').to_string())
                 ],
             )
             .map_err(|error| RuntimeError::Connection(format!("history insert: {error}")))?;
@@ -146,7 +162,7 @@ impl HistoryStore {
             .connection
             .prepare(
                 "SELECT id, source_text, translated_text, source_language,
-                        target_language, model_id, created_at, favorite
+                        target_language, model_id, created_at, favorite, provider_id
                  FROM translation_history ORDER BY id DESC LIMIT ?1 OFFSET ?2",
             )
             .map_err(|error| RuntimeError::Connection(format!("history query: {error}")))?;
@@ -169,7 +185,7 @@ impl HistoryStore {
             .connection
             .prepare(
                 "SELECT id, source_text, translated_text, source_language,
-                        target_language, model_id, created_at, favorite
+                        target_language, model_id, created_at, favorite, provider_id
                  FROM translation_history
                  WHERE source_text LIKE ?1 OR translated_text LIKE ?1
                  ORDER BY id DESC LIMIT ?2 OFFSET ?3",
@@ -231,6 +247,9 @@ fn row_to_entry(row: &rusqlite::Row<'_>) -> rusqlite::Result<HistoryEntry> {
         model_id: row.get(5)?,
         created_at: row.get(6)?,
         favorite: row.get::<_, i64>(7)? != 0,
+        provider_id: row
+            .get::<_, Option<String>>(8)?
+            .and_then(|value| serde_json::from_str(&format!("\"{value}\"")).ok()),
     })
 }
 
@@ -333,7 +352,7 @@ mod tests {
             .connection
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
     }
 
     #[test]

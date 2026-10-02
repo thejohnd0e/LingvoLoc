@@ -102,6 +102,8 @@ pub struct BackendCapabilities {
 pub struct CloudModelConfig {
     pub model_id: String,
     #[serde(default)]
+    pub endpoint: String,
+    #[serde(default)]
     pub available_models: Vec<LocalModel>,
     #[serde(default)]
     pub models_refreshed_at: Option<u64>,
@@ -111,6 +113,7 @@ impl CloudModelConfig {
     fn new(model_id: &str) -> Self {
         Self {
             model_id: model_id.into(),
+            endpoint: String::new(),
             available_models: Vec::new(),
             models_refreshed_at: None,
         }
