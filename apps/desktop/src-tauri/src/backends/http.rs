@@ -8,6 +8,8 @@ use std::time::{Duration, SystemTime};
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 pub const IDLE_TIMEOUT: Duration = Duration::from_secs(45);
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(900);
+/// Longest wait for response headers of a streaming request.
+pub const HEADER_TIMEOUT: Duration = Duration::from_secs(30);
 pub const MAX_ERROR_BODY: usize = 1024 * 1024;
 
 #[derive(Debug, Clone, Copy)]
@@ -237,13 +239,15 @@ async fn stream_post_json_async<F>(
 where
     F: FnMut(&[u8]) -> Result<(), RuntimeError> + Send + 'static,
 {
-    let response = client
-        .post(url)
-        .headers(headers)
-        .body(body)
-        .send()
-        .await
-        .map_err(map_request_error)?;
+    let response = tokio::select! {
+        _ = cancellation.cancelled() => return Err(RuntimeError::Cancelled),
+        result = tokio::time::timeout(
+            HEADER_TIMEOUT.min(timeouts.request),
+            client.post(url).headers(headers).body(body).send(),
+        ) => result
+            .map_err(|_| RuntimeError::Timeout("provider did not respond in time".into()))?
+            .map_err(map_request_error)?,
+    };
     if !response.status().is_success() {
         let status = response.status();
         let headers = response.headers().clone();

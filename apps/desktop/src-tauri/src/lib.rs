@@ -210,7 +210,7 @@ fn get_settings(state: tauri::State<'_, AppState>) -> Result<Settings, RuntimeEr
     settings(&state)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn update_settings(
     state: tauri::State<'_, AppState>,
     next: Settings,
