@@ -14,6 +14,7 @@ import {
   splitParagraphs,
   stripParagraphIndents,
   translateParagraphs,
+  formatTokenUsage,
 } from './popupFormatting';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -29,6 +30,7 @@ const state = {
   fontSize: 16,
   textSplit: DEFAULT_TEXT_SPLIT,
   originalTextExpanded: true,
+  usage: 'Token usage unavailable',
 };
 
 app.innerHTML = `
@@ -293,12 +295,17 @@ async function translateCurrentText() {
   button.disabled = true;
   copyButton.disabled = true;
   status.textContent = 'TRANSLATING';
+  state.usage = 'Token usage unavailable';
   result.innerHTML =
     '<span class="loading-state" role="status"><span class="loading-dots" aria-hidden="true"><i></i><i></i><i></i></span> Translating...</span>';
   try {
     let totalLatency = 0;
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let usageParagraphs = 0;
+    const paragraphs = splitParagraphs(state.text);
     const translatedText = await translateParagraphs(
-      splitParagraphs(state.text),
+      paragraphs,
       async (paragraph) => {
         const translation = await translate(
           state.token,
@@ -307,11 +314,25 @@ async function translateCurrentText() {
           targetInput.value,
         );
         totalLatency += translation.latency_ms;
+        if (
+          translation.prompt_tokens != null &&
+          translation.completion_tokens != null
+        ) {
+          inputTokens += translation.prompt_tokens;
+          outputTokens += translation.completion_tokens;
+          usageParagraphs += 1;
+        }
         return translation.text;
       },
     );
     renderResult(translatedText);
-    status.textContent = `${totalLatency} MS`;
+    state.usage = formatTokenUsage(
+      inputTokens,
+      outputTokens,
+      usageParagraphs,
+      paragraphs.length,
+    );
+    status.textContent = `${totalLatency} MS · ${state.usage}`;
   } catch (error) {
     result.textContent =
       error instanceof Error ? error.message : 'Translation failed';

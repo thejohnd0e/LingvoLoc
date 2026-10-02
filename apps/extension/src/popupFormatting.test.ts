@@ -4,6 +4,7 @@ import {
   splitParagraphs,
   stripParagraphIndents,
   translateParagraphs,
+  formatTokenUsage,
 } from './popupFormatting';
 
 describe('popup paragraph formatting', () => {
@@ -32,5 +33,13 @@ describe('popup paragraph formatting', () => {
     expect(translated).toBe(
       'First paragraph. translated\n\nSecond paragraph. translated',
     );
+  });
+
+  it('formats complete, partial, and unavailable usage honestly', () => {
+    expect(formatTokenUsage(30, 12, 2, 2)).toBe('30 in · 12 out · 42 total');
+    expect(formatTokenUsage(30, 12, 1, 2)).toBe(
+      '30 in · 12 out · 42 total · partial',
+    );
+    expect(formatTokenUsage(0, 0, 0, 2)).toBe('Token usage unavailable');
   });
 });
