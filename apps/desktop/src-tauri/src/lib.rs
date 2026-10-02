@@ -14,6 +14,7 @@ use services::{
     history::{HistoryEntry, HistoryStore},
     translation,
 };
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::{
@@ -29,6 +30,7 @@ pub struct AppState {
     pub(crate) inference: services::inference_coordinator::InferenceCoordinator,
     pub(crate) pending_clipboard: Mutex<Option<String>>,
     pub(crate) api_token: String,
+    pub(crate) document_usage: Mutex<HashMap<String, documents::RequestTokenCounts>>,
 }
 
 impl AppState {
@@ -51,6 +53,7 @@ impl AppState {
             inference: services::inference_coordinator::InferenceCoordinator::default(),
             pending_clipboard: Mutex::new(None),
             api_token: api::generate_token(),
+            document_usage: Mutex::new(HashMap::new()),
         }
     }
 }

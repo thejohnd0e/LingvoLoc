@@ -12,7 +12,9 @@ mod worker;
 use crate::domain::RuntimeError;
 
 pub use crate::services::inference_coordinator::InferenceCoordinator;
-pub use domain::{BlockType, DocumentBlock, DocumentJob, JobState, JobTransitionError};
+pub use domain::{
+    BlockType, DocumentBlock, DocumentJob, JobState, JobTransitionError, RequestTokenCounts,
+};
 pub use segmentation::{segment_block, SegmentationLimits};
 pub use store::DocumentJobStore;
 pub use worker::{translate_job, translate_job_with, WorkerReport};
