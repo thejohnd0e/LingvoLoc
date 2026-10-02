@@ -13,6 +13,7 @@ import {
   loadClipboardTextScale,
   loadSettings,
   saveClipboardTextScale,
+  defaultCloudSettings,
   type Settings,
 } from '../lib/settings';
 import { errorDetail } from '../lib/errors';
@@ -31,6 +32,7 @@ const defaultSettings: Settings = {
   primaryLanguage: 'en',
   secondaryLanguage: 'ru',
   translationStyle: 'neutral',
+  cloud: defaultCloudSettings,
 };
 
 export default function ClipboardPopup() {

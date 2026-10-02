@@ -40,6 +40,7 @@ import {
   loadSettings,
   loadTextScale,
   saveSettings,
+  defaultCloudSettings,
   type Settings,
   type TranslationStyle,
 } from '../lib/settings';
@@ -66,6 +67,7 @@ const defaultSettings: Settings = {
   primaryLanguage: 'en',
   secondaryLanguage: 'ru',
   translationStyle: 'neutral',
+  cloud: defaultCloudSettings,
 };
 
 const enabledDictionariesKey = 'lingvoloc.enabled-dictionaries';
