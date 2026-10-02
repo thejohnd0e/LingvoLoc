@@ -48,6 +48,7 @@ impl AppState {
                 primary_language: "en".into(),
                 secondary_language: "ru".into(),
                 translation_style: TranslationStyle::Neutral,
+                cloud: Default::default(),
             }),
             history: Mutex::new(history),
             inference: services::inference_coordinator::InferenceCoordinator::default(),

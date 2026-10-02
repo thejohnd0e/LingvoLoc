@@ -200,6 +200,11 @@ fn error_response(error: RuntimeError) -> (u16, String) {
         RuntimeError::Connection(_) | RuntimeError::Timeout(_) => 503,
         RuntimeError::Http { .. } | RuntimeError::MalformedResponse(_) => 502,
         RuntimeError::UnsupportedAdapter(_) => 422,
+        RuntimeError::Authentication(_) => 401,
+        RuntimeError::Quota(_) => 402,
+        RuntimeError::RateLimited { .. } => 429,
+        RuntimeError::ContentRejected(_) => 422,
+        RuntimeError::Cancelled => 499,
     };
     (status, json_error(&error.to_string()))
 }
@@ -366,6 +371,7 @@ mod tests {
             primary_language: "en".into(),
             secondary_language: "ru".into(),
             translation_style: TranslationStyle::Conversational,
+            cloud: Default::default(),
         };
         let request = build_translation_request(
             &settings,
