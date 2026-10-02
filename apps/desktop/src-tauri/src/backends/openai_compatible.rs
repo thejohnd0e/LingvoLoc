@@ -100,7 +100,14 @@ impl TranslationBackend for OpenAiCompatibleBackend {
         Ok(RuntimeStatus {
             available: true,
             endpoint: self.base_url.clone(),
-            detail: "OpenAI-compatible endpoint configured".into(),
+            detail: format!(
+                "{} endpoint configured",
+                match self.provider {
+                    ProviderId::DeepSeek => "DeepSeek",
+                    ProviderId::OpenRouter => "OpenRouter",
+                    _ => "OpenAI-compatible",
+                }
+            ),
         })
     }
     fn list_models(&self) -> Result<Vec<LocalModel>, RuntimeError> {
