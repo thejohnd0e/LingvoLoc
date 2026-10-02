@@ -1,6 +1,6 @@
 use crate::domain::{
     ChatMessage, CompletionRequest, CompletionResponse, LocalModel, ModelRuntime, RuntimeError,
-    RuntimeStatus,
+    RuntimeStatus, TokenUsage,
 };
 use crate::trace::runtime_event as trace_runtime;
 use reqwest::blocking::Client;
@@ -311,7 +311,7 @@ async fn stream_completion(
     Ok(CompletionResponse {
         model: payload.model,
         content: choice.message.content,
-        completion_tokens: payload.usage.and_then(|usage| usage.completion_tokens),
+        usage: exact_usage(payload.usage),
     })
 }
 
@@ -321,8 +321,7 @@ struct StreamParser {
     pending: Vec<u8>,
     model: String,
     content: String,
-    completion_tokens: Option<u32>,
-    deltas: u32,
+    usage: Option<TokenUsage>,
     finished: bool,
     done: bool,
 }
@@ -359,13 +358,12 @@ impl StreamParser {
         if let Some(model) = event.model {
             self.model = model;
         }
-        if let Some(tokens) = event.usage.and_then(|usage| usage.completion_tokens) {
-            self.completion_tokens = Some(tokens);
+        if let Some(usage) = exact_usage(event.usage) {
+            self.usage = Some(usage);
         }
         for choice in event.choices {
             if let Some(text) = choice.delta.and_then(|delta| delta.content) {
                 if !text.is_empty() {
-                    self.deltas += 1;
                     self.content.push_str(&text);
                 }
             }
@@ -389,9 +387,7 @@ impl StreamParser {
         Ok(CompletionResponse {
             model: self.model,
             content: self.content,
-            // One streamed delta is one token for llama-server; used only when the
-            // server does not report usage.
-            completion_tokens: self.completion_tokens.or(Some(self.deltas)),
+            usage: self.usage,
         })
     }
 }
@@ -474,11 +470,20 @@ struct ChatCompletionResponse {
 }
 #[derive(Deserialize)]
 struct Usage {
-    completion_tokens: Option<u32>,
+    prompt_tokens: Option<u64>,
+    completion_tokens: Option<u64>,
 }
 #[derive(Deserialize)]
 struct Choice {
     message: ChatMessage,
+}
+
+fn exact_usage(usage: Option<Usage>) -> Option<TokenUsage> {
+    let usage = usage?;
+    Some(TokenUsage {
+        input_tokens: usage.prompt_tokens?,
+        output_tokens: usage.completion_tokens?,
+    })
 }
 
 fn summarize(value: &str) -> String {
@@ -596,7 +601,7 @@ mod tests {
                 "data: {\"model\":\"m\",\"choices\":[{\"delta\":{\"content\":\"Hel\"},\"finish_reason\":null}]}\n\n",
                 "data: {\"choices\":[{\"delta\":{\"content\":\"lo\"},\"finish_reason\":null}]}\n\n",
                 "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
-                "data: {\"choices\":[],\"usage\":{\"completion_tokens\":2}}\n\n",
+                "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2}}\n\n",
                 "data: [DONE]\n\n",
             ],
             Duration::from_millis(0),
@@ -607,12 +612,18 @@ mod tests {
             .unwrap();
         assert_eq!(response.content, "Hello");
         assert_eq!(response.model, "m");
-        assert_eq!(response.completion_tokens, Some(2));
+        assert_eq!(
+            response.usage,
+            Some(TokenUsage {
+                input_tokens: 3,
+                output_tokens: 2,
+            })
+        );
     }
 
     #[test]
     fn accepts_plain_json_from_servers_that_ignore_streaming() {
-        let body = r#"{"model":"m","choices":[{"message":{"role":"assistant","content":"ok"}}],"usage":{"completion_tokens":1}}"#;
+        let body = r#"{"model":"m","choices":[{"message":{"role":"assistant","content":"ok"}}],"usage":{"prompt_tokens":4,"completion_tokens":1}}"#;
         let head: &'static str = Box::leak(
             format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
@@ -626,6 +637,31 @@ mod tests {
             .complete(request())
             .unwrap();
         assert_eq!(response.content, "ok");
+        assert_eq!(
+            response.usage,
+            Some(TokenUsage {
+                input_tokens: 4,
+                output_tokens: 1,
+            })
+        );
+    }
+
+    #[test]
+    fn leaves_usage_unavailable_when_provider_omits_it() {
+        let body = r#"{"model":"m","choices":[{"message":{"role":"assistant","content":"ok"}}]}"#;
+        let head: &'static str = Box::leak(
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .into_boxed_str(),
+        );
+        let endpoint = scripted_server(head, vec![], Duration::from_millis(0));
+        let response = LmStudioRuntime::new(&endpoint)
+            .unwrap()
+            .complete(request())
+            .unwrap();
+        assert_eq!(response.usage, None);
     }
 
     #[test]

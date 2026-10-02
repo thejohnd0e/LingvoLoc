@@ -46,13 +46,17 @@ pub fn translate(
         "translate_complete_returned",
         &format!("ms={}", started.elapsed().as_millis()),
     );
-    let completion_tokens = completion.completion_tokens;
+    let usage = completion.usage.clone();
     let text = adapter.parse_response(completion)?;
     Ok(TranslationResult {
         text,
         model_id: request.model_id,
         adapter_id: adapter.id().into(),
         latency_ms: started.elapsed().as_millis(),
-        completion_tokens,
+        prompt_tokens: usage.as_ref().map(|usage| usage.input_tokens),
+        completion_tokens: usage.as_ref().map(|usage| usage.output_tokens),
+        total_tokens: usage
+            .as_ref()
+            .map(|usage| usage.input_tokens + usage.output_tokens),
     })
 }
