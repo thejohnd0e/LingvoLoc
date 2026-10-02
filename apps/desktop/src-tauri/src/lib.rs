@@ -14,6 +14,8 @@ use domain::{
 use services::{
     credentials::{CredentialStatus, CredentialStore},
     history::{HistoryEntry, HistoryStore},
+    request_control::RequestRegistry,
+    session_usage::{SessionUsageEntry, SessionUsageTracker},
     translation,
 };
 use std::collections::HashMap;
@@ -33,7 +35,9 @@ pub struct AppState {
     pub(crate) pending_clipboard: Mutex<Option<String>>,
     pub(crate) api_token: String,
     pub(crate) credentials: CredentialStore,
-    pub(crate) document_usage: Mutex<HashMap<String, documents::RequestTokenCounts>>,
+    pub(crate) request_registry: RequestRegistry,
+    pub(crate) session_usage: SessionUsageTracker,
+    pub(crate) document_usage: Mutex<HashMap<String, documents::RequestUsage>>,
 }
 
 impl AppState {
@@ -58,6 +62,8 @@ impl AppState {
             pending_clipboard: Mutex::new(None),
             api_token: api::generate_token(),
             credentials: CredentialStore::windows(),
+            request_registry: RequestRegistry::default(),
+            session_usage: SessionUsageTracker::default(),
             document_usage: Mutex::new(HashMap::new()),
         }
     }
@@ -87,12 +93,79 @@ fn write_clipboard(text: String) -> Result<(), RuntimeError> {
 
 #[tauri::command(async)]
 fn get_runtime_status(state: tauri::State<'_, AppState>) -> Result<RuntimeStatus, RuntimeError> {
-    translation::status(&settings(&state)?)
+    translation::status_with_credentials(&settings(&state)?, &state.credentials)
 }
 
 #[tauri::command(async)]
 fn list_models(state: tauri::State<'_, AppState>) -> Result<Vec<LocalModel>, RuntimeError> {
-    translation::list_models(&settings(&state)?)
+    translation::list_models_with_credentials(&settings(&state)?, &state.credentials)
+}
+
+fn settings_for_provider(
+    current: &Settings,
+    provider_id: domain::ProviderId,
+) -> Result<Settings, RuntimeError> {
+    let mut next = current.clone();
+    next.runtime_mode = match provider_id {
+        domain::ProviderId::OpenAi => domain::RuntimeMode::OpenAi,
+        domain::ProviderId::Anthropic => domain::RuntimeMode::Anthropic,
+        domain::ProviderId::Gemini => domain::RuntimeMode::Gemini,
+        domain::ProviderId::DeepL => domain::RuntimeMode::DeepL,
+        domain::ProviderId::OpenAiCompatible => domain::RuntimeMode::OpenAiCompatible,
+        domain::ProviderId::LlamaCpp | domain::ProviderId::LmStudio => {
+            return Err(RuntimeError::InvalidInput(
+                "provider has no cloud refresh command".into(),
+            ))
+        }
+    };
+    Ok(next)
+}
+
+#[tauri::command(async)]
+fn get_backend_capabilities(
+    state: tauri::State<'_, AppState>,
+) -> Result<domain::BackendCapabilities, RuntimeError> {
+    Ok(
+        backends::for_settings_with_credentials(&settings(&state)?, &state.credentials)?
+            .capabilities(),
+    )
+}
+
+#[tauri::command(async)]
+fn refresh_provider_models(
+    state: tauri::State<'_, AppState>,
+    provider_id: domain::ProviderId,
+) -> Result<Vec<LocalModel>, RuntimeError> {
+    let next = settings_for_provider(&settings(&state)?, provider_id)?;
+    translation::list_models_with_credentials(&next, &state.credentials)
+}
+
+#[tauri::command(async)]
+fn refresh_deepl_languages(state: tauri::State<'_, AppState>) -> Result<Vec<String>, RuntimeError> {
+    let current = settings(&state)?;
+    let key = state
+        .credentials
+        .get(domain::ProviderId::DeepL)
+        .map_err(services::credentials::map_error)?;
+    let backend = backends::deepl::DeepLBackend::new(&current.cloud.deep_l.plan, key)?;
+    backend.list_languages("target")
+}
+
+#[tauri::command(async)]
+fn test_provider_connection(
+    state: tauri::State<'_, AppState>,
+    provider_id: domain::ProviderId,
+) -> Result<RuntimeStatus, RuntimeError> {
+    let next = settings_for_provider(&settings(&state)?, provider_id)?;
+    let backend = backends::for_settings_with_credentials(&next, &state.credentials)?;
+    if provider_id == domain::ProviderId::OpenAiCompatible {
+        return Ok(RuntimeStatus {
+            available: true,
+            endpoint: next.cloud.open_ai_compatible.endpoint,
+            detail: "OpenAI-compatible endpoint configured".into(),
+        });
+    }
+    backend.status()
 }
 
 #[tauri::command(async)]
@@ -107,15 +180,29 @@ fn translate(
         ));
     }
     let snapshot = services::inference_coordinator::snapshot(&current, &request.model_id);
+    let (request_id, cancellation) = state.request_registry.start_generated("interactive");
     let result = state.inference.run_interactive(&snapshot, || {
-        translation::translate(&current, request.clone())
-    })?;
+        translation::translate_with_cancellation_and_credentials(
+            &current,
+            request.clone(),
+            &cancellation,
+            &state.credentials,
+        )
+    });
+    state.request_registry.finish(&request_id);
+    let result = result?;
+    state.session_usage.record_success(&result);
     state
         .history
         .lock()
         .map_err(|_| RuntimeError::Connection("history lock is poisoned".into()))?
         .add(&request.text, &request, &result)?;
     Ok(result)
+}
+
+#[tauri::command]
+fn get_session_usage(state: tauri::State<'_, AppState>) -> Vec<SessionUsageEntry> {
+    state.session_usage.list()
 }
 
 #[tauri::command]
@@ -555,6 +642,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_runtime_status,
             list_models,
+            get_backend_capabilities,
+            refresh_provider_models,
+            refresh_deepl_languages,
+            test_provider_connection,
+            get_session_usage,
             translate,
             get_settings,
             get_api_token,

@@ -72,8 +72,11 @@ impl TranslationBackend for LocalBackend {
     fn translate(
         &self,
         request: &TranslationRequest,
-        _cancellation: &RequestCancellation,
+        cancellation: &RequestCancellation,
     ) -> Result<TranslationResult, RuntimeError> {
+        if cancellation.is_cancelled() {
+            return Err(RuntimeError::Cancelled);
+        }
         let adapter = Family::from_model_id(&request.model_id).adapter(&request.model_id);
         let runtime = self.runtime(&request.model_id)?;
         let started = Instant::now();
