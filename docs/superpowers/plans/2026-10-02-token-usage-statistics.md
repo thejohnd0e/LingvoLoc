@@ -28,6 +28,7 @@
 ### Task 1: Runtime Usage Contract
 
 **Files:**
+
 - Modify: `apps/desktop/src-tauri/src/domain.rs`
 - Modify: `apps/desktop/src-tauri/src/runtimes/lm_studio.rs`
 - Modify: `apps/desktop/src-tauri/src/runtimes/llama_server.rs`
@@ -35,6 +36,7 @@
 - Test: existing Rust tests in the same files
 
 **Interfaces:**
+
 - Add `TokenUsage { input_tokens: u64, output_tokens: u64 }`.
 - Extend `CompletionResponse` with `usage: Option<TokenUsage>`.
 - Add `ModelRuntime::provider_id(&self) -> &'static str`.
@@ -58,12 +60,14 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml domain
 ### Task 2: Interactive Usage Aggregates
 
 **Files:**
+
 - Modify: `apps/desktop/src-tauri/src/services/history.rs`
 - Modify: `apps/desktop/src-tauri/src/lib.rs`
 - Modify: `apps/desktop/src-tauri/src/api.rs`
 - Test: `apps/desktop/src-tauri/src/services/history.rs`
 
 **Interfaces:**
+
 - Add `usage_daily` to `lingoloc.sqlite`.
 - Add `HistoryStore::usage_statistics()` and `HistoryStore::reset_usage_statistics()`.
 - Make `HistoryStore::add()` update history and usage atomically.
@@ -103,6 +107,7 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml history
 ### Task 3: Extension Paragraph Operation Counting
 
 **Files:**
+
 - Modify: `apps/desktop/src-tauri/src/api.rs`
 - Modify: `apps/extension/src/api.ts`
 - Modify: `apps/extension/src/api.test.ts`
@@ -110,6 +115,7 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml history
 - Test: `apps/extension/src/popupFormatting.test.ts`
 
 **Interfaces:**
+
 - Add optional API request field `operationStart: boolean`.
 - Default `operationStart` to `true` for backward compatibility.
 
@@ -141,6 +147,7 @@ npm run extension:typecheck
 ### Task 4: Document Block Usage
 
 **Files:**
+
 - Modify: `apps/desktop/src-tauri/src/documents/domain.rs`
 - Modify: `apps/desktop/src-tauri/src/documents/store.rs`
 - Modify: `apps/desktop/src-tauri/src/documents/worker.rs`
@@ -148,6 +155,7 @@ npm run extension:typecheck
 - Test: existing document store and worker tests
 
 **Interfaces:**
+
 - Extend `DocumentBlock` with optional prompt tokens, completion tokens, and latency.
 - Extend `DocumentJobView` and `DocumentJobSummary` with aggregate usage fields.
 - Change the injected worker translator to return `TranslationResult` rather than only text.
@@ -181,6 +189,7 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml documents::store
 ### Task 5: Combined Statistics Commands
 
 **Files:**
+
 - Modify: `apps/desktop/src-tauri/src/lib.rs`
 - Modify: `apps/desktop/src/lib/commands.ts`
 - Modify: `apps/desktop/src/lib/commands.test.ts`
@@ -229,6 +238,7 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml usage
 ### Task 6: Desktop Usage UI
 
 **Files:**
+
 - Modify: `apps/desktop/src/lib/commands.ts`
 - Modify: `apps/desktop/src/app/App.tsx`
 - Modify: `apps/desktop/src/app/App.test.tsx`
@@ -258,6 +268,7 @@ npm run typecheck
 ### Task 7: Extension Usage UI
 
 **Files:**
+
 - Modify: `apps/extension/src/api.ts`
 - Modify: `apps/extension/src/popup.ts`
 - Modify: `apps/extension/src/popup.css`
@@ -283,6 +294,7 @@ npm run extension:build
 ### Task 8: Documentation And Final Verification
 
 **Files:**
+
 - Modify: `README.md`
 - Modify: `README.ru.md`
 - Modify: `docs/LOCAL_API.md`

@@ -24,6 +24,7 @@
 ### Task 1: Runtime Usage Contract
 
 **Files:**
+
 - Modify: `apps/desktop/src-tauri/src/domain.rs`
 - Modify: `apps/desktop/src-tauri/src/runtimes/lm_studio.rs`
 - Modify: `apps/desktop/src-tauri/src/services/translation.rs`
@@ -69,6 +70,7 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml lm_studio
 ### Task 2: Desktop And Clipboard Display
 
 **Files:**
+
 - Modify: `apps/desktop/src/lib/commands.ts`
 - Modify: `apps/desktop/src/lib/commands.test.ts`
 - Modify: `apps/desktop/src/app/App.tsx`
@@ -105,6 +107,7 @@ npm exec vitest run apps/desktop/src/app/ClipboardPopup.test.tsx
 ### Task 3: Extension Display
 
 **Files:**
+
 - Modify: `apps/extension/src/api.ts`
 - Modify: `apps/extension/src/api.test.ts`
 - Modify: `apps/extension/src/popup.ts`
@@ -131,6 +134,7 @@ npm run extension:build
 ### Task 4: Transient Document Request Usage
 
 **Files:**
+
 - Modify: `apps/desktop/src-tauri/src/lib.rs`
 - Modify: `apps/desktop/src-tauri/src/documents/domain.rs`
 - Modify: `apps/desktop/src-tauri/src/documents/worker.rs`
@@ -176,6 +180,7 @@ npm exec vitest run apps/desktop/src/app/App.test.tsx
 ### Task 5: Documentation And Final Gate
 
 **Files:**
+
 - Modify: `README.md`
 - Modify: `README.ru.md`
 - Modify: `docs/LOCAL_API.md`
