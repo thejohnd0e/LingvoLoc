@@ -141,10 +141,7 @@ impl TranslationBackend for GeminiBackend {
         let text = extract_candidate_text(&value).ok_or_else(|| {
             RuntimeError::MalformedResponse("Gemini response contained no translation".into())
         })?;
-        let usage = value
-            .get("usageMetadata")
-            .map(parse_usage)
-            .transpose()?;
+        let usage = value.get("usageMetadata").map(parse_usage).transpose()?;
         Ok(TranslationResult {
             text,
             model_id: model_id.to_string(),
@@ -288,7 +285,10 @@ mod tests {
             ]
         })).unwrap();
         assert_eq!(
-            models.iter().map(|model| model.id.as_str()).collect::<Vec<_>>(),
+            models
+                .iter()
+                .map(|model| model.id.as_str())
+                .collect::<Vec<_>>(),
             vec![
                 "gemini-2.5-flash-lite",
                 "gemini-2.0-flash",

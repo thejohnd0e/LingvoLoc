@@ -79,10 +79,9 @@ impl TranslationBackend for OpenAiCompatibleBackend {
         })
     }
     fn list_models(&self) -> Result<Vec<LocalModel>, RuntimeError> {
-        let response = self.transport.get_with_headers(
-            &format!("{}/models", self.base_url),
-            self.headers()?,
-        )?;
+        let response = self
+            .transport
+            .get_with_headers(&format!("{}/models", self.base_url), self.headers()?)?;
         let value: Value = response.json().map_err(|_| {
             RuntimeError::MalformedResponse("compatible models response is not valid JSON".into())
         })?;

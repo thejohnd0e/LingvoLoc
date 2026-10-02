@@ -115,17 +115,16 @@ fn route(request: &HttpRequest, app: &AppHandle) -> (u16, String) {
         ("GET", "/api/v1/status") => match settings(&state) {
             // Pairing only proves the desktop token works. Provider outages must not
             // look like a bad pairing token to the extension.
-            Ok(settings) => match translation::status_with_credentials(
-                &settings,
-                &state.credentials,
-            ) {
-                Ok(status) => json_result(Ok(status)),
-                Err(error) => json_result(Ok(crate::domain::RuntimeStatus {
-                    available: false,
-                    endpoint: String::new(),
-                    detail: error.to_string(),
-                })),
-            },
+            Ok(settings) => {
+                match translation::status_with_credentials(&settings, &state.credentials) {
+                    Ok(status) => json_result(Ok(status)),
+                    Err(error) => json_result(Ok(crate::domain::RuntimeStatus {
+                        available: false,
+                        endpoint: String::new(),
+                        detail: error.to_string(),
+                    })),
+                }
+            }
             Err(error) => error_response(error),
         },
         ("GET", "/api/v1/models") => match settings(&state) {

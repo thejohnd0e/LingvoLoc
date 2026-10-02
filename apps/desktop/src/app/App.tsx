@@ -432,7 +432,10 @@ export default function App() {
 
   async function runTranslation(input = source) {
     if (!input.trim()) return;
-    if (isCloudProvider(settings.runtimeMode) && !settings.cloud.consentAccepted) {
+    if (
+      isCloudProvider(settings.runtimeMode) &&
+      !settings.cloud.consentAccepted
+    ) {
       setError(
         'Accept the cloud provider notice in Settings before translating.',
       );
@@ -1642,7 +1645,9 @@ export default function App() {
                   <input
                     aria-label="Cloud model"
                     value={
-                      settings.runtimeMode === 'deepL' ? 'deepL' : selectedCloudModel
+                      settings.runtimeMode === 'deepL'
+                        ? 'deepL'
+                        : selectedCloudModel
                     }
                     disabled={settings.runtimeMode === 'deepL'}
                     placeholder="Model id"

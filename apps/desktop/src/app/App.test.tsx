@@ -209,9 +209,9 @@ describe('translation workspace', () => {
     );
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
-    expect(
-      screen.getByRole('combobox', { name: 'Runtime mode' }),
-    ).toHaveValue('openAi');
+    expect(screen.getByRole('combobox', { name: 'Runtime mode' })).toHaveValue(
+      'openAi',
+    );
     expect(
       screen.queryByRole('combobox', { name: 'Cloud provider' }),
     ).not.toBeInTheDocument();
