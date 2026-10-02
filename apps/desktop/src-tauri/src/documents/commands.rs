@@ -37,21 +37,31 @@ pub struct DocumentJobSummary {
     pub job: DocumentJob,
     pub total_blocks: usize,
     pub translated_blocks: usize,
+    pub last_request_usage: Option<crate::documents::RequestTokenCounts>,
 }
 
 #[tauri::command(async)]
-pub fn list_document_jobs(app: AppHandle) -> Result<Vec<DocumentJobSummary>, RuntimeError> {
+pub fn list_document_jobs(
+    app: AppHandle,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<Vec<DocumentJobSummary>, RuntimeError> {
     let store = open_store(&app)?;
     Ok(store
         .summaries(30)?
         .into_iter()
-        .map(
-            |(job, total_blocks, translated_blocks)| DocumentJobSummary {
+        .map(|(job, total_blocks, translated_blocks)| {
+            let job_id = job.id.clone();
+            DocumentJobSummary {
                 job,
                 total_blocks,
                 translated_blocks,
-            },
-        )
+                last_request_usage: state
+                    .document_usage
+                    .lock()
+                    .ok()
+                    .and_then(|usage| usage.get(&job_id).cloned()),
+            }
+        })
         .collect())
 }
 
@@ -59,16 +69,23 @@ pub fn list_document_jobs(app: AppHandle) -> Result<Vec<DocumentJobSummary>, Run
 #[tauri::command(async)]
 pub fn get_document_progress(
     app: AppHandle,
+    state: tauri::State<'_, crate::AppState>,
     job_id: String,
 ) -> Result<DocumentJobSummary, RuntimeError> {
     let store = open_store(&app)?;
     let (job, total_blocks, translated_blocks) = store
         .summary(&job_id)?
         .ok_or_else(|| RuntimeError::InvalidInput("document job not found".into()))?;
+    let usage = state
+        .document_usage
+        .lock()
+        .ok()
+        .and_then(|usage| usage.get(&job.id).cloned());
     Ok(DocumentJobSummary {
         job,
         total_blocks,
         translated_blocks,
+        last_request_usage: usage,
     })
 }
 
@@ -267,6 +284,9 @@ pub(super) fn run_job(
     state: &tauri::State<'_, crate::AppState>,
     job_id: &str,
 ) -> Result<(DocumentJobView, WorkerReport), RuntimeError> {
+    if let Ok(mut usage) = state.document_usage.lock() {
+        usage.remove(job_id);
+    }
     let result = (|| {
         let current = state
             .settings
@@ -303,6 +323,7 @@ pub(super) fn run_job(
             &current,
             &current_snapshot,
             SegmentationLimits::default(),
+            &state.document_usage,
         )?;
         Ok((view(store, job_id)?, report))
     })();
@@ -716,7 +737,13 @@ pub fn clear_document_job(app: AppHandle, job_id: String) -> Result<(), RuntimeE
     ) {
         crate::runtimes::llama_server::interrupt("job cleared");
     }
-    store.delete(&job_id)
+    let result = store.delete(&job_id);
+    if let Some(state) = app.try_state::<crate::AppState>() {
+        if let Ok(mut usage) = state.document_usage.lock() {
+            usage.remove(&job_id);
+        }
+    }
+    result
 }
 
 #[tauri::command(async)]

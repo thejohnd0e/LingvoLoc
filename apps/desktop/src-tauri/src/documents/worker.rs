@@ -1,5 +1,6 @@
 use super::segmentation::{segment_block, SegmentationLimits};
 use super::{DocumentJobStore, JobState};
+use crate::documents::RequestTokenCounts;
 use crate::domain::{RuntimeError, Settings, TranslationRequest};
 use crate::services::inference_coordinator::InferenceCoordinator;
 use std::fs::OpenOptions;
@@ -216,6 +217,7 @@ pub fn translate_job(
     settings: &Settings,
     snapshot: &str,
     limits: SegmentationLimits,
+    usage_store: &std::sync::Mutex<std::collections::HashMap<String, RequestTokenCounts>>,
 ) -> Result<WorkerReport, RuntimeError> {
     translate_job_with(
         store,
@@ -225,8 +227,19 @@ pub fn translate_job(
         snapshot,
         limits,
         |request| {
-            crate::services::translation::translate(settings, request.clone())
-                .map(|result| result.text)
+            crate::services::translation::translate(settings, request.clone()).map(|result| {
+                if let Ok(mut usage) = usage_store.lock() {
+                    usage.insert(
+                        job_id.to_string(),
+                        RequestTokenCounts {
+                            input_tokens: result.prompt_tokens,
+                            output_tokens: result.completion_tokens,
+                            total_tokens: result.total_tokens,
+                        },
+                    );
+                }
+                result.text
+            })
         },
     )
 }
