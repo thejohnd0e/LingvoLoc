@@ -355,10 +355,30 @@ textarea::placeholder {
   font-size: 0.72rem;
 }
 .feedback {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
   min-height: 24px;
   padding: 10px 2px;
   color: #86b8ad;
   font-size: 0.78rem;
+}
+.feedback-usage {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0 4px;
+  padding: 4px 9px;
+  border: 1px solid #29434c;
+  border-radius: 5px;
+  background: #14232b;
+  color: #c1dcd3;
+  white-space: nowrap;
+}
+.feedback-usage-label {
+  color: #f0f6d8;
+  font-weight: 700;
 }
 .documents-panel {
   margin-top: 16px;

@@ -812,6 +812,33 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  const feedbackMessage = loading
+    ? settings.runtimeMode === 'standalone'
+      ? 'Translating… the model may still be loading'
+      : 'Translating…'
+    : error ||
+      notice ||
+      historyMessage ||
+      (timing === null
+        ? 'Local runtime · no request yet'
+        : `Local runtime · ${timing} · ${settings.modelId}`);
+  const usageMarker = ' · Used tokens: ';
+  const usageStart = feedbackMessage.indexOf(usageMarker);
+  const hasUsage = usageStart >= 0;
+  const usagePrefix = hasUsage
+    ? feedbackMessage.slice(0, usageStart)
+    : feedbackMessage;
+  const modelSuffix = ` · ${settings.modelId}`;
+  const modelSuffixStart = hasUsage
+    ? feedbackMessage.lastIndexOf(modelSuffix)
+    : -1;
+  const usageEnd =
+    modelSuffixStart > usageStart ? modelSuffixStart : feedbackMessage.length;
+  const usageText = hasUsage
+    ? feedbackMessage.slice(usageStart + usageMarker.length, usageEnd)
+    : '';
+  const usageSuffix = modelSuffixStart > usageStart ? modelSuffix : '';
+
   return (
     <main className="shell">
       <header className="masthead">
@@ -1135,16 +1162,18 @@ export default function App() {
       </section>
       <div className="feedback" role="status" hidden={mode !== 'text'}>
         {loading && <Spinner />}
-        {loading
-          ? settings.runtimeMode === 'standalone'
-            ? 'Translating… the model may still be loading'
-            : 'Translating…'
-          : error ||
-            notice ||
-            historyMessage ||
-            (timing === null
-              ? 'Local runtime · no request yet'
-              : `Local runtime · ${timing} · ${settings.modelId}`)}
+        {hasUsage ? (
+          <>
+            <span>{usagePrefix}</span>
+            <span className="feedback-usage">
+              <span className="feedback-usage-label">Used tokens</span>
+              <span>{usageText}</span>
+            </span>
+            <span>{usageSuffix}</span>
+          </>
+        ) : (
+          feedbackMessage
+        )}
         {detectedLanguage ? ` · detected ${detectedLanguage}` : ''}
       </div>
       <DocumentsPanel
