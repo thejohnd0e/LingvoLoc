@@ -28,6 +28,7 @@ import {
   clearHistory,
   exportHistory,
   listModels,
+  refreshProviderModels,
   listHistory,
   lookupLexicon,
   setHistoryFavorite,
@@ -93,6 +94,25 @@ function isCloudProvider(
 ): value is Exclude<ProviderId, 'llamaCpp' | 'lmStudio'> {
   // ProviderId also contains local runtime identifiers.
   return value !== 'standalone' && value !== 'lmStudio';
+}
+
+function runtimeModeLabel(mode: Settings['runtimeMode']): string {
+  switch (mode) {
+    case 'standalone':
+      return 'Standalone';
+    case 'lmStudio':
+      return 'LM Studio';
+    case 'openAi':
+      return 'OpenAI';
+    case 'anthropic':
+      return 'Anthropic';
+    case 'gemini':
+      return 'Google Gemini';
+    case 'deepL':
+      return 'DeepL';
+    case 'openAiCompatible':
+      return 'OpenAI-compatible';
+  }
 }
 
 function activeModelId(settings: Settings): string {
@@ -189,6 +209,7 @@ export default function App() {
   const [credentialInput, setCredentialInput] = useState('');
   const [usageEntries, setUsageEntries] = useState<SessionUsageEntry[]>([]);
   const [usageBusy, setUsageBusy] = useState(false);
+  const [cloudModelsMessage, setCloudModelsMessage] = useState('');
   const [additionalOpen, setAdditionalOpen] = useState(false);
   const [lexicalBusy, setLexicalBusy] = useState(false);
   const [dictionariesBusy, setDictionariesBusy] = useState(false);
@@ -200,8 +221,7 @@ export default function App() {
     async () => undefined,
   );
   settingsRef.current = settings;
-  const runtimeLabel =
-    settings.runtimeMode === 'standalone' ? 'Standalone' : 'LM Studio';
+  const runtimeLabel = runtimeModeLabel(settings.runtimeMode);
   const runtimeLabelRef = useRef(runtimeLabel);
   runtimeLabelRef.current = runtimeLabel;
 
@@ -318,18 +338,68 @@ export default function App() {
   async function refreshCloudSettings() {
     if (!isCloudProvider(settings.runtimeMode)) return;
     setUsageBusy(true);
+    let credentials: CredentialStatus | null = null;
     try {
-      const [credentials, usage] = await Promise.all([
+      const [nextCredentials, usage] = await Promise.all([
         getProviderCredentialStatus(settings.runtimeMode),
         getSessionUsage(),
       ]);
-      setCredentialStatus(credentials);
+      credentials = nextCredentials;
+      setCredentialStatus(nextCredentials);
       setUsageEntries(usage);
     } catch {
       setCredentialStatus(null);
       setUsageEntries([]);
     } finally {
       setUsageBusy(false);
+    }
+    if (credentials?.configured) {
+      void refreshCloudModels();
+    } else if (settings.runtimeMode !== 'deepL') {
+      setCloudModelsMessage('Save an API key to load models.');
+    } else {
+      setCloudModelsMessage('');
+    }
+  }
+
+  async function refreshCloudModels(
+    provider = settingsRef.current.runtimeMode,
+  ): Promise<void> {
+    if (!isCloudProvider(provider) || provider === 'deepL') return;
+    setRefreshing(true);
+    setCloudModelsMessage('');
+    try {
+      const availableModels = await refreshProviderModels(provider);
+      const current = settingsRef.current;
+      const next = {
+        ...current,
+        cloud: {
+          ...current.cloud,
+          [provider]: {
+            ...current.cloud[provider],
+            availableModels,
+            modelsRefreshedAt: Date.now(),
+          },
+        },
+      };
+      setModels(availableModels);
+      setSettings(next);
+      saveSettings(next);
+      void updateNativeSettings(next).catch(() => undefined);
+      setStatus(
+        `${runtimeModeLabel(provider)} · ${availableModels.length} models`,
+      );
+      setCloudModelsMessage(
+        availableModels.length > 0
+          ? `${availableModels.length} models loaded.`
+          : 'Provider returned no models.',
+      );
+    } catch (reason) {
+      const detail = errorDetail(reason);
+      setCloudModelsMessage(`Model list refresh failed · ${detail}`);
+      setNotice(`Model list refresh failed · ${detail}`);
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -344,6 +414,7 @@ export default function App() {
       setCredentialStatus(next);
       setCredentialInput('');
       setNotice('Provider key saved securely.');
+      void refreshCloudModels(settings.runtimeMode);
     } catch (reason) {
       setNotice(`Provider key was not saved · ${errorDetail(reason)}`);
     }
@@ -353,16 +424,34 @@ export default function App() {
     if (!isCloudProvider(settings.runtimeMode)) return;
     await deleteProviderCredential(settings.runtimeMode);
     setCredentialStatus({ configured: false, hint: null });
+    if (settings.runtimeMode !== 'deepL') {
+      setCloudModelsMessage('Save an API key to load models.');
+    }
     setNotice('Provider key removed.');
   }
 
   async function runTranslation(input = source) {
     if (!input.trim()) return;
+    if (isCloudProvider(settings.runtimeMode) && !settings.cloud.consentAccepted) {
+      setError(
+        'Accept the cloud provider notice in Settings before translating.',
+      );
+      return;
+    }
+    if (
+      isCloudProvider(settings.runtimeMode) &&
+      settings.runtimeMode !== 'deepL' &&
+      !activeModelId(settings).trim()
+    ) {
+      setError('Select a cloud model before translating.');
+      return;
+    }
     setLoading(true);
     setError('');
     setNotice('');
     setHistoryMessage('');
     try {
+      await updateNativeSettings(settings);
       const sourceLanguage =
         settings.sourceLanguage === 'auto'
           ? (await detectLanguage(input)).code
@@ -453,6 +542,28 @@ export default function App() {
   }
 
   async function refreshModels() {
+    if (isCloudProvider(settings.runtimeMode)) {
+      if (settings.runtimeMode === 'deepL') return;
+      let configured = credentialStatus?.configured === true;
+      if (credentialStatus === null) {
+        try {
+          const status = await getProviderCredentialStatus(
+            settings.runtimeMode,
+          );
+          setCredentialStatus(status);
+          configured = status.configured;
+        } catch {
+          configured = false;
+        }
+      }
+      if (!configured) {
+        setCloudModelsMessage('Save an API key to load models.');
+        setStatus(`${runtimeLabel} · provider credential is not configured`);
+        return;
+      }
+      await refreshCloudModels(settings.runtimeMode);
+      return;
+    }
     setRefreshing(true);
     try {
       const availableModels = await listModels();
@@ -922,6 +1033,18 @@ export default function App() {
     : '';
   const usageSuffix = modelSuffixStart > usageStart ? modelSuffix : '';
   const selectedCloudModel = activeModelId(settings);
+  const cloudModels =
+    isCloudProvider(settings.runtimeMode) && settings.runtimeMode !== 'deepL'
+      ? (settings.cloud[settings.runtimeMode].availableModels ?? [])
+      : [];
+  const cloudModelOptions =
+    cloudModels.length === 0
+      ? []
+      : cloudModels.some((model) => model.id === selectedCloudModel)
+        ? cloudModels
+        : selectedCloudModel
+          ? [{ id: selectedCloudModel }, ...cloudModels]
+          : cloudModels;
 
   return (
     <main className="shell">
@@ -1207,6 +1330,7 @@ export default function App() {
           <span className="model-label">Model</span>
           <div className="model-row">
             <select
+              aria-label="Model"
               value={activeModelId(settings)}
               onChange={(event) =>
                 isCloudProvider(settings.runtimeMode) &&
@@ -1226,9 +1350,18 @@ export default function App() {
               <option value="">
                 {settings.runtimeMode === 'standalone'
                   ? 'Select a .gguf model'
-                  : 'Select from LM Studio'}
+                  : isCloudProvider(settings.runtimeMode)
+                    ? settings.runtimeMode === 'deepL'
+                      ? 'DeepL'
+                      : 'Select a cloud model'
+                    : 'Select from LM Studio'}
               </option>
-              {models.map((model) => (
+              {(isCloudProvider(settings.runtimeMode) &&
+              settings.runtimeMode !== 'deepL' &&
+              settings.cloud[settings.runtimeMode].availableModels.length > 0
+                ? settings.cloud[settings.runtimeMode].availableModels
+                : models
+              ).map((model) => (
                 <option key={model.id} value={model.id}>
                   {model.id}
                 </option>
@@ -1292,6 +1425,7 @@ export default function App() {
             <label className="runtime-mode">
               <b>Mode</b>
               <select
+                aria-label="Runtime mode"
                 value={settings.runtimeMode}
                 onChange={(event) =>
                   changeRuntimeMode(
@@ -1455,46 +1589,74 @@ export default function App() {
               aria-label="Cloud provider"
             >
               <span className="panel-label">CLOUD PROVIDER</span>
-              <label className="runtime-mode">
-                <b>Provider</b>
-                <select
-                  aria-label="Cloud provider"
-                  value={settings.runtimeMode}
-                  onChange={(event) =>
-                    changeRuntimeMode(
-                      event.target.value as Settings['runtimeMode'],
-                    )
-                  }
-                >
-                  {cloudProviders.map((provider) => (
-                    <option key={provider.id} value={provider.id}>
-                      {provider.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <label className="runtime-row">
                 <b>Model</b>
-                <input
-                  aria-label="Cloud model"
-                  value={selectedCloudModel}
-                  disabled={settings.runtimeMode === 'deepL'}
-                  onChange={(event) => {
-                    const provider = settings.runtimeMode;
-                    if (provider === 'deepL' || !isCloudProvider(provider))
-                      return;
-                    updateSettings({
-                      cloud: {
-                        ...settings.cloud,
-                        [provider]: {
-                          ...settings.cloud[provider],
-                          modelId: event.target.value,
+                {cloudModelOptions.length > 0 ? (
+                  <select
+                    aria-label="Cloud model"
+                    value={selectedCloudModel}
+                    onChange={(event) => {
+                      const provider = settings.runtimeMode;
+                      if (provider === 'deepL' || !isCloudProvider(provider))
+                        return;
+                      updateSettings({
+                        cloud: {
+                          ...settings.cloud,
+                          [provider]: {
+                            ...settings.cloud[provider],
+                            modelId: event.target.value,
+                          },
                         },
-                      },
-                    });
-                  }}
-                />
+                      });
+                    }}
+                  >
+                    {cloudModelOptions.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.id}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    aria-label="Cloud model"
+                    value={
+                      settings.runtimeMode === 'deepL' ? 'deepL' : selectedCloudModel
+                    }
+                    disabled={settings.runtimeMode === 'deepL'}
+                    placeholder="Model id"
+                    onChange={(event) => {
+                      const provider = settings.runtimeMode;
+                      if (provider === 'deepL' || !isCloudProvider(provider))
+                        return;
+                      updateSettings({
+                        cloud: {
+                          ...settings.cloud,
+                          [provider]: {
+                            ...settings.cloud[provider],
+                            modelId: event.target.value,
+                          },
+                        },
+                      });
+                    }}
+                  />
+                )}
+                {settings.runtimeMode !== 'deepL' && (
+                  <button
+                    className="quiet"
+                    type="button"
+                    aria-label="Refresh cloud models"
+                    disabled={refreshing || !credentialStatus?.configured}
+                    onClick={() => void refreshCloudModels()}
+                  >
+                    Refresh models
+                  </button>
+                )}
               </label>
+              {cloudModelsMessage && (
+                <p className="runtime-note" role="status">
+                  {cloudModelsMessage}
+                </p>
+              )}
               <div className="runtime-row">
                 <div>
                   <b>

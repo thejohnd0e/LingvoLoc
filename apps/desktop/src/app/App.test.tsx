@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -32,6 +33,7 @@ vi.mock('../lib/commands', () => ({
   listUserDictionaries: vi.fn().mockResolvedValue([]),
   lookupLexicon: vi.fn().mockResolvedValue([]),
   listModels: vi.fn().mockRejectedValue(new Error('offline')),
+  refreshProviderModels: vi.fn().mockResolvedValue([]),
   listHistory: vi.fn().mockResolvedValue([]),
   clearHistory: vi.fn().mockResolvedValue(undefined),
   setHistoryFavorite: vi.fn().mockResolvedValue(undefined),
@@ -208,12 +210,58 @@ describe('translation workspace', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
     expect(
-      screen.getByRole('combobox', { name: 'Cloud provider' }),
+      screen.getByRole('combobox', { name: 'Runtime mode' }),
     ).toHaveValue('openAi');
+    expect(
+      screen.queryByRole('combobox', { name: 'Cloud provider' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('OpenAI API key')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Save an API key to load models.'),
+    ).toBeInTheDocument();
+    expect(commands.refreshProviderModels).not.toHaveBeenCalled();
     expect(await screen.findByText('Session usage')).toBeInTheDocument();
     expect(screen.getByText('200 tokens')).toBeInTheDocument();
     expect(screen.getByText('450 characters')).toBeInTheDocument();
+  });
+
+  it('loads and presents multiple models for the selected cloud provider', async () => {
+    localStorage.setItem(
+      'lingvoloc.settings',
+      JSON.stringify({
+        runtimeMode: 'openAi',
+        cloud: {
+          consentAccepted: true,
+          openAi: {
+            modelId: 'gpt-4o-mini',
+            availableModels: [],
+            modelsRefreshedAt: null,
+          },
+        },
+      }),
+    );
+    vi.mocked(commands.getProviderCredentialStatus).mockResolvedValue({
+      configured: true,
+      hint: '••••1234',
+    });
+    vi.mocked(commands.refreshProviderModels).mockResolvedValue([
+      { id: 'gpt-4o-mini' },
+      { id: 'gpt-4.1' },
+    ]);
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+
+    const modelSelect = await screen.findByRole('combobox', {
+      name: 'Cloud model',
+    });
+    expect(commands.refreshProviderModels).toHaveBeenCalledWith('openAi');
+    expect(modelSelect).toHaveValue('gpt-4o-mini');
+    expect(
+      within(modelSelect).getByRole('option', { name: 'gpt-4.1' }),
+    ).toBeInTheDocument();
+    fireEvent.change(modelSelect, { target: { value: 'gpt-4.1' } });
+    expect(modelSelect).toHaveValue('gpt-4.1');
   });
 
   it('uses the selected cloud model for the main translation action', async () => {
