@@ -21,11 +21,6 @@ pub struct DeepLBackend {
 }
 
 impl DeepLBackend {
-    pub fn with_proxy(mut self, proxy: &str) -> Result<Self, RuntimeError> {
-        self.transport = self.transport.with_proxy(proxy)?;
-        Ok(self)
-    }
-
     pub fn new(plan: &str, api_key: String) -> Result<Self, RuntimeError> {
         Self::with_base_url(plan, api_key, HttpTransport::new()?)
     }

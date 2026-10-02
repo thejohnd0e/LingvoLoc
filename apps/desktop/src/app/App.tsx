@@ -1779,29 +1779,6 @@ export default function App() {
                   </span>
                 </div>
               </div>
-              <div className="runtime-row">
-                <b>Proxy</b>
-                <div className="cloud-field">
-                  <input
-                    aria-label="Cloud proxy"
-                    value={settings.cloud.proxyUrl}
-                    placeholder="http://host:port (optional)"
-                    spellCheck={false}
-                    onChange={(event) =>
-                      updateSettings({
-                        cloud: {
-                          ...settings.cloud,
-                          proxyUrl: event.target.value,
-                        },
-                      })
-                    }
-                  />
-                  <span className="runtime-note">
-                    Used for all cloud providers. Leave empty to connect
-                    directly.
-                  </span>
-                </div>
-              </div>
               <label className="consent-row">
                 <input
                   type="checkbox"

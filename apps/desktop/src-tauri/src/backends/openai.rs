@@ -19,11 +19,6 @@ pub struct OpenAiBackend {
 }
 
 impl OpenAiBackend {
-    pub fn with_proxy(mut self, proxy: &str) -> Result<Self, RuntimeError> {
-        self.transport = self.transport.with_proxy(proxy)?;
-        Ok(self)
-    }
-
     pub fn new(_endpoint: String, model_id: String, api_key: String) -> Result<Self, RuntimeError> {
         Self::with_base_url(OPENAI_BASE, model_id, api_key)
     }
