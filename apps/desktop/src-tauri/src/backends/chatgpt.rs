@@ -106,7 +106,7 @@ impl TranslationBackend for ChatGptBackend {
         Ok(RuntimeStatus {
             available: !self.access_token.is_empty(),
             endpoint: self.base_url.clone(),
-            detail: "ChatGPT plan sign-in".into(),
+            detail: "ChatGPT Plus/Pro".into(),
         })
     }
 

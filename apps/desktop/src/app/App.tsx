@@ -93,7 +93,7 @@ const cloudProviders: Array<{ id: ProviderId; label: string }> = [
   { id: 'deepSeek', label: 'DeepSeek' },
   { id: 'openRouter', label: 'OpenRouter' },
   { id: 'xai', label: 'xAI Grok' },
-  { id: 'chatGpt', label: 'ChatGPT (Plus/Pro sign-in)' },
+  { id: 'chatGpt', label: 'ChatGPT Plus/Pro' },
 ];
 
 function credentialPrompt(mode: Settings['runtimeMode']): string {
@@ -145,7 +145,7 @@ function runtimeModeLabel(mode: Settings['runtimeMode']): string {
     case 'xai':
       return 'xAI Grok';
     case 'chatGpt':
-      return 'ChatGPT';
+      return 'ChatGPT Plus/Pro';
   }
 }
 
