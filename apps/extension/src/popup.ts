@@ -323,6 +323,8 @@ async function translateCurrentText() {
     let inputTokens = 0;
     let outputTokens = 0;
     let usageParagraphs = 0;
+    let billedCharacters = 0;
+    let billedCharacterParagraphs = 0;
     const paragraphs = splitParagraphs(state.text);
     const translatedText = await translateParagraphs(
       paragraphs,
@@ -342,6 +344,10 @@ async function translateCurrentText() {
           outputTokens += translation.completion_tokens;
           usageParagraphs += 1;
         }
+        if (translation.billed_characters != null) {
+          billedCharacters += translation.billed_characters;
+          billedCharacterParagraphs += 1;
+        }
         return translation.text;
       },
     );
@@ -351,6 +357,7 @@ async function translateCurrentText() {
       outputTokens,
       usageParagraphs,
       paragraphs.length,
+      billedCharacterParagraphs === paragraphs.length ? billedCharacters : null,
     );
     showMetrics(totalLatency, state.usage);
   } catch (error) {

@@ -41,5 +41,6 @@ describe('popup paragraph formatting', () => {
       '30 in · 12 out · 42 total · partial',
     );
     expect(formatTokenUsage(0, 0, 0, 2)).toBe('Token usage unavailable');
+    expect(formatTokenUsage(0, 0, 1, 1, 450)).toBe('450 characters');
   });
 });

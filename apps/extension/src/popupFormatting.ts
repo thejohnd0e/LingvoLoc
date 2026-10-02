@@ -5,7 +5,9 @@ export function formatTokenUsage(
   output: number,
   translatedParagraphs: number,
   paragraphs: number,
+  billedCharacters?: number | null,
 ): string {
+  if (billedCharacters != null) return `${billedCharacters} characters`;
   if (translatedParagraphs === 0) return 'Token usage unavailable';
   const partial = translatedParagraphs < paragraphs ? ' · partial' : '';
   return `${input} in · ${output} out · ${input + output} total${partial}`;
