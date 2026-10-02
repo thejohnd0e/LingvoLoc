@@ -31,7 +31,12 @@ impl OpenAiCompatibleBackend {
         model_id: String,
         api_key: String,
     ) -> Result<Self, RuntimeError> {
-        let mut backend = Self::with_transport(base_url, model_id, api_key, HttpTransport::new()?)?;
+        let mut backend = Self::with_transport(
+            base_url,
+            model_id,
+            api_key,
+            HttpTransport::new()?.with_provider_messages(),
+        )?;
         backend.provider = provider;
         Ok(backend)
     }
@@ -126,6 +131,9 @@ impl TranslationBackend for OpenAiCompatibleBackend {
                             "compatible response is not valid JSON".into(),
                         )
                     })?;
+                    if let Some(error) = stream_error(&value) {
+                        return Err(error);
+                    }
                     if let Some(content) = value
                         .pointer("/choices/0/message/content")
                         .and_then(Value::as_str)
@@ -156,6 +164,9 @@ impl TranslationBackend for OpenAiCompatibleBackend {
                             "compatible stream event is not valid JSON".into(),
                         )
                     })?;
+                    if let Some(error) = stream_error(&value) {
+                        return Err(error);
+                    }
                     if let Some(content) = value
                         .pointer("/choices/0/delta/content")
                         .and_then(Value::as_str)
@@ -207,6 +218,18 @@ impl TranslationBackend for OpenAiCompatibleBackend {
             billed_characters: None,
         })
     }
+}
+
+/// Providers such as OpenRouter report some failures as an `error` object inside a
+/// successful (HTTP 200) response or stream.
+fn stream_error(value: &Value) -> Option<RuntimeError> {
+    value.get("error")?;
+    let body = serde_json::to_vec(value).ok()?;
+    let message = super::http::provider_error_message(&body)
+        .unwrap_or_else(|| "provider reported an error".into());
+    Some(RuntimeError::Connection(format!(
+        "provider error: {message}"
+    )))
 }
 
 fn consume_sse(

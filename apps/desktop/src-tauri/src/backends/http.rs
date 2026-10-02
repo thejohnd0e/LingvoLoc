@@ -35,6 +35,7 @@ pub struct HttpTransport {
     client: Client,
     async_client: reqwest::Client,
     timeouts: HttpTimeouts,
+    provider_messages: bool,
 }
 
 impl HttpTransport {
@@ -59,7 +60,15 @@ impl HttpTransport {
             client,
             async_client,
             timeouts,
+            provider_messages: false,
         })
+    }
+
+    /// Adds the provider's own `error.message` to streaming HTTP errors. Meant for
+    /// OpenAI-style gateways whose messages explain model access and quota problems.
+    pub fn with_provider_messages(mut self) -> Self {
+        self.provider_messages = true;
+        self
     }
 
     pub fn get(&self, url: &str) -> Result<Response, RuntimeError> {
@@ -161,6 +170,7 @@ impl HttpTransport {
         let body = serde_json::to_vec(body)
             .map_err(|error| RuntimeError::InvalidInput(format!("request JSON: {error}")))?;
         let timeouts = self.timeouts;
+        let provider_messages = self.provider_messages;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -175,6 +185,7 @@ impl HttpTransport {
                     body,
                     cancellation,
                     timeouts,
+                    provider_messages,
                     on_chunk,
                 ),
             )
@@ -227,6 +238,7 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn stream_post_json_async<F>(
     client: reqwest::Client,
     url: String,
@@ -234,6 +246,7 @@ async fn stream_post_json_async<F>(
     body: Vec<u8>,
     cancellation: RequestCancellation,
     timeouts: HttpTimeouts,
+    provider_messages: bool,
     mut on_chunk: F,
 ) -> Result<(), RuntimeError>
 where
@@ -252,7 +265,20 @@ where
         let status = response.status();
         let headers = response.headers().clone();
         let body = read_bounded_body(response, cancellation.clone(), timeouts).await?;
-        return Err(safe_http_error(status, &headers, &body));
+        let message = provider_error_message(&body);
+        crate::trace::runtime_event(
+            "cloud_http_error",
+            &format!(
+                "status={} message={}",
+                status.as_u16(),
+                message.as_deref().unwrap_or("-")
+            ),
+        );
+        let error = safe_http_error(status, &headers, &body);
+        return Err(match message {
+            Some(message) if provider_messages => with_message(error, &message),
+            _ => error,
+        });
     }
     let mut response = response;
     loop {
@@ -308,6 +334,47 @@ pub fn read_sse_lines<R: BufRead, F: FnMut(&str) -> Result<(), RuntimeError>>(
         }
     }
     Ok(())
+}
+
+/// Extracts a short, single-line `error.message` from a JSON error body.
+pub fn provider_error_message(body: &[u8]) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_slice(body).ok()?;
+    let message = value
+        .pointer("/error/message")
+        .or_else(|| value.get("error"))
+        .or_else(|| value.get("message"))?
+        .as_str()?;
+    let cleaned: String = message
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .take(200)
+        .collect();
+    let cleaned = cleaned.trim();
+    (!cleaned.is_empty()).then(|| cleaned.to_string())
+}
+
+fn with_message(error: RuntimeError, message: &str) -> RuntimeError {
+    match error {
+        RuntimeError::Authentication(detail) => {
+            RuntimeError::Authentication(format!("{detail}: {message}"))
+        }
+        RuntimeError::Quota(detail) => RuntimeError::Quota(format!("{detail}: {message}")),
+        RuntimeError::Connection(detail) => {
+            RuntimeError::Connection(format!("{detail}: {message}"))
+        }
+        RuntimeError::RateLimited {
+            detail,
+            retry_after,
+        } => RuntimeError::RateLimited {
+            detail: format!("{detail}: {message}"),
+            retry_after,
+        },
+        RuntimeError::Http { status, detail } => RuntimeError::Http {
+            status,
+            detail: format!("{detail}: {message}"),
+        },
+        other => other,
+    }
 }
 
 pub fn safe_http_error(
@@ -520,6 +587,18 @@ mod tests {
             assert!(!error.to_string().contains("super-secret"));
             assert!(!error.to_string().contains("source text"));
         }
+    }
+
+    #[test]
+    fn provider_error_message_is_short_and_single_line() {
+        let body = br#"{"error":{"message":"No endpoints found\nfor this model","code":404}}"#;
+        assert_eq!(
+            provider_error_message(body).as_deref(),
+            Some("No endpoints found for this model")
+        );
+        let long = format!(r#"{{"error":"{}"}}"#, "x".repeat(500));
+        assert_eq!(provider_error_message(long.as_bytes()).unwrap().len(), 200);
+        assert!(provider_error_message(b"<html>blocked</html>").is_none());
     }
 
     #[test]
