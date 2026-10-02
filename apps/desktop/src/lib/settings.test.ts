@@ -76,6 +76,12 @@ const fallback: Settings = {
       availableModels: [],
       modelsRefreshedAt: null,
     },
+    superGrok: {
+      modelId: '',
+      proxyUrl: '',
+      availableModels: [],
+      modelsRefreshedAt: null,
+    },
   },
 };
 
@@ -141,6 +147,7 @@ describe('settings persistence', () => {
     'openRouter',
     'xai',
     'chatGpt',
+    'superGrok',
   ] as const)('accepts runtime mode %s', (runtimeMode) => {
     localStorage.setItem('lingvoloc.settings', JSON.stringify({ runtimeMode }));
     expect(loadSettings(fallback).runtimeMode).toBe(runtimeMode);

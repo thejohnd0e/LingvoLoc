@@ -68,6 +68,13 @@ pub fn for_settings_with_credentials(
             credentials.get(crate::domain::ProviderId::OpenRouter)
         }
         crate::domain::RuntimeMode::Xai => credentials.get(crate::domain::ProviderId::Xai),
+        crate::domain::RuntimeMode::SuperGrok => {
+            let token = crate::services::supergrok_auth::access_token(
+                credentials,
+                &settings.cloud.super_grok.proxy_url,
+            )?;
+            return for_settings_with_key(settings, token);
+        }
         crate::domain::RuntimeMode::ChatGpt => {
             let token = crate::services::chatgpt_auth::access_token(
                 credentials,
@@ -149,6 +156,13 @@ fn for_settings_with_key(
         crate::domain::RuntimeMode::ChatGpt => Ok(Box::new(
             chatgpt::ChatGptBackend::new(settings.cloud.chat_gpt.model_id.clone(), key)?
                 .with_proxy(&settings.cloud.chat_gpt.proxy_url)?,
+        )),
+        crate::domain::RuntimeMode::SuperGrok => Ok(Box::new(
+            chatgpt::ChatGptBackend::for_super_grok(
+                settings.cloud.super_grok.model_id.clone(),
+                key,
+            )?
+            .with_proxy(&settings.cloud.super_grok.proxy_url)?,
         )),
     }
 }

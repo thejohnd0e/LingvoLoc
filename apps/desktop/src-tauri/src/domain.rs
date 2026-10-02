@@ -64,6 +64,7 @@ pub enum RuntimeMode {
     OpenRouter,
     Xai,
     ChatGpt,
+    SuperGrok,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -80,6 +81,7 @@ pub enum ProviderId {
     OpenRouter,
     Xai,
     ChatGpt,
+    SuperGrok,
 }
 
 impl ProviderId {
@@ -96,6 +98,7 @@ impl ProviderId {
             Self::OpenRouter => "com.lingoloc.desktop.ai.openrouter",
             Self::Xai => "com.lingoloc.desktop.ai.xai",
             Self::ChatGpt => "com.lingoloc.desktop.ai.chatgpt",
+            Self::SuperGrok => "com.lingoloc.desktop.ai.supergrok",
         }
     }
 }
@@ -167,6 +170,8 @@ pub struct CloudSettings {
     pub xai: CloudModelConfig,
     #[serde(default = "default_chat_gpt")]
     pub chat_gpt: CloudModelConfig,
+    #[serde(default = "default_super_grok")]
+    pub super_grok: CloudModelConfig,
 }
 
 fn default_deep_seek() -> CloudModelConfig {
@@ -182,6 +187,10 @@ fn default_xai() -> CloudModelConfig {
 }
 
 fn default_chat_gpt() -> CloudModelConfig {
+    CloudModelConfig::new("")
+}
+
+fn default_super_grok() -> CloudModelConfig {
     CloudModelConfig::new("")
 }
 
@@ -203,6 +212,7 @@ impl Default for CloudSettings {
             open_router: default_open_router(),
             xai: default_xai(),
             chat_gpt: default_chat_gpt(),
+            super_grok: default_super_grok(),
         }
     }
 }
@@ -251,6 +261,7 @@ impl Settings {
             RuntimeMode::OpenRouter => self.cloud.open_router.model_id.as_str(),
             RuntimeMode::Xai => self.cloud.xai.model_id.as_str(),
             RuntimeMode::ChatGpt => self.cloud.chat_gpt.model_id.as_str(),
+            RuntimeMode::SuperGrok => self.cloud.super_grok.model_id.as_str(),
             RuntimeMode::LmStudio | RuntimeMode::Standalone => self.model_id.as_str(),
         }
     }
@@ -429,6 +440,7 @@ mod tests {
             ("openRouter", ProviderId::OpenRouter),
             ("xai", ProviderId::Xai),
             ("chatGpt", ProviderId::ChatGpt),
+            ("superGrok", ProviderId::SuperGrok),
         ] {
             assert_eq!(
                 serde_json::from_str::<ProviderId>(&format!("\"{json}\"")).unwrap(),

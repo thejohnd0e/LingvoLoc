@@ -176,6 +176,7 @@ pub fn snapshot(settings: &Settings, model_id: &str) -> String {
         RuntimeMode::OpenRouter => "openRouter",
         RuntimeMode::Xai => "xai",
         RuntimeMode::ChatGpt => "chatGpt",
+        RuntimeMode::SuperGrok => "superGrok",
     };
     if !matches!(
         settings.runtime_mode,
@@ -197,6 +198,7 @@ pub fn snapshot(settings: &Settings, model_id: &str) -> String {
             RuntimeMode::OpenRouter => "openrouter",
             RuntimeMode::Xai => "xai",
             RuntimeMode::ChatGpt => "chatgpt",
+            RuntimeMode::SuperGrok => "supergrok",
             RuntimeMode::LmStudio | RuntimeMode::Standalone => unreachable!(),
         };
         return format!("{mode}|{endpoint_category}|{model_id}");

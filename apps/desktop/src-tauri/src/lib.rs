@@ -116,6 +116,7 @@ fn settings_for_provider(
         domain::ProviderId::OpenRouter => domain::RuntimeMode::OpenRouter,
         domain::ProviderId::Xai => domain::RuntimeMode::Xai,
         domain::ProviderId::ChatGpt => domain::RuntimeMode::ChatGpt,
+        domain::ProviderId::SuperGrok => domain::RuntimeMode::SuperGrok,
         domain::ProviderId::LlamaCpp | domain::ProviderId::LmStudio => {
             return Err(RuntimeError::InvalidInput(
                 "provider has no cloud refresh command".into(),
@@ -254,6 +255,9 @@ fn get_provider_credential_status(
     if provider_id == domain::ProviderId::ChatGpt {
         return services::chatgpt_auth::status(&state.credentials);
     }
+    if provider_id == domain::ProviderId::SuperGrok {
+        return services::supergrok_auth::status(&state.credentials);
+    }
     state
         .credentials
         .status(provider_id)
@@ -281,6 +285,10 @@ fn delete_provider_credential(
         let proxy = settings(&state)?.cloud.chat_gpt.proxy_url;
         return services::chatgpt_auth::sign_out(&state.credentials, &proxy);
     }
+    if provider_id == domain::ProviderId::SuperGrok {
+        let proxy = settings(&state)?.cloud.super_grok.proxy_url;
+        return services::supergrok_auth::sign_out(&state.credentials, &proxy);
+    }
     state
         .credentials
         .delete(provider_id)
@@ -300,6 +308,36 @@ fn chatgpt_sign_in(
             .open_url(url, None::<&str>)
             .map_err(|error| error.to_string())
     })
+}
+
+/// EXPERIMENTAL: starts the SuperGrok device-code sign-in and opens the browser.
+#[tauri::command(async)]
+fn supergrok_sign_in_start(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<services::supergrok_auth::DeviceCode, RuntimeError> {
+    use tauri_plugin_opener::OpenerExt;
+    let proxy = settings(&state)?.cloud.super_grok.proxy_url;
+    let code = services::supergrok_auth::begin_sign_in(&proxy)?;
+    // The code is also shown in the app, so a failure to open the browser is not fatal.
+    let _ = app
+        .opener()
+        .open_url(code.verification_url.as_str(), None::<&str>);
+    Ok(code)
+}
+
+/// Waits until the SuperGrok sign-in started by `supergrok_sign_in_start` is approved.
+#[tauri::command(async)]
+fn supergrok_sign_in_finish(
+    state: tauri::State<'_, AppState>,
+) -> Result<CredentialStatus, RuntimeError> {
+    let proxy = settings(&state)?.cloud.super_grok.proxy_url;
+    services::supergrok_auth::finish_sign_in(&state.credentials, &proxy)
+}
+
+#[tauri::command]
+fn supergrok_cancel_sign_in() {
+    services::supergrok_auth::cancel_sign_in();
 }
 
 #[tauri::command]
@@ -687,6 +725,9 @@ pub fn run() {
             cancel_translation,
             chatgpt_sign_in,
             chatgpt_cancel_sign_in,
+            supergrok_sign_in_start,
+            supergrok_sign_in_finish,
+            supergrok_cancel_sign_in,
             get_settings,
             get_api_token,
             write_clipboard,

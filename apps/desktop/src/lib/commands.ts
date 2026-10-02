@@ -67,7 +67,8 @@ export type ProviderId =
   | 'deepSeek'
   | 'openRouter'
   | 'xai'
-  | 'chatGpt';
+  | 'chatGpt'
+  | 'superGrok';
 
 export interface CredentialStatus {
   configured: boolean;
@@ -211,6 +212,21 @@ export const deleteProviderCredential = (providerId: ProviderId) =>
   invokeNative<void>('delete_provider_credential', { providerId });
 export const chatGptSignIn = () =>
   invokeNative<CredentialStatus>('chatgpt_sign_in');
+
+export interface DeviceCode {
+  userCode: string;
+  verificationUrl: string;
+  expiresIn: number;
+}
+
+export const superGrokSignInStart = () =>
+  invokeNative<DeviceCode>('supergrok_sign_in_start');
+
+export const superGrokSignInFinish = () =>
+  invokeNative<CredentialStatus>('supergrok_sign_in_finish');
+
+export const superGrokCancelSignIn = () =>
+  invokeNative<void>('supergrok_cancel_sign_in');
 
 export const chatGptCancelSignIn = () =>
   invokeNative<void>('chatgpt_cancel_sign_in');

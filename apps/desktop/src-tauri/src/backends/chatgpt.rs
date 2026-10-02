@@ -16,8 +16,10 @@ use std::time::{Duration, Instant};
 type Usage = (u64, u64, u64);
 
 const API_BASE: &str = "https://api.openai.com/v1";
+const XAI_API_BASE: &str = "https://api.x.ai/v1";
 
 pub struct ChatGptBackend {
+    provider: ProviderId,
     transport: HttpTransport,
     base_url: String,
     model_id: String,
@@ -29,12 +31,20 @@ impl ChatGptBackend {
         Self::with_base_url(API_BASE.into(), model_id, access_token)
     }
 
+    /// The same Responses API flow against xAI, for a SuperGrok subscription token.
+    pub fn for_super_grok(model_id: String, access_token: String) -> Result<Self, RuntimeError> {
+        let mut backend = Self::with_base_url(XAI_API_BASE.into(), model_id, access_token)?;
+        backend.provider = ProviderId::SuperGrok;
+        Ok(backend)
+    }
+
     fn with_base_url(
         base_url: String,
         model_id: String,
         access_token: String,
     ) -> Result<Self, RuntimeError> {
         Ok(Self {
+            provider: ProviderId::ChatGpt,
             transport: HttpTransport::with_timeouts(HttpTimeouts {
                 request: Duration::from_secs(180),
                 ..Default::default()
@@ -54,7 +64,7 @@ impl ChatGptBackend {
     fn headers(&self, accept: &'static str) -> Result<HeaderMap, RuntimeError> {
         if self.access_token.is_empty() {
             return Err(RuntimeError::Authentication(
-                "sign in with ChatGPT in Settings first".into(),
+                "sign in to this provider in Settings first".into(),
             ));
         }
         let mut headers = HeaderMap::new();
@@ -89,7 +99,7 @@ impl ChatGptBackend {
 
 impl TranslationBackend for ChatGptBackend {
     fn provider_id(&self) -> ProviderId {
-        ProviderId::ChatGpt
+        self.provider
     }
 
     fn capabilities(&self) -> BackendCapabilities {
@@ -106,7 +116,12 @@ impl TranslationBackend for ChatGptBackend {
         Ok(RuntimeStatus {
             available: !self.access_token.is_empty(),
             endpoint: self.base_url.clone(),
-            detail: "ChatGPT Plus/Pro".into(),
+            detail: if self.provider == ProviderId::SuperGrok {
+                "SuperGrok (experimental)"
+            } else {
+                "ChatGPT Plus/Pro"
+            }
+            .into(),
         })
     }
 
@@ -157,18 +172,35 @@ impl TranslationBackend for ChatGptBackend {
         Ok(TranslationResult {
             text,
             model_id: request.model_id.clone(),
-            adapter_id: "chatgpt-responses".into(),
+            adapter_id: if self.provider == ProviderId::SuperGrok {
+                "supergrok-responses"
+            } else {
+                "chatgpt-responses"
+            }
+            .into(),
             latency_ms: started.elapsed().as_millis(),
             prompt_tokens: usage.map(|u| u.0),
             completion_tokens: usage.map(|u| u.1),
             total_tokens: usage.map(|u| u.2),
-            provider_id: Some(ProviderId::ChatGpt),
+            provider_id: Some(self.provider),
             billed_characters: None,
         })
     }
 }
 
 fn parse_models(value: &Value) -> Result<Vec<LocalModel>, RuntimeError> {
+    if let Some(data) = value.get("data").and_then(Value::as_array) {
+        return Ok(data
+            .iter()
+            .filter_map(|model| model.get("id").and_then(Value::as_str))
+            .filter(|id| !id.is_empty() && id.len() <= 200)
+            .map(|id| LocalModel {
+                id: id.to_string(),
+                owned_by: None,
+                quantization: None,
+            })
+            .collect());
+    }
     let models = value
         .get("models")
         .and_then(Value::as_array)
@@ -309,6 +341,13 @@ data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\"
         .unwrap();
         assert_eq!(models.len(), 1);
         assert_eq!(models[0].id, "gpt-5");
+    }
+
+    #[test]
+    fn openai_style_model_lists_are_accepted() {
+        let models = parse_models(&json!({"data":[{"id":"grok-4"},{"id":"grok-3-mini"}]})).unwrap();
+        assert_eq!(models.len(), 2);
+        assert_eq!(models[0].id, "grok-4");
     }
 
     #[test]

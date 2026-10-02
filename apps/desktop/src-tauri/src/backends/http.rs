@@ -179,13 +179,13 @@ impl HttpTransport {
         })
     }
 
-    /// Posts an `application/x-www-form-urlencoded` body and returns the JSON reply.
-    /// OAuth error replies are mapped to distinguishable errors.
-    pub fn post_form(
+    /// Posts an `application/x-www-form-urlencoded` body and returns the HTTP status with
+    /// the JSON reply (`null` when the body is not JSON), without judging the status.
+    pub fn post_form_raw(
         &self,
         url: &str,
         form: &[(&str, &str)],
-    ) -> Result<serde_json::Value, RuntimeError> {
+    ) -> Result<(u16, serde_json::Value), RuntimeError> {
         let response = self
             .client
             .post(url)
@@ -193,29 +193,33 @@ impl HttpTransport {
             .form(form)
             .send()
             .map_err(map_request_error)?;
-        let status = response.status();
+        let status = response.status().as_u16();
         let mut body = Vec::new();
         let _ = response
             .take(self.timeouts.max_error_body as u64)
             .read_to_end(&mut body);
-        if status.is_success() {
-            return serde_json::from_slice(&body).map_err(|_| {
-                RuntimeError::MalformedResponse("token response is not valid JSON".into())
-            });
+        Ok((status, serde_json::from_slice(&body).unwrap_or_default()))
+    }
+
+    /// Like [`Self::post_form_raw`], but maps OAuth error replies to errors.
+    pub fn post_form(
+        &self,
+        url: &str,
+        form: &[(&str, &str)],
+    ) -> Result<serde_json::Value, RuntimeError> {
+        let (status, value) = self.post_form_raw(url, form)?;
+        if (200..300).contains(&status) {
+            if value.is_null() {
+                return Err(RuntimeError::MalformedResponse(
+                    "token response is not valid JSON".into(),
+                ));
+            }
+            return Ok(value);
         }
-        let value: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
-        let code = value
-            .get("error")
-            .and_then(|error| error.as_str().or_else(|| error.get("code")?.as_str()))
-            .unwrap_or("unknown_error")
-            .to_string();
-        crate::trace::runtime_event(
-            "oauth_http_error",
-            &format!("status={} code={code}", status.as_u16()),
-        );
+        let code = oauth_error_code(&value);
+        crate::trace::runtime_event("oauth_http_error", &format!("status={status} code={code}"));
         Err(RuntimeError::Authentication(format!(
-            "provider returned HTTP {} ({code})",
-            status.as_u16()
+            "provider returned HTTP {status} ({code})"
         )))
     }
 
@@ -428,6 +432,15 @@ pub fn read_sse_lines<R: BufRead, F: FnMut(&str) -> Result<(), RuntimeError>>(
         }
     }
     Ok(())
+}
+
+/// The OAuth `error` code of a reply, whether it is a string or an object with `code`.
+pub fn oauth_error_code(value: &serde_json::Value) -> String {
+    value
+        .get("error")
+        .and_then(|error| error.as_str().or_else(|| error.get("code")?.as_str()))
+        .unwrap_or("unknown_error")
+        .to_string()
 }
 
 /// Extracts a short, single-line `error.message` from a JSON error body.

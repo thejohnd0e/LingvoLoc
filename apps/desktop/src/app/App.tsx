@@ -36,6 +36,10 @@ import {
   cancelTranslation,
   chatGptCancelSignIn,
   chatGptSignIn,
+  superGrokCancelSignIn,
+  superGrokSignInFinish,
+  superGrokSignInStart,
+  type DeviceCode,
   translateWord,
   writeClipboard,
   updateSettings as updateNativeSettings,
@@ -94,12 +98,15 @@ const cloudProviders: Array<{ id: ProviderId; label: string }> = [
   { id: 'openRouter', label: 'OpenRouter' },
   { id: 'xai', label: 'xAI Grok' },
   { id: 'chatGpt', label: 'ChatGPT Plus/Pro' },
+  { id: 'superGrok', label: 'SuperGrok (experimental)' },
 ];
 
 function credentialPrompt(mode: Settings['runtimeMode']): string {
   return mode === 'chatGpt'
     ? 'Sign in with ChatGPT to load models.'
-    : 'Save an API key to load models.';
+    : mode === 'superGrok'
+      ? 'Sign in with SuperGrok to load models.'
+      : 'Save an API key to load models.';
 }
 
 function isFreeModel(id: string): boolean {
@@ -146,6 +153,8 @@ function runtimeModeLabel(mode: Settings['runtimeMode']): string {
       return 'xAI Grok';
     case 'chatGpt':
       return 'ChatGPT Plus/Pro';
+    case 'superGrok':
+      return 'SuperGrok';
   }
 }
 
@@ -243,6 +252,7 @@ export default function App() {
   const [credentialInput, setCredentialInput] = useState('');
   const [credentialFocused, setCredentialFocused] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
+  const [deviceCode, setDeviceCode] = useState<DeviceCode | null>(null);
   const translationRunRef = useRef(0);
   const [usageEntries, setUsageEntries] = useState<SessionUsageEntry[]>([]);
   const [usageBusy, setUsageBusy] = useState(false);
@@ -471,6 +481,23 @@ export default function App() {
     }
   }
 
+  async function signInWithSuperGrok() {
+    setSigningIn(true);
+    try {
+      const code = await superGrokSignInStart();
+      setDeviceCode(code);
+      const next = await superGrokSignInFinish();
+      setCredentialStatus(next);
+      setNotice('Signed in with SuperGrok.');
+      void refreshCloudModels('superGrok');
+    } catch (reason) {
+      setNotice(`SuperGrok sign-in failed · ${errorDetail(reason)}`);
+    } finally {
+      setDeviceCode(null);
+      setSigningIn(false);
+    }
+  }
+
   async function removeCloudKey() {
     if (!isCloudProvider(settings.runtimeMode)) return;
     await deleteProviderCredential(settings.runtimeMode);
@@ -479,8 +506,8 @@ export default function App() {
       setCloudModelsMessage(credentialPrompt(settingsRef.current.runtimeMode));
     }
     setNotice(
-      settings.runtimeMode === 'chatGpt'
-        ? 'Signed out of ChatGPT.'
+      settings.runtimeMode === 'chatGpt' || settings.runtimeMode === 'superGrok'
+        ? 'Signed out.'
         : 'Provider key removed.',
     );
   }
@@ -1759,7 +1786,8 @@ export default function App() {
                   )}
                 </div>
               </div>
-              {settings.runtimeMode === 'chatGpt' ? (
+              {settings.runtimeMode === 'chatGpt' ||
+              settings.runtimeMode === 'superGrok' ? (
                 <div className="runtime-row">
                   <b>Account</b>
                   <div className="cloud-field">
@@ -1767,12 +1795,18 @@ export default function App() {
                       {signingIn ? (
                         <>
                           <span className="runtime-note">
-                            Waiting for the browser…
+                            {deviceCode
+                              ? `Approve in the browser. Code: ${deviceCode.userCode}`
+                              : 'Waiting for the browser…'}
                           </span>
                           <button
                             className="quiet"
                             type="button"
-                            onClick={() => void chatGptCancelSignIn()}
+                            onClick={() =>
+                              void (settings.runtimeMode === 'superGrok'
+                                ? superGrokCancelSignIn()
+                                : chatGptCancelSignIn())
+                            }
                           >
                             Cancel
                           </button>
@@ -1782,11 +1816,17 @@ export default function App() {
                           <button
                             className="quiet"
                             type="button"
-                            onClick={() => void signInWithChatGpt()}
+                            onClick={() =>
+                              void (settings.runtimeMode === 'superGrok'
+                                ? signInWithSuperGrok()
+                                : signInWithChatGpt())
+                            }
                           >
                             {credentialStatus?.configured
                               ? 'Sign in again'
-                              : 'Sign in with ChatGPT'}
+                              : settings.runtimeMode === 'superGrok'
+                                ? 'Sign in with SuperGrok'
+                                : 'Sign in with ChatGPT'}
                           </button>
                           {credentialStatus?.configured && (
                             <button
@@ -1812,9 +1852,9 @@ export default function App() {
                         : '○ Not signed in'}
                     </span>
                     <span className="runtime-note">
-                      Uses your ChatGPT Plus/Pro allowance, for personal use.
-                      Set a weekly cap for LingvoLoc in ChatGPT under Settings →
-                      Usage.
+                      {settings.runtimeMode === 'superGrok'
+                        ? 'Experimental and unofficial: xAI does not document subscription sign-in for other apps, so it may stop working or be refused for your account (HTTP 403). It identifies as the shared Grok client.'
+                        : 'Uses your ChatGPT Plus/Pro allowance, for personal use. Set a weekly cap for LingvoLoc in ChatGPT under Settings → Usage.'}
                     </span>
                   </div>
                 </div>
