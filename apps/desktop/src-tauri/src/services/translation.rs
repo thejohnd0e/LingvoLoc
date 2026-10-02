@@ -5,6 +5,7 @@ use crate::domain::{
 use crate::services::credentials::CredentialStore;
 use crate::services::request_control::RequestCancellation;
 
+#[allow(dead_code)]
 pub fn status(settings: &Settings) -> Result<RuntimeStatus, RuntimeError> {
     backends::for_settings(settings)?.status()
 }
@@ -16,6 +17,7 @@ pub fn status_with_credentials(
     backends::for_settings_with_credentials(settings, credentials)?.status()
 }
 
+#[allow(dead_code)]
 pub fn list_models(settings: &Settings) -> Result<Vec<LocalModel>, RuntimeError> {
     backends::for_settings(settings)?.list_models()
 }

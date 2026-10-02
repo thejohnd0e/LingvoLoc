@@ -24,7 +24,7 @@ fn build_translation_request(
     source_language: String,
 ) -> TranslationRequest {
     TranslationRequest {
-        model_id: settings.model_id.clone(),
+        model_id: settings.active_model_id().to_string(),
         adapter_id: settings.adapter_id.clone(),
         source_language,
         target_language: body.target_language,
@@ -86,7 +86,11 @@ fn handle_connection(mut stream: TcpStream, app: &AppHandle) {
         return;
     }
     let expected_token = app.state::<AppState>().api_token.clone();
-    if request.header("authorization") != Some(format!("Bearer {expected_token}").as_str()) {
+    let expected = format!("Bearer {expected_token}");
+    let authorized = request
+        .header("authorization")
+        .is_some_and(|value| value.trim() == expected);
+    if !authorized {
         write_response(&mut stream, 401, json_error("authorization required"), None);
         return;
     }
@@ -109,11 +113,26 @@ fn route(request: &HttpRequest, app: &AppHandle) -> (u16, String) {
     let state = app.state::<AppState>();
     match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/api/v1/status") => match settings(&state) {
-            Ok(settings) => json_result(translation::status(&settings)),
+            // Pairing only proves the desktop token works. Provider outages must not
+            // look like a bad pairing token to the extension.
+            Ok(settings) => match translation::status_with_credentials(
+                &settings,
+                &state.credentials,
+            ) {
+                Ok(status) => json_result(Ok(status)),
+                Err(error) => json_result(Ok(crate::domain::RuntimeStatus {
+                    available: false,
+                    endpoint: String::new(),
+                    detail: error.to_string(),
+                })),
+            },
             Err(error) => error_response(error),
         },
         ("GET", "/api/v1/models") => match settings(&state) {
-            Ok(settings) => json_result(translation::list_models(&settings)),
+            Ok(settings) => json_result(translation::list_models_with_credentials(
+                &settings,
+                &state.credentials,
+            )),
             Err(error) => error_response(error),
         },
         ("GET", "/api/v1/settings/language-pair") => match settings(&state) {
@@ -143,7 +162,7 @@ fn translate(request: &HttpRequest, state: &AppState) -> (u16, String) {
         Ok(settings) => settings,
         Err(error) => return error_response(error),
     };
-    if settings.model_id.trim().is_empty() {
+    if settings.active_model_id().trim().is_empty() {
         return error_response(RuntimeError::InvalidInput(
             "a model must be selected in LingvoLoc".into(),
         ));
@@ -349,6 +368,14 @@ mod tests {
     }
 
     #[test]
+    fn bearer_token_comparison_trims_header_value() {
+        let expected_token = "abc123";
+        let expected = format!("Bearer {expected_token}");
+        assert_eq!("Bearer abc123".trim(), expected);
+        assert_eq!(" Bearer abc123 ".trim(), expected);
+    }
+
+    #[test]
     fn parses_json_request_body() {
         let listener = TcpListener::bind("127.0.0.1:0").expect("listener should bind");
         let address = listener.local_addr().expect("listener should have address");
@@ -393,5 +420,36 @@ mod tests {
         );
         assert_eq!(request.translation_style, TranslationStyle::Conversational);
         assert_eq!(request.text, "Hello");
+        assert_eq!(request.model_id, "model");
+    }
+
+    #[test]
+    fn builds_extension_request_with_cloud_model_id() {
+        let mut settings = Settings {
+            runtime_mode: RuntimeMode::Gemini,
+            models_directory: String::new(),
+            llama_server_path: String::new(),
+            endpoint: "local".into(),
+            model_id: String::new(),
+            adapter_id: "adapter".into(),
+            source_language: "auto".into(),
+            target_language: "en".into(),
+            primary_language: "en".into(),
+            secondary_language: "ru".into(),
+            translation_style: TranslationStyle::Neutral,
+            cloud: Default::default(),
+        };
+        settings.cloud.gemini.model_id = "gemini-2.5-flash-lite".into();
+        let request = build_translation_request(
+            &settings,
+            TranslateBody {
+                text: "Hello".into(),
+                source_language: "en".into(),
+                target_language: "th".into(),
+            },
+            "en".into(),
+        );
+        assert_eq!(request.model_id, "gemini-2.5-flash-lite");
+        assert_eq!(request.target_language, "th");
     }
 }
